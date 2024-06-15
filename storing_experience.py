@@ -6,6 +6,12 @@ import re
 class StoringExperience:
     def __init__(self):
         self.db_name = "database/experience.db"
+        self.destroy1 = """
+            DROP TABLE IF EXISTS ranking
+        """
+        self.destroy2 = """
+            DROP TABLE IF EXISTS experience
+        """
         self.create1 = """
             CREATE TABLE IF NOT EXISTS ranking (
             id integer PRIMARY KEY,
@@ -31,6 +37,8 @@ class StoringExperience:
         conn = self.connection()
         c = conn.cursor()
         try:
+            c.execute(self.destroy1)
+            c.execute(self.destroy2)
             c.execute(self.create1)
             c.execute(self.create2)
         except Error as e:

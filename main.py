@@ -1,6 +1,7 @@
 import datetime
 import time
 import sys
+import os
 
 from skopt import gp_minimize
 from skopt import load
@@ -12,6 +13,21 @@ from controller import controller
 from dataset import cifar_data, mnist
 from search_space import search_space
 from params_checker import paramsChecker
+
+# FOLDER SECTION --------------------------------------------------------------------------------------------------------
+os.system("")
+
+base_dir = os.path.abspath(os.path.dirname(__file__))
+new_dir = ['Model', 'Weights', 'database', 'checkpoints', 'log_folder', 'algorithm_logs']
+
+for folder in new_dir:
+    final_path = os.path.join(base_dir, folder)
+    try:
+        if not os.path.exists(final_path):
+            os.makedirs(final_path)
+    except OSError:
+        print(colors.MAGENTA, "|  ----------- FAILED TO CREATE FOLDER ----------  |\n", colors.ENDC)
+        pass
 
 # MNIST SECTION --------------------------------------------------------------------------------------------------------
 

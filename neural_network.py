@@ -348,8 +348,8 @@ class neural_network:
             json_file.write(model_json)
         flops, _ = fc.analyze_model(model)
         flops = flops.total_float_ops
-        trainableParams = np.sum([np.prod(v.get_shape())for v in model.trainable_weights])
-        nonTrainableParams = np.sum([np.prod(v.get_shape())for v in model.non_trainable_weights])
+        trainableParams = np.sum([np.prod(v.shape)for v in model.trainable_weights])
+        nonTrainableParams = np.sum([np.prod(v.shape)for v in model.non_trainable_weights])
         nparams = trainableParams + nonTrainableParams
 
         print(colors.FAIL, "FLOPS: " + str(flops), colors.ENDC)
@@ -383,7 +383,7 @@ class neural_network:
                 horizontal_flip=True)
             datagen.fit(self.train_data)
 
-            history = model.fit_generator(
+            history = model.fit(
                 datagen.flow(self.train_data, self.train_labels, batch_size=params['batch_size']), epochs=self.epochs,
                 verbose=1, validation_data=(self.test_data, self.test_labels),
                 callbacks=[tensorboard, reduce_lr, es1, es2]).history
@@ -395,14 +395,14 @@ class neural_network:
                                 callbacks=[tensorboard, reduce_lr, es1, es2]).history
 
         score = model.evaluate(self.test_data, self.test_labels)
-        weights_name = "Weights/weights-{}.h5".format(model_name_id)
+        weights_name = "Weights/weights-{}.weights.h5".format(model_name_id)
         model.save_weights(weights_name)
         
         f = open("Model/model-{}.json".format(model_name_id))
         mj = json.load(f)
         model_json = json.dumps(mj)
         model = tf.keras.models.model_from_json(model_json)
-        model.load_weights("Weights/weights-{}.h5".format(model_name_id))
+        model.load_weights("Weights/weights-{}.weights.h5".format(model_name_id))
         model.save("dashboard/model/model.h5")
         return score, history, model, flops, nparams  # , rta
 
