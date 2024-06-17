@@ -17,17 +17,14 @@ from params_checker import paramsChecker
 # FOLDER SECTION --------------------------------------------------------------------------------------------------------
 os.system("")
 
-base_dir = os.path.abspath(os.path.dirname(__file__))
 new_dir = ['Model', 'Weights', 'database', 'checkpoints', 'log_folder', 'algorithm_logs']
 
 for folder in new_dir:
-    final_path = os.path.join(base_dir, folder)
     try:
-        if not os.path.exists(final_path):
-            os.makedirs(final_path)
+        if not os.path.exists(folder):
+            os.makedirs(folder)
     except OSError:
-        print(colors.MAGENTA, "|  ----------- FAILED TO CREATE FOLDER ----------  |\n", colors.ENDC)
-        pass
+        print(colors.FAIL, "|  ----------- FAILED TO CREATE FOLDER ----------  |\n", colors.ENDC)
 
 # MNIST SECTION --------------------------------------------------------------------------------------------------------
 
@@ -143,3 +140,4 @@ end_time = time.time()
 print(colors.CYAN, "\nTIME --------> \n", end_time - start_time, colors.ENDC)
 
 controller.plotting_obj_function()
+controller.save_experience()

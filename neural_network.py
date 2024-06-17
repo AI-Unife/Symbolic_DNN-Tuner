@@ -351,6 +351,8 @@ class neural_network:
         trainableParams = np.sum([np.prod(v.shape)for v in model.trainable_weights])
         nonTrainableParams = np.sum([np.prod(v.shape)for v in model.non_trainable_weights])
         nparams = trainableParams + nonTrainableParams
+   
+        self.last_model_id = model_name_id
 
         print(colors.FAIL, "FLOPS: " + str(flops), colors.ENDC)
         print(colors.FAIL, "PARAMS: " + str(nparams), colors.ENDC)

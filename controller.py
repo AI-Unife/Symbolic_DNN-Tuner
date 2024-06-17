@@ -13,7 +13,7 @@ from lfi_integration import LfiIntegration
 from storing_experience import StoringExperience
 from improvement_checker import ImprovementChecker
 from integral import integrals
-
+from shutil import copyfile
 
 class controller:
     def __init__(self, X_train, Y_train, X_test, Y_test, n_classes):
@@ -179,3 +179,11 @@ class controller:
         plt.plot(x, y1, color='black', label="Total Object Function")
         plt.plot(x, y2, color='blue', label="FLOPS gap")
         plt.savefig("objective_funct.png")
+
+    def save_experience(self):
+        db_split = os.path.splitext(self.db.db_name)
+        db_dir = (db_split[0] + "-{}" + db_split[1]).format(self.nn.last_model_id)
+        try:
+            copyfile(self.db.db_name, db_dir)
+        except:
+            print(colors.FAIL, "|  -------------- FAILED TO SAVE DB -------------  |\n", colors.ENDC)
