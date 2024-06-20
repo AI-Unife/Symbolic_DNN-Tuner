@@ -14,7 +14,8 @@ class module:
     """
     def load_modules(self):
         for module in self.modules_array:
-            self.modules_obj.append(getattr(__import__(module), module)())
+            base_dir = "loss." + module
+            self.modules_obj.append(getattr(importlib.import_module(base_dir), module)())
 
         return self.modules_obj
 
