@@ -1,4 +1,6 @@
 import importlib
+from colors import colors
+import os
 
 class module:
     """
@@ -7,6 +9,7 @@ class module:
     def __init__(self, modules):
         self.modules_array = modules
         self.modules_obj = []
+        self.modules_name = []
 
     """
     Creation of module instances
@@ -14,14 +17,50 @@ class module:
     """
     def load_modules(self):
         for module in self.modules_array:
-            base_dir = "loss." + module
-            self.modules_obj.append(getattr(importlib.import_module(base_dir), module)())
+            try:
+                base_dir = "loss." + module
+                self.modules_obj.append(getattr(importlib.import_module(base_dir), module)())
+                self.modules_name.append(module)
+            except ModuleNotFoundError:
+                print(colors.FAIL, "|  ----------- FAILED TO INSTANCIATE MODULE ----------  |\n", colors.ENDC)
 
         return self.modules_obj
 
-    def get_loaded_modules(self):
-        return self.modules_obj
+    """
+    Filter rules, actions and problem rules of loaded modules
+    :return: Strings containing the set of rules, actions and problem rules of the loaded modules, respectively
+    """
+    def get_rules(self):      
+        rules = ""
+        actions = ""
+        problems = ""
 
+        for name in self.modules_name:
+           module_name = "loss/" + name + ".pl"
+           if os.path.exists(module_name):
+
+               rules += "% rules utils in '" + name + "'\n"
+               actions += "% action rules in '" + name + "'\n"
+               problems += "% problems rules in '" + name + "'\n"
+
+               f = open(module_name, 'r')
+               lines = f.readlines()
+               for line in lines:
+                   if "::" in line and ":-" in line:
+                       problems += line
+                   elif "::" in line:
+                       actions += line
+                   elif ":-" in line:
+                       rules += line
+  
+               rules += "\n"
+               actions += "\n"
+               problems += "\n"
+
+               f.close()
+
+        return rules, actions, problems
+           
     def value(self):
         return self.modules_obj[0].obtain_value()
 
