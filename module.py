@@ -68,15 +68,14 @@ class module:
         for module in self.modules_obj:
             module.update_state(*args)
 
-
     """
     Get values of modules
     :return: list of module values
     """
-    def value(self):
+    def values(self):
         values = []
         for i in range(len(self.modules_obj)):
-            values += [self.modules_obj[i].obtain_value()]
+            values += self.modules_obj[i].obtain_values()
         return values
 
     """
@@ -85,14 +84,21 @@ class module:
     """
     def optimiziation(self):
         values = []
-        weight = []
+        weights = []
         for i in range(len(self.modules_obj)):
-           weight += [self.modules_obj[i].weight]
+           weights += [self.modules_obj[i].weight]
            values += [self.modules_obj[i].optimiziation_function()]
 
-        norm_weight = [w / np.sum(weight) for w in weight]
-        final_opt = np.sum([w*v for w,v in zip(norm_weight,values)])
-        return weight, values, final_opt
+        norm_weights = [w / np.sum(weights) for w in weights]
+        final_opt = np.sum([w*v for w,v in zip(norm_weights,values)])
+        return weights, values, final_opt
+
+    """
+    Printing module values
+    """
+    def print(self):
+        for i in range(len(self.modules_obj)):
+            self.modules_obj[i].printing_values()
 
     """
     Plotting graphs of values from each module

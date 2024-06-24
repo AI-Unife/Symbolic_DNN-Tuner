@@ -1,7 +1,9 @@
 from common_interface import common_interface
 from tensorflow.keras.models import load_model
+from colors import colors
 import os
 import matplotlib.pyplot as plt
+import numpy as np
 
 import flops_calculator as fc
 
@@ -25,11 +27,19 @@ class new_flop_calculator(common_interface):
     def update_state(self, *args):
         self.accuracy = args[1]
         self.model = args[2]
-        self.flops = self.obtain_value()
+        self.flops, _ = fc.analyze_model(self.model)
+        self.flops = self.flops.total_float_ops
+        trainableParams = np.sum([np.prod(v.shape)for v in self.model.trainable_weights])
+        nonTrainableParams = np.sum([np.prod(v.shape)for v in self.model.non_trainable_weights])
+        self.nparams = trainableParams + nonTrainableParams
 
-    def obtain_value(self):
-        flops, _ = fc.analyze_model(self.model)
-        return flops.total_float_ops
+    def obtain_values(self):
+        # has to match the list of facts
+        return [self.flops, self.flops_th, self.nparams, self.nparams_th]
+
+    def printing_values(self):
+        print(colors.FAIL, "FLOPS: " + str(self.flops), colors.ENDC)
+        print(colors.FAIL, "PARAMS: " + str(self.nparams), colors.ENDC)
 
     def optimiziation_function(self, *args):
         # norm flops between 0 - 1

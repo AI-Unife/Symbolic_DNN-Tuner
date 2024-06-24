@@ -13,22 +13,22 @@ class common_interface(ABC):
                 raise NotImplementedError(f'Required variable `{var}` in {cls} not found')
 
     """
-    function to update the internal state of the module at each iteration
+    Function to update the internal state of the module at each iteration
     """
     @abstractmethod
     def update_state(self):
         pass
 
     """
-    function to obtain the value of loss parameter
+    Function to obtain the value of loss parameter
     :return: value of that specific loss parameter
     """
     @abstractmethod
-    def obtain_value(self):
+    def obtain_values(self):
         pass
 
     """
-    function for calculating the loss function value to be minimized
+    Function for calculating the loss function value to be minimized
     :return: loss value to be minimized
     """
     @abstractmethod
@@ -36,14 +36,21 @@ class common_interface(ABC):
         pass
 
     """
-    function to plot the results
+    Function to print module values
+    """
+    @abstractmethod
+    def printing_values(self):
+        pass
+
+    """
+    Function to plot the results
     """
     @abstractmethod
     def plotting_function(self):
         pass
 
     """
-    function to save log informations
+    Function to save log informations
     """
     @abstractmethod
     def log_function(self):
