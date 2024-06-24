@@ -13,6 +13,13 @@ class common_interface(ABC):
                 raise NotImplementedError(f'Required variable `{var}` in {cls} not found')
 
     """
+    function to update the internal state of the module at each iteration
+    """
+    @abstractmethod
+    def update_state(self):
+        pass
+
+    """
     function to obtain the value of loss parameter
     :return: value of that specific loss parameter
     """

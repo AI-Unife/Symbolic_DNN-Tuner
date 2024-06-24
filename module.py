@@ -1,10 +1,11 @@
 import importlib
 from colors import colors
 import os
+import numpy as np
 
 class module:
     """
-    class for creating and managing loss module instances
+    Class for creating and managing loss module instances
     """
     def __init__(self, modules):
         self.modules_array = modules
@@ -41,7 +42,6 @@ class module:
 
                rules += "% rules utils in '" + name + "'\n"
                actions += "% action rules in '" + name + "'\n"
-               problems += "% problems rules in '" + name + "'\n"
 
                f = open(module_name, 'r')
                lines = f.readlines()
@@ -55,20 +55,55 @@ class module:
   
                rules += "\n"
                actions += "\n"
-               problems += "\n"
 
                f.close()
 
         return rules, actions, problems
-           
+    
+    """
+    Calculation of the final value of the loss function
+    :return: list of module weights, list of module loss values and final value to be optimised
+    """
+    def state(self, *args):
+        for module in self.modules_obj:
+            module.update_state(*args)
+
+
+    """
+    Get values of modules
+    :return: list of module values
+    """
     def value(self):
-        return self.modules_obj[0].obtain_value()
+        values = []
+        for i in range(len(self.modules_obj)):
+            values += [self.modules_obj[i].obtain_value()]
+        return values
 
+    """
+    Calculation of the final value of the loss function
+    :return: list of module weights, list of module loss values and final value to be optimised
+    """
     def optimiziation(self):
-        return self.modules_obj[0].optimiziation_function()
+        values = []
+        weight = []
+        for i in range(len(self.modules_obj)):
+           weight += [self.modules_obj[i].weight]
+           values += [self.modules_obj[i].optimiziation_function()]
 
+        norm_weight = [w / np.sum(weight) for w in weight]
+        final_opt = np.sum([w*v for w,v in zip(norm_weight,values)])
+        return weight, values, final_opt
+
+    """
+    Plotting graphs of values from each module
+    """
     def plot(self):
-        self.modules_obj[0].plotting_function()
+        for i in range(len(self.modules_obj)):
+            self.modules_obj[i].plotting_function()
 
+    """
+    Saving log informations of each module
+    """
     def log(self):
-        self.modules_obj[0].log_function()
+        for i in range(len(self.modules_obj)):
+            self.modules_obj[i].log_function()
