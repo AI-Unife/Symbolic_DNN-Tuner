@@ -20,11 +20,6 @@ from module import module
 # init modules istance with modules names as first arg
 modules = module(["new_flop_calculator"])
 
-import tensorflow as tf
-from tensorflow.python.framework.convert_to_constants import (
-    convert_variables_to_constants_v2_as_graph,
-)
-
 class controller:
     def __init__(self, X_train, Y_train, X_test, Y_test, n_classes):
         # self.nn = neural_network(X_train, Y_train, X_test, Y_test, n_classes)
