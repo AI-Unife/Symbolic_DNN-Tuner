@@ -63,12 +63,15 @@ class LfiIntegration:
         e.close()
         return evidence
 
-    def learning(self, improve, tuning, diagnosis):
+    def learning(self, improve, tuning, diagnosis, actions):
         evidence = self.evidence(improve, tuning, diagnosis)
         self.experience.append(evidence)
         f1 = open("symbolic/lfi.pl", "r")
         to_learn = f1.read()
         f1.close()
+
+        to_learn += actions
+
         _, weights, _, _, lfi_problem = lfi.run_lfi(PrologString(to_learn), self.experience)
 
         return weights, lfi_problem

@@ -15,6 +15,16 @@ from improvement_checker import ImprovementChecker
 from integral import integrals
 from shutil import copyfile
 
+from module import module
+
+# init modules istance with modules names as first arg
+modules = module(["new_flop_calculator"])
+
+import tensorflow as tf
+from tensorflow.python.framework.convert_to_constants import (
+    convert_variables_to_constants_v2_as_graph,
+)
+
 class controller:
     def __init__(self, X_train, Y_train, X_test, Y_test, n_classes):
         # self.nn = neural_network(X_train, Y_train, X_test, Y_test, n_classes)
@@ -102,6 +112,21 @@ class controller:
         self.nn = neural_network(self.X_train, self.Y_train, self.X_test, self.Y_test, self.n_classes)
         self.score, self.history, self.model, self.flops, self.nparams = self.nn.training(params, self.new, self.new_fc, self.new_conv, self.rem_conv, self.da,
                                                                 self.space)
+
+        #load modules during only in the first iteration
+        if self.iter == 0:
+            modules.load_modules()
+
+        # update state of modules
+        # each module will take the necessary args internally
+        modules.state(self.score[0], self.score[1], self.model)
+ 
+        # print modules informations
+        modules.print()
+        
+        # log module values of training
+        modules.log()
+
         if os.path.exists("graph_report.txt"):
             os.remove("graph_report.txt")
         f = open("graph_report.txt", "a")
@@ -109,6 +134,9 @@ class controller:
         f.close()
         self.rem_conv = False
         self.iter += 1
+
+        # return the function value to be optimised
+        _, _, opt_value = modules.optimiziation()
 
         # return -self.score[1]
         return self.optimiziation_function(self.score[1], self.flops)
@@ -119,14 +147,27 @@ class controller:
         :return: call to tuning method or hp_space, model and accuracy(*-1)
         """
         print(colors.CYAN, "| START SYMBOLIC DIAGNOSIS ----------------------------------  |\n", colors.ENDC)
-        diagnosis_logs = open("algorithm_logs/diagnosis_symbolic_logs.txt", "a") # TODO add creation of folder when needed and absent in filesystem
+        diagnosis_logs = open("algorithm_logs/diagnosis_symbolic_logs.txt", "a")
         tuning_logs = open("algorithm_logs/tuning_symbolic_logs.txt", "a")
 
         improv = self.imp_checker.checker(self.score[1], self.score[0])
         self.db.insert_ranking(self.score[1], self.score[0])
 
+        # get rules and problems to create prolog model
+        rules, actions, problems = modules.get_rules()
+
+        # add facts and problems to NeuralSymbolicBridge
+        # and create dynamic prolog file contains list of possible problems
+        # only during first diagnosis iteration
+        if self.iter == 1:
+            for i in range(len(modules.modules_obj)):
+                self.nsb.initial_facts += modules.modules_obj[i].facts
+                self.nsb.problems += modules.modules_obj[i].problems
+
+            self.nsb.build_sym_prob(problems)
+
         if improv is not None:
-            _, lfi_problem = self.lfi.learning(improv, self.symbolic_tuning, self.symbolic_diagnosis)
+            _, lfi_problem = self.lfi.learning(improv, self.symbolic_tuning, self.symbolic_diagnosis, actions)
             sy_model = lfi_problem.get_model()
             self.nsb.edit_probs(sy_model)
 
@@ -137,13 +178,22 @@ class controller:
                 self.lacc = self.lacc/2 + 0.05
                 self.hloss = self.hloss/2 + 0.15
 
-        self.symbolic_tuning, self.symbolic_diagnosis = self.nsb.symbolic_reasoning(
-            [self.history['loss'], self.smooth(self.history['loss']),
+        facts_list = [self.history['loss'], self.smooth(self.history['loss']),
              self.history['accuracy'], self.smooth(self.history['accuracy']),
              self.history['val_loss'], self.history['val_accuracy'], int_loss, int_slope, self.lacc, self.hloss,
              self.flops, self.flops_th,
-             self.nparams, self.nparams_th],
-            diagnosis_logs, tuning_logs)
+             self.nparams, self.nparams_th]
+
+        # base facts list
+        facts_list_module = [self.history['loss'], self.smooth(self.history['loss']),
+             self.history['accuracy'], self.smooth(self.history['accuracy']),
+             self.history['val_loss'], self.history['val_accuracy'], int_loss, int_slope, self.lacc, self.hloss]
+
+        # add facts list from loaded modules
+        facts_list_module += modules.values()
+
+        self.symbolic_tuning, self.symbolic_diagnosis = self.nsb.symbolic_reasoning(
+            facts_list, diagnosis_logs, tuning_logs, rules)
 
         diagnosis_logs.close()
         tuning_logs.close()
@@ -172,6 +222,9 @@ class controller:
         return new_space, -self.score[1], self.model
 
     def plotting_obj_function(self):
+        # plot graphs from each module
+        modules.plot()
+
         x = list(range(self.tuner_steps))
         x = [float(i) for i in x]
         y1 = self.tuner_opt_function

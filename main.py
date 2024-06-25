@@ -3,6 +3,9 @@ import time
 import sys
 import os
 
+os.system("")
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+
 from skopt import gp_minimize
 from skopt import load
 from skopt.callbacks import CheckpointSaver
@@ -15,9 +18,8 @@ from search_space import search_space
 from params_checker import paramsChecker
 
 # FOLDER SECTION --------------------------------------------------------------------------------------------------------
-os.system("")
 
-new_dir = ['Model', 'Weights', 'database', 'checkpoints', 'log_folder', 'algorithm_logs']
+new_dir = ['Model', 'Weights', 'database', 'checkpoints', 'log_folder', 'algorithm_logs', 'loss', 'dashboard/model']
 
 for folder in new_dir:
     try:
@@ -34,6 +36,7 @@ for folder in new_dir:
 X_train, X_test, Y_train, Y_test, n_classes = cifar_data()
 dt = datetime.datetime.now()
 max_evals = 30
+
 
 # hyper-parameters
 sp = search_space()

@@ -7,11 +7,15 @@ from problog.tasks import sample
 
 class NeuralSymbolicBridge:
     def __init__(self):
-        self.initial_facts = ['l', 'sl', 'a', 'sa', 'vl', 'va',
-                              'int_loss', 'int_slope', 'lacc', 'hloss', 'flops', 'flops_th', 'nparams', 'nparams_th']
-        self.problems = ['overfitting', 'underfitting', 'inc_loss', 'floating_loss', 'high_lr', 'low_lr', 'latency', 'model_size']
+        #self.initial_facts = ['l', 'sl', 'a', 'sa', 'vl', 'va',
+        #                      'int_loss', 'int_slope', 'lacc', 'hloss', 'flops', 'flops_th', 'nparams', 'nparams_th']
+        #self.problems = ['overfitting', 'underfitting', 'inc_loss', 'floating_loss', 'high_lr', 'low_lr', 'latency', 'model_size']
 
-    def build_symbolic_model(self, facts):
+        self.initial_facts = ['l', 'sl', 'a', 'sa', 'vl', 'va',
+                              'int_loss', 'int_slope', 'lacc', 'hloss']
+        self.problems = ['overfitting', 'underfitting', 'inc_loss', 'floating_loss', 'high_lr', 'low_lr']
+
+    def build_symbolic_model(self, facts, rules):
         """
         build logic program
         :param facts: facts to code dynamically into the symbolic program
@@ -32,11 +36,13 @@ class NeuralSymbolicBridge:
             sym_facts = sym_facts + i + "(" + str(fa) + ").\n"
 
         output = open("symbolic/final.pl", "w")
-        output.write(sym_facts + "\n" + sym_prob + "\n" + sym_model)
+        #output.write(sym_facts + "\n" + sym_prob + "\n" + sym_model)
+        output.write(sym_facts + "\n" + sym_prob + "\n" + sym_model + "\n" + rules)
         output.close()
 
         # return the assembled model
-        return PrologString(sym_facts + "\n" + sym_prob + "\n" + sym_model)
+        #return PrologString(sym_facts + "\n" + sym_prob + "\n" + sym_model)
+        return PrologString(sym_facts + "\n" + sym_prob + "\n" + sym_model + "\n" + rules)
 
     def complete_probs(self, sym_model, prev_model):
         new_str = ""
@@ -70,6 +76,14 @@ class NeuralSymbolicBridge:
         #     res.append(new_str[:len(new_str)-2] + ".")
         return "\n".join(res)
 
+    def build_sym_prob(self, problems):
+        base_model = open("symbolic/sym_prob_base.pl", "r").read()
+        base_model += problems
+
+        f = open("symbolic/sym_prob.pl", "w")
+        f.write(base_model)
+        f.close()
+
     def edit_probs(self, sym_model):
         prev_model = open("symbolic/sym_prob.pl", "r").read()
 
@@ -82,7 +96,7 @@ class NeuralSymbolicBridge:
         f.write(new)
         f.close()
 
-    def symbolic_reasoning(self, facts, diagnosis_logs, tuning_logs):
+    def symbolic_reasoning(self, facts, diagnosis_logs, tuning_logs, rules):
         """
         Start symbolic reasoning
         :param facts: facts to code into the symbolic program
@@ -92,7 +106,7 @@ class NeuralSymbolicBridge:
         diagnosis = []
         res = {}
         problems = []
-        symbolic_model = self.build_symbolic_model(facts)
+        symbolic_model = self.build_symbolic_model(facts, rules)
         symbolic_evaluation = get_evaluatable().create_from(symbolic_model).evaluate()
 
         for i in symbolic_evaluation.keys():

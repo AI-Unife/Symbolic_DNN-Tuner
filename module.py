@@ -61,8 +61,7 @@ class module:
         return rules, actions, problems
     
     """
-    Calculation of the final value of the loss function
-    :return: list of module weights, list of module loss values and final value to be optimised
+    Update internal state of modules
     """
     def state(self, *args):
         for module in self.modules_obj:

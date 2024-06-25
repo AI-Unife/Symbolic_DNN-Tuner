@@ -21,7 +21,12 @@ from LOLR import Lolr
 from search_space import search_space
 
 import flops_calculator as fc
+#from loss.new_flop_calculator import new_flop_calculator
 
+#from module import module
+
+#modules = module(["new_flop_calculator"])
+#modules.load_modules()
 
 class neural_network:
     def __init__(self, X_train, Y_train, X_test, Y_test, n_classes):
@@ -399,13 +404,14 @@ class neural_network:
         score = model.evaluate(self.test_data, self.test_labels)
         weights_name = "Weights/weights-{}.weights.h5".format(model_name_id)
         model.save_weights(weights_name)
+
+        model.save("dashboard/model/model.keras")
         
         f = open("Model/model-{}.json".format(model_name_id))
         mj = json.load(f)
         model_json = json.dumps(mj)
         model = tf.keras.models.model_from_json(model_json)
         model.load_weights("Weights/weights-{}.weights.h5".format(model_name_id))
-        model.save("dashboard/model/model.h5")
         return score, history, model, flops, nparams  # , rta
 
 
