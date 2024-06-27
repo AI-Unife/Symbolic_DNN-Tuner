@@ -7,8 +7,8 @@ action(inc_lr,low_lr):- eve, problem(low_lr).
 0.6::action(data_augmentation,overfitting):- problem(overfitting).
 0.3::action(decr_lr,underfitting):- problem(underfitting).
 0.0::action(inc_neurons,underfitting):- problem(underfitting).
-0.45::action(new_fc_layer):- problem(underfitting), \+problem(latency), \+problem(model_size).
-0.45::action(new_conv_layer):- problem(underfitting), \+problem(latency), \+problem(model_size).
+0.45::action(new_fc_layer):- problem(underfitting), \+problem(model_size), \+problem(latency).
+0.45::action(new_conv_layer):- problem(underfitting), \+problem(model_size), \+problem(latency).
 0.85::action(inc_batch_size,floating_loss):- problem(floating_loss).
 0.15::action(decr_lr,floating_loss):- problem(floating_loss).
 0.4::action(dec_neurons,latency):- problem(latency).
