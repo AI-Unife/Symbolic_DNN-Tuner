@@ -50,6 +50,7 @@ class controller:
         self.levels = [7, 10, 13]
         self.imp_checker = ImprovementChecker(self.db, self.lfi)
         self.modules = module(["new_flop_calculator", "accuracy_module"])
+        self.rules, self.actions, self.problems = self.modules.get_rules()
 
     def set_case(self, new):
         self.new = new
@@ -122,21 +123,18 @@ class controller:
         improv = self.imp_checker.checker(self.score[1], self.score[0])
         self.db.insert_ranking(self.score[1], self.score[0])
 
-        # get rules and problems to create prolog model
-        rules, actions, problems = self.modules.get_rules()
-
         # add facts and problems to NeuralSymbolicBridge
         # and create dynamic prolog file contains list of possible problems
         # only during first diagnosis iteration
         if self.iter == 1:
-            for i in range(len(self.modules.modules_obj)):
-                self.nsb.initial_facts += self.modules.modules_obj[i].facts
-                self.nsb.problems += self.modules.modules_obj[i].problems
+            for module in self.modules.modules_obj:
+                self.nsb.initial_facts += module.facts
+                self.nsb.problems += module.problems
 
-            self.nsb.build_sym_prob(problems)
+            self.nsb.build_sym_prob(self.problems)
 
         if improv is not None:
-            _, lfi_problem = self.lfi.learning(improv, self.symbolic_tuning, self.symbolic_diagnosis, actions)
+            _, lfi_problem = self.lfi.learning(improv, self.symbolic_tuning, self.symbolic_diagnosis, self.actions)
             sy_model = lfi_problem.get_model()
             self.nsb.edit_probs(sy_model)
 
@@ -156,7 +154,7 @@ class controller:
         facts_list_module += self.modules.values()
 
         self.symbolic_tuning, self.symbolic_diagnosis = self.nsb.symbolic_reasoning(
-            facts_list_module, diagnosis_logs, tuning_logs, rules)
+            facts_list_module, diagnosis_logs, tuning_logs, self.rules)
 
         diagnosis_logs.close()
         tuning_logs.close()
