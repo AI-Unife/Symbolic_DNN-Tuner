@@ -5,6 +5,7 @@ import os
 
 os.system("")
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 from skopt import gp_minimize
 from skopt import load
@@ -36,7 +37,6 @@ for folder in new_dir:
 X_train, X_test, Y_train, Y_test, n_classes = cifar_data()
 dt = datetime.datetime.now()
 max_evals = 30
-
 
 # hyper-parameters
 sp = search_space()

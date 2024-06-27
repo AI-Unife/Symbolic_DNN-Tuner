@@ -20,14 +20,6 @@ from dataset import cifar_data
 from LOLR import Lolr
 from search_space import search_space
 
-import flops_calculator as fc
-#from loss.new_flop_calculator import new_flop_calculator
-
-#from module import module
-
-#modules = module(["new_flop_calculator"])
-#modules.load_modules()
-
 class neural_network:
     def __init__(self, X_train, Y_train, X_test, Y_test, n_classes):
         self.train_data = X_train
@@ -351,16 +343,9 @@ class neural_network:
         model_name = "Model/model-{}.json".format(model_name_id)
         with open(model_name, 'w') as json_file:
             json_file.write(model_json)
-        flops, _ = fc.analyze_model(model)
-        flops = flops.total_float_ops
-        trainableParams = np.sum([np.prod(v.shape)for v in model.trainable_weights])
-        nonTrainableParams = np.sum([np.prod(v.shape)for v in model.non_trainable_weights])
-        nparams = trainableParams + nonTrainableParams
-   
+        
         self.last_model_id = model_name_id
 
-        print(colors.FAIL, "FLOPS: " + str(flops), colors.ENDC)
-        print(colors.FAIL, "PARAMS: " + str(nparams), colors.ENDC)
         try:
             model.load_weights("Weights/weights.h5")
         except:
@@ -412,7 +397,7 @@ class neural_network:
         model_json = json.dumps(mj)
         model = tf.keras.models.model_from_json(model_json)
         model.load_weights("Weights/weights-{}.weights.h5".format(model_name_id))
-        return score, history, model, flops, nparams  # , rta
+        return score, history, model
 
 
 if __name__ == '__main__':

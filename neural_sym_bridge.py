@@ -7,10 +7,6 @@ from problog.tasks import sample
 
 class NeuralSymbolicBridge:
     def __init__(self):
-        #self.initial_facts = ['l', 'sl', 'a', 'sa', 'vl', 'va',
-        #                      'int_loss', 'int_slope', 'lacc', 'hloss', 'flops', 'flops_th', 'nparams', 'nparams_th']
-        #self.problems = ['overfitting', 'underfitting', 'inc_loss', 'floating_loss', 'high_lr', 'low_lr', 'latency', 'model_size']
-
         self.initial_facts = ['l', 'sl', 'a', 'sa', 'vl', 'va',
                               'int_loss', 'int_slope', 'lacc', 'hloss']
         self.problems = ['overfitting', 'underfitting', 'inc_loss', 'floating_loss', 'high_lr', 'low_lr']
@@ -36,12 +32,10 @@ class NeuralSymbolicBridge:
             sym_facts = sym_facts + i + "(" + str(fa) + ").\n"
 
         output = open("symbolic/final.pl", "w")
-        #output.write(sym_facts + "\n" + sym_prob + "\n" + sym_model)
         output.write(sym_facts + "\n" + sym_prob + "\n" + sym_model + "\n" + rules)
         output.close()
 
         # return the assembled model
-        #return PrologString(sym_facts + "\n" + sym_prob + "\n" + sym_model)
         return PrologString(sym_facts + "\n" + sym_prob + "\n" + sym_model + "\n" + rules)
 
     def complete_probs(self, sym_model, prev_model):
@@ -76,12 +70,61 @@ class NeuralSymbolicBridge:
         #     res.append(new_str[:len(new_str)-2] + ".")
         return "\n".join(res)
 
+    def clean_problems(self, problems):
+        clean_p = r'[.\s]'
+        return [re.sub(clean_p, '', p) for p in problems]
+
     def build_sym_prob(self, problems):
         base_model = open("symbolic/sym_prob_base.pl", "r").read()
+        
         base_model += problems
+        rules_dict = {}
+        rules = ""
+
+        for problem in base_model.splitlines():
+            # filter model based on different types of rules
+            # atoms, probilistic and deterministic rules
+            # probabilistic rules splitted in prob, action and problems
+            prob_rules = re.search(r'(.*)(?<=::)(.*)(?<=:-)(.*)', problem)
+            det_rules = re.search(r'^([\D].*)', problem)
+            atoms = re.search(r'^((?!:-).)*$', problem)
+
+            # adding atoms and deterministic rules
+            if atoms is not None:
+                rules += "".join(atoms.group()) + "\n"
+
+            if det_rules is not None:
+                rules += "".join(det_rules.group()) + "\n"
+
+            if prob_rules is not None:
+                #get probabilty and action
+                base_prob, action = prob_rules.group(1), prob_rules.group(2)
+
+                # use the name of the action as a key
+                # each element of the dict has a list of two elements
+                # first is the rule's probability, the second a list of possible problems
+                if not action in rules_dict:
+                    rules_dict[action] = [base_prob, []]
+  
+                # add to the actions list the possible problems from modules
+                new_problems = self.clean_problems(prob_rules.group(3).split(','))
+                rules_dict[action][1] += new_problems
+
+        # iterate over every probabilist action
+        for action in rules_dict:
+            # init rule with prob and name of the action
+            new_rule = rules_dict[action][0] + action
+ 
+            # delete duplicate problems with set
+            merged_problem = list(set(rules_dict[action][1]))
+
+            # complete the rule and add it to the model
+            for new_p in merged_problem:
+                new_rule += " " + new_p +  ","    
+            rules += new_rule[:-1] + ".\n"
 
         f = open("symbolic/sym_prob.pl", "w")
-        f.write(base_model)
+        f.write(rules)
         f.close()
 
     def edit_probs(self, sym_model):

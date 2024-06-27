@@ -10,7 +10,7 @@ class common_interface(ABC):
         required_variables = ['facts','problems','weight']
         for var in required_variables:
             if not hasattr(cls, var):
-                raise NotImplementedError(f'Required variable `{var}` in {cls} not found')
+                raise NotImplementedError(f"Required variable {var} in {cls} not found")
 
     """
     Function to update the internal state of the module at each iteration
