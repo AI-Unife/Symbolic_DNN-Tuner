@@ -14,7 +14,7 @@ class new_flop_calculator(common_interface):
     problems = ['latency', 'model_size']
 
     #weight of the module for the final loss calculation
-    weight = 0.76
+    weight = 0.05
 
     def __init__(self):
         self.epsilon = 0.33
@@ -59,11 +59,11 @@ class new_flop_calculator(common_interface):
         y2 = self.flops_gap
         plt.plot(x, y1, color='black', label="Total Object Function")
         plt.plot(x, y2, color='blue', label="FLOPS gap")
-        plt.savefig("objective_funct_2.png")
+        plt.savefig("objective_funct.png")
 
     def log_function(self):
-        if os.path.exists("graph_report_2.txt"):
-            os.remove("graph_report_2.txt")
-        f = open("graph_report_2.txt", "a")
+        if os.path.exists("graph_report.txt"):
+            os.remove("graph_report.txt")
+        f = open("graph_report.txt", "a")
         f.write(str(self.flops_th) + " " + str(self.flops) + " " + str(self.accuracy) + "\n")
         f.close()
