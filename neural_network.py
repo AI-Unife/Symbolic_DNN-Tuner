@@ -31,7 +31,7 @@ class neural_network:
         self.train_data /= 255
         self.test_data /= 255
         self.n_classes = n_classes
-        self.epochs = 200
+        self.epochs = 2
         self.last_dense = 0
         self.counter_fc = 0
         self.counter_conv = 0
@@ -102,13 +102,13 @@ class neural_network:
             if self.rgl:
                 if 'conv' in layer.name:
                     layer.kernel_regularizer = reg.l2(params['reg'])
-            for node in layer.outbound_nodes:
-                if len(layer.outbound_nodes) > 1:
+            for node in layer._outbound_nodes:
+                if len(layer._outbound_nodes) > 1:
                     if 'dense' in layer.name and not self.dense and check:
                         check = False
                         pass
                     else:
-                        layer_name = node.outbound_layer.name
+                        layer_name = node.operation.name if hasattr(node, 'operation') else node.outbound_layer.name
                         if layer_name not in network_dict['input_layers_of']:
                             network_dict['input_layers_of'].update(
                                 {layer_name: [layer.name]})
@@ -117,7 +117,7 @@ class neural_network:
                         check = True
                         break
                 else:
-                    layer_name = node.outbound_layer.name
+                    layer_name = node.operation.name if hasattr(node, 'operation') else node.outbound_layer.name
                     if layer_name not in network_dict['input_layers_of']:
                         network_dict['input_layers_of'].update(
                             {layer_name: [layer.name]})
@@ -146,10 +146,12 @@ class neural_network:
 
         # Iterate over all layers after the input
         for layer in model.layers[1:]:
-            if layer.name == 'final':
-                name = "dense_1"
-            else:
-                name = layer.name
+            #if layer.name == 'final':
+            #    name = "dense_1"
+            #else:
+            #    name = layer.name
+
+            name = layer.name
             layer_input = [network_dict['new_output_tensor_of'][layer_aux]
                            for layer_aux in network_dict['input_layers_of'][name]]
             if len(layer_input) == 1:
@@ -165,6 +167,7 @@ class neural_network:
                     pass
                 else:
                     raise ValueError('position must be: before, after or replace')
+
                 if not 'Softmax' in layer.output.name or not 'softm' in layer.output.name:
                     if self.rgl and not any(['batch' in i.name for i in model.layers]):
                         naming = '{}'.format(time())
@@ -205,6 +208,7 @@ class neural_network:
 
             # Set new output tensor (the original one, or the one of the inserted layer)
             network_dict['new_output_tensor_of'].update({layer.name: x})
+
         input = model.inputs
         return Model(inputs=input, outputs=x)
 
@@ -275,7 +279,7 @@ class neural_network:
                         pass
                 else:
                     _x = model.get_layer(i.name)
-                    _x.outbound_nodes[0] = to_delete[1].outbound_nodes[0]
+                    _x._outbound_nodes[0] = to_delete[1]._outbound_nodes[0]
                     x = _x(x)
             else:
                 if i.__class__ == buff.__class__:
@@ -299,11 +303,12 @@ class neural_network:
                 x = BatchNormalization(name=i.name)(x)
             else:
                 if 'activation' in i.name and e == len(head)-1:
-                    x = Activation('Softmax', name='activation_{}'.format(time()))(x)
+                    x = Activation('softmax', name='activation_{}'.format(time()))(x)
                 else:
                     x = Activation(params['activation'], name='activation_{}'.format(time()))(x)
         
-        return Model(inputs=new_input.input, outputs=x)
+        new_input_model = new_input._input_tensor if hasattr(new_input, '_input_tensor') else new_input.input             
+        return Model(inputs=new_input_model, outputs=x)
         
 
     def training(self, params, new, new_fc, new_conv, rem_conv, da, space):
@@ -343,7 +348,7 @@ class neural_network:
         model_name = "Model/model-{}.json".format(model_name_id)
         with open(model_name, 'w') as json_file:
             json_file.write(model_json)
-        
+
         self.last_model_id = model_name_id
 
         try:
