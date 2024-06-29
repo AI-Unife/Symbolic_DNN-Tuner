@@ -124,6 +124,10 @@ class neural_network:
                     else:
                         network_dict['input_layers_of'][layer_name].append(layer.name)
 
+        # new key 'dense_1' to match the name in the next check of layer's name
+        if 'final' in network_dict['input_layers_of']:
+            network_dict['input_layers_of']['dense_1'] = network_dict['input_layers_of'].pop('final')
+            
         # Set the output tensor of the input layer
         network_dict['new_output_tensor_of'].update(
             {model.layers[0].name: model.input})
@@ -146,14 +150,14 @@ class neural_network:
 
         # Iterate over all layers after the input
         for layer in model.layers[1:]:
-            #if layer.name == 'final':
-            #    name = "dense_1"
-            #else:
-            #    name = layer.name
+            if layer.name == 'final':
+                name = "dense_1"
+            else:
+                name = layer.name
 
-            name = layer.name
             layer_input = [network_dict['new_output_tensor_of'][layer_aux]
                            for layer_aux in network_dict['input_layers_of'][name]]
+ 
             if len(layer_input) == 1:
                 layer_input = layer_input[0]
 
