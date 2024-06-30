@@ -159,6 +159,11 @@ class neural_network:
                            for layer_aux in network_dict['input_layers_of'][name]]
  
             if len(layer_input) == 1:
+                # fix error keras >= 3.4
+                # 'input layer' has stored in list of lists [[...]] instead of a single list [...]
+                # if the first element is a list, extract it
+                if type(layer_input[0]) is list:
+                    layer_input = layer_input[0]
                 layer_input = layer_input[0]
 
             # Insert layer if name matches the regular expression
