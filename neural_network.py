@@ -31,7 +31,7 @@ class neural_network:
         self.train_data /= 255
         self.test_data /= 255
         self.n_classes = n_classes
-        self.epochs = 2
+        self.epochs = 200
         self.last_dense = 0
         self.counter_fc = 0
         self.counter_conv = 0
@@ -124,10 +124,6 @@ class neural_network:
                     else:
                         network_dict['input_layers_of'][layer_name].append(layer.name)
 
-        # new key 'dense_1' to match the name in the next check of layer's name
-        if 'final' in network_dict['input_layers_of']:
-            network_dict['input_layers_of']['dense_1'] = network_dict['input_layers_of'].pop('final')
-            
         # Set the output tensor of the input layer
         network_dict['new_output_tensor_of'].update(
             {model.layers[0].name: model.input})
@@ -157,10 +153,13 @@ class neural_network:
 
             layer_input = [network_dict['new_output_tensor_of'][layer_aux]
                            for layer_aux in network_dict['input_layers_of'][name]]
- 
+
+            # get activation name if layer has that attribute
+            layer_output_name = layer.activation.__name__ if hasattr(layer, 'activation') else layer.output.name
+
             if len(layer_input) == 1:
                 # fix error keras >= 3.4
-                # 'input layer' has stored in list of lists [[...]] instead of a single list [...]
+                # 'input layer' is stored in list of lists [[...]] instead of a single list [...]
                 # if the first element is a list, extract it
                 if type(layer_input[0]) is list:
                     layer_input = layer_input[0]
@@ -177,7 +176,7 @@ class neural_network:
                 else:
                     raise ValueError('position must be: before, after or replace')
 
-                if not 'Softmax' in layer.output.name or not 'softm' in layer.output.name:
+                if not 'softmax' in layer_output_name or not 'softm' in layer_output_name:
                     if self.rgl and not any(['batch' in i.name for i in model.layers]):
                         naming = '{}'.format(time())
                         x = BatchNormalization(name="batch_norm_{}".format(naming))(x)
@@ -204,8 +203,8 @@ class neural_network:
                 if position == 'before':
                     x = layer(x)
             else:
-                if layer.output.shape[1] == 10 and re.match(layer_regex, layer.name) and not 'Softmax' in \
-                                                                                             layer.output.name:
+                if layer.output.shape[1] == 10 and re.match(layer_regex, layer.name) and not 'softmax' in \
+                                                                                             layer_output_name:
                     x = Dense(layer.output.shape[1], name='final')(x) 
                 else:
                     if self.conv and 'dense' in layer.name and layer.output.shape[1] == 10:
