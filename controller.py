@@ -50,7 +50,6 @@ class controller:
         self.levels = [7, 10, 13]
         self.imp_checker = ImprovementChecker(self.db, self.lfi)
         self.modules = module(["new_flop_calculator", "accuracy_module"])
-        self.rules, self.actions, self.problems = self.modules.get_rules()
 
     def set_case(self, new):
         self.new = new
@@ -93,7 +92,7 @@ class controller:
         # update state of modules
         # each module will take the necessary args internally
         self.modules.state(self.score[0], self.score[1], self.model)
- 
+
         # print modules informations
         self.modules.print()
         
@@ -103,9 +102,10 @@ class controller:
         self.rem_conv = False
         self.iter += 1
 
-        # if no module has been loaded, accuracy will be the value to be optimised
+        # if no module has been loaded or is incorrect for the symbolic part
+        # accuracy will be the value to be optimised
         # otherwise return the finale function value to be optimised
-        if len(self.modules.modules_obj) == 0:
+        if (len(self.modules.modules_obj) == 0) or not self.modules.ready():
             return -self.score[1]
         else:
             _, _, opt_value = self.modules.optimiziation()
@@ -123,21 +123,6 @@ class controller:
         improv = self.imp_checker.checker(self.score[1], self.score[0])
         self.db.insert_ranking(self.score[1], self.score[0])
 
-        # add facts and problems to NeuralSymbolicBridge
-        # and create dynamic prolog file contains list of possible problems
-        # only during first diagnosis iteration
-        if self.iter == 1:
-            for module in self.modules.modules_obj:
-                self.nsb.initial_facts += module.facts
-                self.nsb.problems += module.problems
-
-            self.nsb.build_sym_prob(self.problems)
-
-        if improv is not None:
-            _, lfi_problem = self.lfi.learning(improv, self.symbolic_tuning, self.symbolic_diagnosis, self.actions)
-            sy_model = lfi_problem.get_model()
-            self.nsb.edit_probs(sy_model)
-
         int_loss, int_slope = integrals(self.history['val_loss'])
 
         for level in self.levels:
@@ -150,8 +135,26 @@ class controller:
              self.history['accuracy'], self.smooth(self.history['accuracy']),
              self.history['val_loss'], self.history['val_accuracy'], int_loss, int_slope, self.lacc, self.hloss]
 
-        # add facts list from loaded modules
-        facts_list_module += self.modules.values()
+        # add facts values from loaded modules
+        facts_list_module += self.modules.values().values()
+
+        # add facts and problems to NeuralSymbolicBridge
+        # and create dynamic prolog file contains a list of possible problems
+        # only during first diagnosis iteration
+        if self.iter == 1:
+            self.rules, self.actions, self.problems = self.modules.get_rules()
+
+            for module, no_err in zip(self.modules.modules_obj, self.modules.modules_ready):
+                if no_err:
+                    self.nsb.initial_facts += module.facts
+                    self.nsb.problems += module.problems
+
+            self.nsb.build_sym_prob(self.problems)
+
+        if improv is not None:
+            _, lfi_problem = self.lfi.learning(improv, self.symbolic_tuning, self.symbolic_diagnosis, self.actions)
+            sy_model = lfi_problem.get_model()
+            self.nsb.edit_probs(sy_model)
 
         self.symbolic_tuning, self.symbolic_diagnosis = self.nsb.symbolic_reasoning(
             facts_list_module, diagnosis_logs, tuning_logs, self.rules)

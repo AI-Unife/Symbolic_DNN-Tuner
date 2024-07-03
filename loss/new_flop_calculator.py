@@ -35,7 +35,7 @@ class new_flop_calculator(common_interface):
 
     def obtain_values(self):
         # has to match the list of facts
-        return [self.flops, self.flops_th, self.nparams, self.nparams_th]
+        return dict(zip(self.facts, [self.flops, self.flops_th, self.nparams, self.nparams_th]))
 
     def printing_values(self):
         print(colors.FAIL, "FLOPS: " + str(self.flops), colors.ENDC)

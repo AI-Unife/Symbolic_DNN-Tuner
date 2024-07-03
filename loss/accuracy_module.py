@@ -5,7 +5,7 @@ import os
 class accuracy_module(common_interface):
 
     #facts and problems for creating the prolog model
-    facts = []
+    facts = ['new_acc']
     problems = []
 
     #weight of the module for the final loss calculation
@@ -19,7 +19,7 @@ class accuracy_module(common_interface):
         
     def obtain_values(self):
         # has to match the list of facts
-        return []
+        return {'new_acc' : self.accuracy}
 
     def printing_values(self):
         print(colors.FAIL, "ACCURACY: " + str(self.accuracy), colors.ENDC)
