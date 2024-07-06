@@ -49,7 +49,7 @@ class controller:
         self.hloss = 1.2
         self.levels = [7, 10, 13]
         self.imp_checker = ImprovementChecker(self.db, self.lfi)
-        self.modules = module(["new_flop_calculator", "accuracy_module"])
+        self.modules = module(["energy_module", "new_flop_calculator", "accuracy_module"])
 
     def set_case(self, new):
         self.new = new
@@ -75,7 +75,13 @@ class controller:
             smoothed.append(smoothed_val)
             last = smoothed_val
         return smoothed
-    
+
+    def manage_configuration(self):
+        energy_name = "energy_module"
+        if energy_name in self.modules.modules_name:
+            index = self.modules.modules_name.index(energy_name)
+            self.modules.modules_obj[index].fix_configuration()      
+
     def training(self, params):
         """
         Training and tasting the neural network

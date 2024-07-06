@@ -78,7 +78,10 @@ class tuning_rules_symbolic:
 
     def dec_layers(self):
         self.controller.remove_conv_section(True)
-    
+
+    def new_config(self):
+        self.controller.manage_configuration()
+  
     # ------------------------------------
 
     def repair(self, sym_tuning, model, params):
@@ -88,7 +91,7 @@ class tuning_rules_symbolic:
         '''
         del self.controller.model
         for d in sym_tuning:
-            if d != 'reg_l2' and d != 'data_augmentation' and d != 'new_fc_layer' and d != 'new_conv_layer' and d != 'dec_layers':
+            if d != 'reg_l2' and d != 'data_augmentation' and d != 'new_fc_layer' and d != 'new_conv_layer' and d != 'dec_layers' and d != 'new_config':
                 d = "self." + d + "(params)"
             else:
                 d = "self." + d + "()"
