@@ -112,15 +112,18 @@ class energy_module(common_interface):
                 lower_limit = value_list[0]['limit']
                 current_limit = self.fpga_models[name]['limit']
 
-                # find a configuration that can hold the model,
-                # or find a better configuration than the previous one
-                #if (self.flops < current_limit) or (current_limit > self.current_range[1]):
-                if (self.flops_w > lower_limit):
+                # calculates the number of MFLOPS/WATT of the current configuration in the loop
+                temp_flops_w = (self.flops / 10**6) / self.fpga_models[name]['power_c']
+
+                # find a configuration that can hold the model
+                if (temp_flops_w > lower_limit):
                     # a new configuration has been found
-                    # save the name and the new range on which operate
+                    # save MFLOPS, name and new range on which operate
                     new_config = True
+                    self.flops_w = temp_flops_w
                     self.current_config = name
                     self.current_range = [lower_limit, current_limit]
+                    self.power = self.fpga_models[name]['power_c']
                    
                 # scrolls upwards to search a new configuration
                 value_list = value_list[1:]
@@ -143,15 +146,18 @@ class energy_module(common_interface):
                     lower_limit = value_list[0]['limit']
                 else: lower_limit = 0
 
-                # find a configuration that can hold the model,
-                # or find a better configuration than the previous one
-                #if (self.flops > lower_limit) or (lower_limit < self.current_range[0]):
-                if (self.flops_w < current_limit):
+                # calculates the number of MFLOPS/WATT of the current configuration in the loop
+                temp_flops_w = (self.flops / 10**6) / self.fpga_models[name]['power_c']
+
+                # find a configuration that can hold the model
+                if (temp_flops_w < current_limit):
                     # a new configuration has been found
-                    # save the name and the new range on which operate
+                    # save MFLOPS, name and new range on which operate
                     new_config = True
+                    self.flops_w = temp_flops_w
                     self.current_config = name
                     self.current_range = [lower_limit, current_limit]
+                    self.power = self.fpga_models[name]['power_c']
 
         if new_config:
             print(f" New configuration found: name : {self.current_config}, [MFLOPS/W] : {self.current_range[1]}\n")
@@ -161,7 +167,7 @@ class energy_module(common_interface):
         return {'low_p' : self.current_range[0], 'high_p' : self.current_range[1], 'flops_w' : self.flops_w, 'last_flops' : self.last_flops}
 
     def printing_values(self):
-        print(colors.FAIL, f"[MFLOPS/W]: {self.flops_w}", colors.ENDC)
+        print(colors.FAIL, f"ENERGY: {self.power}, MODEL: {self.flops_w} [MFLOPS/W]", colors.ENDC)
         print(colors.FAIL, f"CONFIG: {self.current_config} : {self.current_range[1]} [MFLOPS/W]", colors.ENDC)
 
     def optimiziation_function(self, *args):
