@@ -18,7 +18,17 @@ from shutil import copyfile
 from module import module
 
 class controller:
+    """
+    The controller class manages the training and tuning of the neural network,
+    interfacing with the underlying modules, identifying possible problems affecting
+    the architecture and how to solve them during iterations.
+    """
     def __init__(self, X_train, Y_train, X_test, Y_test, n_classes):
+        """
+        All attributes for managing the training of the neural network are initialised,
+        as well as auxiliary classes such as the one for interfacing with the symbolic part
+        and the one for storing the training progress on DB.
+        """
         # self.nn = neural_network(X_train, Y_train, X_test, Y_test, n_classes)
         self.X_train = X_train
         self.Y_train = Y_train
@@ -51,24 +61,52 @@ class controller:
         self.imp_checker = ImprovementChecker(self.db, self.lfi)
         self.modules = module(["energy_module", "new_flop_calculator", "accuracy_module"])
 
+    # The following methods are used to determine actions to be applied to the network structure,
+    # for example addition or removal of convolutions and dense layers
+
     def set_case(self, new):
+        """
+        indicates if batch norm needs to be added
+        """
         self.new = new
 
     def add_fc_layer(self, new_fc, c):
+        """
+        indicates if one or more dense layers needs to be added, with 'c' the number of dense layers
+        """
         self.new_fc = [new_fc, c]
 
     def add_conv_section(self, new_conv, c):
+        """
+        indicates if one or more convolutional layers needs to be added, with 'c' the number of conv layers
+        """
         self.new_conv = [new_conv, c]
         
     def remove_conv_section(self, rem_conv):
+        """
+        indicates, based on the value of the boolean 'rem_conv', if a convolutional layer needs to be removed
+        """
         self.rem_conv = rem_conv
 
     def set_data_augmentation(self, da):
+        """
+        indicates, based on the value of the boolean 'da', if data augmentation is necessary
+        """
         self.da = da
 
     def smooth(self, scalars):
+        """
+        This function allows the smoothing of values in a list of values,
+        weighing the last value and the next one during the iterations.
+        :param scalars: scalars list to be smoothed (acc or loss history)
+        :return: list of smoothed values
+        """
+        # init variables, last will be the first el of the list,
+        # smoothed is initialised as an empty list
         last = scalars[0]
         smoothed = list()
+
+        # iterate over each value
         for point in scalars:
             # Calculate smoothed value
             smoothed_val = last * self.weight + (1 - self.weight) * point
@@ -77,8 +115,15 @@ class controller:
         return smoothed
 
     def manage_configuration(self):
+        """
+        this function calls, if initially loaded, the function in the 'energy module' for managing the power consumed,
+        searching for the best available configuration.
+        """
         energy_name = "energy_module"
+
+        # if the module has been loaded
         if energy_name in self.modules.modules_name:
+            # get the index from the loaded modules and, once the object is obtained, call the function
             index = self.modules.modules_name.index(energy_name)
             self.modules.modules_obj[index].fix_configuration()      
 
@@ -105,12 +150,13 @@ class controller:
         # log module values of training
         self.modules.log()
 
+        # increase the number of iterations
         self.rem_conv = False
         self.iter += 1
 
         # if no module has been loaded or is incorrect for the symbolic part
-        # accuracy will be the value to be optimised
-        # otherwise return the finale function value to be optimised
+        # accuracy will be the value to be optimized
+        # otherwise return the finale function value to be optimized
         if (len(self.modules.modules_obj) == 0) or not self.modules.ready():
             return -self.score[1]
         else:
@@ -126,11 +172,15 @@ class controller:
         diagnosis_logs = open("algorithm_logs/diagnosis_symbolic_logs.txt", "a")
         tuning_logs = open("algorithm_logs/tuning_symbolic_logs.txt", "a")
 
+        # check if there has been an improvement from the last iteration 
+        # also saves loss and accuracy values in the DB
         improv = self.imp_checker.checker(self.score[1], self.score[0])
         self.db.insert_ranking(self.score[1], self.score[0])
 
+        # integral of loss history, useful in the symbolic part
         int_loss, int_slope = integrals(self.history['val_loss'])
 
+        # at specific epochs, change  the threshold values for low accuracy and high loss detection
         for level in self.levels:
             if self.iter == level:
                 self.lacc = self.lacc/2 + 0.05
@@ -151,25 +201,35 @@ class controller:
             self.rules, self.actions, self.problems = self.modules.get_rules()
 
             for module, no_err in zip(self.modules.modules_obj, self.modules.modules_ready):
+                # if there are no errors in the module, dynamically add facts and problems to the symbolic part
                 if no_err:
                     self.nsb.initial_facts += module.facts
                     self.nsb.problems += module.problems
 
+            # create a file containing all the logical rules for detecting problems in the network
             self.nsb.build_sym_prob(self.problems)
 
+        # if there's data on improvement during training
+        # analyse the problems in the neural network, as well as possible solutions,
+        # and modify the probability with which these can be applied
         if improv is not None:
             _, lfi_problem = self.lfi.learning(improv, self.symbolic_tuning, self.symbolic_diagnosis, self.actions)
             sy_model = lfi_problem.get_model()
             self.nsb.edit_probs(sy_model)
 
+        # analysing the neurla network through rule-based reasoning,
+        # determining possible anomalies and solutions to these problems
         self.symbolic_tuning, self.symbolic_diagnosis = self.nsb.symbolic_reasoning(
             facts_list_module, diagnosis_logs, tuning_logs, self.rules)
 
+        # close log files in which previous informations are stored
         diagnosis_logs.close()
         tuning_logs.close()
 
         print(colors.CYAN, "| END SYMBOLIC DIAGNOSIS   ----------------------------------  |\n", colors.ENDC)
 
+        # if the network has anomalies, try to correct them through tuning operations,
+        # returning the new hyper-parameter space at the end
         if self.symbolic_tuning:
             self.space, to_optimize, self.model = self.tuning()
             return self.space, to_optimize
@@ -192,10 +252,17 @@ class controller:
         return new_space, -self.score[1], self.model
 
     def plotting_obj_function(self):
-        # plot graphs from each module
+        """
+        plot graphs from each loaded module
+        """
         self.modules.plot()
 
     def save_experience(self):
+        """
+        the function saves a database containing the progress of the last training of the neural network
+        """
+        # separate the path from the database extension on which the data are stored
+        # and add the name of the model to identify the db associated more easily
         db_split = os.path.splitext(self.db.db_name)
         db_dir = (db_split[0] + "-{}" + db_split[1]).format(self.nn.last_model_id)
         try:
