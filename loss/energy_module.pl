@@ -11,15 +11,12 @@ problem(config_tuning) :- \+high_power, \+diff_flops.
 
 % rules for power constraints
 t(0.4)::action(new_config, config_problem).
-t(0.5)::action(dec_neurons, config_tuning).
-t(0.4)::action(dec_layers, config_tuning).
+t(0.5)::action(dec_layers, config_tuning).
 
 %problem rules
-0.5::action(new_config,config_problem):- problem(config_problem).
-0.4::action(dec_neurons,config_tuning):- problem(config_tuning).
+0.4::action(new_config,config_problem):- problem(config_problem).
 0.5::action(dec_layers,config_tuning):- problem(config_tuning).
+
 %expanding old rules
-0.45::action(new_fc_layer):- \+problem(config_tuning).
+0.5::action(new_fc_layer):- \+problem(config_tuning).
 0.45::action(new_conv_layer):- \+problem(config_tuning).
-0.3::action(decr_lr,underfitting):- \+problem(config_tuning).
-0.6::action(inc_neurons,underfitting):- \+problem(config_tuning).
