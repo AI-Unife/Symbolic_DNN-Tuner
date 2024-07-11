@@ -41,7 +41,7 @@ class neural_network:
         self.train_data /= 255
         self.test_data /= 255
         self.n_classes = n_classes
-        self.epochs = 2
+        self.epochs = 200
         self.last_dense = 0
         self.counter_fc = 0
         self.counter_conv = 0
@@ -424,7 +424,96 @@ class neural_network:
         # depending on the keras version, it's necessary to determine where to find the input tensor
         new_input_model = new_input._input_tensor if hasattr(new_input, '_input_tensor') else new_input.input             
         return Model(inputs=new_input_model, outputs=x)
-        
+
+    def remove_fc(self, model):
+        """
+        Method used for removing a dense layer from the neural network
+        :param model: neural network model from which a dense layer needs to be removed
+        :return: model without a dense layer
+        """
+        # dense layer counter set to 0
+        d = 0
+
+        # get the layers of neural network and reverse the list
+        # scan the architecture in reverse in order to find the dense layer to remove
+        layers_list = model.layers
+        layers_list = layers_list[::-1]
+
+        # boolean to indicate if the layer to be removed was found
+        first_dense = False
+
+        # initialize dict containing the neural network layers after removal as empty
+        removed = {}
+
+        # initialize the name of the layer to be removed as an empty string
+        removed_name = ""
+
+        # iterate over each layer
+        for i in layers_list:
+  
+            # get the name of the current layer class from which it's derived
+            layer_name = i.__class__.__name__
+  
+            # boolean indicating if the current layer is dense
+            dense_type = ('dense' in i.name or 'dense' in layer_name)
+
+            # if the layer is dense and if it's not the output layer and 
+            # i haven't found the layer to remove, then save the name of the layer to remove
+            if dense_type and i.output.shape[1] != 10 and not first_dense:
+                d+= 1
+                first_dense = True
+                removed_name = i.name
+            else:
+                # otherwise if it's a dense layer, increases the dense layer counter and
+                # save the layer into the dict that maps the network architecture
+                if dense_type:
+                    d+=1
+                removed |= {i.name : i}
+
+        # If the total number of dense layers is less than or equal to 2, 
+        # specifically the output layer and a dense layer after the flatten,
+        # don't remove any layers and return the model
+        if d <= 2:
+            return model
+
+        # reverse the dict that maps the architecture of the neural network
+        removed_order = {}
+        for i in removed.keys():
+            removed_order = {i : removed[i]} | removed_order
+            
+        x = None
+        new_inputs = None
+
+        # build a new neural network, based on the previously saved layers,
+        # adding a specific layer based on the type of layer saved before
+        for layer_key in removed_order.keys():
+            layer = removed_order[layer_key]
+            layer_name = layer.__class__.__name__
+            if 'Input' in layer_name:
+                new_input = layer._input_tensor if hasattr(layer, '_input_tensor') else layer.input
+                if(new_input.shape[0] == None):
+                    new_input = new_input.shape[1:]
+                new_inputs = Input(new_input)
+                x = new_inputs
+            elif 'Conv' in layer_name:
+                x = Conv2D(layer.kernel.shape[-1], layer.kernel_size, padding='same', name=layer_key)(x)
+            elif 'Activation' in layer_name:
+                activation_name = layer.activation.__name__ if hasattr(layer, 'activation') else layer.output.name
+                x = Activation(activation_name, name=layer_key)(x)
+            elif 'Flatten' in layer_name:
+                x = Flatten()(x)
+            elif 'Batch' in layer_name:
+                x = BatchNormalization(name=layer_key)(x)
+            elif 'Dense' in layer_name:
+                x = Dense(layer.units, name=layer_key)(x)
+            elif 'Dropout' in layer_name:
+                x = Dropout(layer.rate, name=layer_key)(x)
+            elif 'Max' in layer_name:
+                x = MaxPooling2D(pool_size=(2, 2), name=layer_key)(x)
+
+        print(f"\n#### removed ####\n{removed_name}\n")
+
+        return Model(inputs=new_inputs, outputs=x)
 
     def training(self, params, new, new_fc, new_conv, rem_conv, da, space):
         """
