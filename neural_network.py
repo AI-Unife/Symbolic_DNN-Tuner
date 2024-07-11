@@ -27,7 +27,7 @@ class neural_network:
     """
     def __init__(self, X_train, Y_train, X_test, Y_test, n_classes):
         """
-        initialises the attributes of the class.
+        initialized the attributes of the class.
         first part is used for storing the examples of the dataset,
         the second part to keep track of the number of the various parts of the dnn,
         for example the number of convolutional or dense layers.
@@ -111,65 +111,93 @@ class neural_network:
         # Auxiliary dictionary to describe the network graph
         K.clear_session()
         network_dict = {'input_layers_of': {}, 'new_output_tensor_of': {}}
-        # Set the input layers of each layer
+        # set the input layers of each layer
         for layer in model.layers:
+            # if the flag indicating the addition of batch normalization is true
+            # and the current layer is a convolutional layer
             if self.rgl:
                 if 'conv' in layer.name:
+                    # add to layer regularization the batch normalization, getting parameters from the search space
                     layer.kernel_regularizer = reg.l2(params['reg'])
+            # iterate over each output layer of the current layer
             for node in layer._outbound_nodes:
+                # if the layer has multiple output
                 if len(layer._outbound_nodes) > 1:
+                    # if the current layer is dense and the flag for adding a new fully connected layer is false
                     if 'dense' in layer.name and not self.dense and check:
                         check = False
                         pass
                     else:
+                        # get the name of the layer depending on the version of keras
+                        # and if that name is not already a key, then add it to the dictionary
+                        # as a list with the input as the only element
                         layer_name = node.operation.name if hasattr(node, 'operation') else node.outbound_layer.name
                         if layer_name not in network_dict['input_layers_of']:
                             network_dict['input_layers_of'].update(
                                 {layer_name: [layer.name]})
                         else:
+                            # otherwise add it to the input layer list of the current layer
                             network_dict['input_layers_of'][layer_name].append(layer.name)
                         check = True
                         break
                 else:
+                    # get the name of the layer depending on the version of keras
+                    # and if that name is not already a key, then add it to the dictionary
+                    # as a list with the input as the only element
                     layer_name = node.operation.name if hasattr(node, 'operation') else node.outbound_layer.name
                     if layer_name not in network_dict['input_layers_of']:
                         network_dict['input_layers_of'].update(
                             {layer_name: [layer.name]})
                     else:
+                        # otherwise add it to the input layer list of the current layer
                         network_dict['input_layers_of'][layer_name].append(layer.name)
 
-        # Set the output tensor of the input layer
+        # set the output tensor of the input layer
         network_dict['new_output_tensor_of'].update(
             {model.layers[0].name: model.input})
 
-        
+        # get the input of each layer
+        # teh key is the name of a layer, while the value is the name of its input layer
         d = network_dict['input_layers_of']
         k = []
         _d = {}
+        # iterate over each layer and put all the layers name in the k list
         for i in d.keys():
             k.append(i)
         __d = d.copy()
+
+        # iterate over each pair of layer name and its content
         for i, j in zip(d, k):
+            # if a layer has mutiple inputs
             if len(d[i]) > 1:
+                # insert the name of the second input into the layer name list
+                # and insert into the dictionary the first input layer
                 k.insert(k.index(i), d[i][1])
                 __d[d[i][1]] = [d[i][0]]
                 __d[i].pop(0)
+
+        # copy the elements of the dict used for mmultiple inputs search into
+        # the dictionary that maps the structure of the network
         for i in k:
             _d[i] = __d[i]
         network_dict.pop('input_layers_of')
         network_dict['input_layers_of'] = _d
 
-        # Iterate over all layers after the input
+        # iterate over all layers after the input and build the new network
         for layer in model.layers[1:]:
+            # use 'dense_1' instead of 'final' for continuity with dense layer network names
             if layer.name == 'final':
                 name = "dense_1"
             else:
                 name = layer.name
 
+            # create list of input layers iterating over the dict, searching for the
+            # value of each layer of new_output_tensor_of in input_layers_of
             layer_input = [network_dict['new_output_tensor_of'][layer_aux]
                            for layer_aux in network_dict['input_layers_of'][name]]
 
             # get activation name if layer has that attribute
+            # this is used to get the name of the output layer based on the version of keras
             layer_output_name = layer.activation.__name__ if hasattr(layer, 'activation') else layer.output.name
 
             if len(layer_input) == 1:
@@ -180,7 +208,7 @@ class neural_network:
                     layer_input = layer_input[0]
                 layer_input = layer_input[0]
 
-            # Insert layer if name matches the regular expression
+            # insert layer if name matches the regular expression and doesn't have the same size as the dnn output
             if re.match(layer_regex, layer.name) and layer.output.shape[1] != 10:
                 if position == 'replace':
                     x = layer_input
@@ -191,21 +219,37 @@ class neural_network:
                 else:
                     raise ValueError('position must be: before, after or replace')
 
-                if not 'softmax' in layer_output_name or not 'softm' in layer_output_name:
+                # check if the current layer isn't not the last layer with a softmax activation
+                if not 'Softmax' in layer_output_name or not 'softm' in layer_output_name:
+
+                    # if the flag indcatiding the addition of batch normalization is true
+                    # and there's no batch normalization layers already, add it in the network
                     if self.rgl and not any(['batch' in i.name for i in model.layers]):
                         naming = '{}'.format(time())
                         x = BatchNormalization(name="batch_norm_{}".format(naming))(x)
+                    # if the flag indcatiding the addition of dense layer is true
+                    # and if the current number of dense layers is less than the total maximum number
                     elif self.dense and self.counter_fc < self.tot_fc:
+                        # if i need to add at least one dense layer, but that this number is greater than
+                        # the maximum number of dense layers, then set that parameter to 0
                         if num_fc > 0:
                             if num_fc > self.tot_fc:
                                 num_fc = 0
+
+                            # add a number of dense layers equal to those given in the parameter
                             for _ in range(num_fc):
                                 self.counter_fc += 1
                                 x = Dense(params['new_fc'], name='dense_{}'.format(time()))(x)
                         else:
+                            # add a dense layer
                             x = Dense(params['new_fc'], name='dense_{}'.format(time()))(x)
+                        # store the size of the last dense layer
                         self.last_dense = x.shape[1]
+
+                    # if the flag indicating the addition of a convolutional layer is true
+                    # and if the current number of conv layers is less than the total maximum number
                     elif self.conv and self.counter_conv < self.tot_conv:
+                        # add a convolutional layer and an activation function layer
                         self.counter_conv += 1
                         naming = '{}'.format(time())
                         x = Conv2D(params['unit_c2'], (3, 3), padding='same', name='conv_{}'.format(naming))(x)
@@ -215,21 +259,29 @@ class neural_network:
                         # x = MaxPooling2D(pool_size=(2, 2), name='maxpooling_{}'.format(naming))(x)
                         # x = Dropout(params['dr1_2'], name='dropout_{}'.format(naming))(x)
 
+                # if the position to insert the layer is before
                 if position == 'before':
                     x = layer(x)
             else:
+                # if the size of the output matches the number of classes, it matches the regular expression,
+                # but it doesn't have a softmax activation function
                 if layer.output.shape[1] == 10 and re.match(layer_regex, layer.name) and not 'softmax' in \
                                                                                              layer_output_name:
+                    # add a dense layer with the same size called 'final'
                     x = Dense(layer.output.shape[1], name='final')(x) 
                 else:
+                    # if the layer is dense and the output size is equal classes number,
+                    # then it's the last layer in the network
                     if self.conv and 'dense' in layer.name and layer.output.shape[1] == 10:
                         x = Dense(layer.output.shape[1], name='final')(x)
                     elif self.conv and 'dense' in layer.name:
+                        # otherwise if it's a generic dense layer instead, add it
                         x = Dense(params['unit_d'])(x)
                     else:
+                        # if it's not a dense layer and doesn't match regular expressions, then it's the input
                         x = layer(layer_input)
 
-            # Set new output tensor (the original one, or the one of the inserted layer)
+            # set new output tensor (the original one, or the one of the inserted layer)
             network_dict['new_output_tensor_of'].update({layer.name: x})
 
         input = model.inputs
@@ -273,12 +325,13 @@ class neural_network:
                 # if there's at least one batch normalization in the network
                 if btc:
                     # last part of the network will start with flatten
-                    # remove dropout temporary from the architeture
+                    # go back four steps, because activation, batch and max pooling layers
                     to_delete.append(buffer_rev[reverse_layers_list.index(layer)-3])
                     head_start = buffer_rev[reverse_layers_list.index(layer)-4]
                     buffer_rev.remove(buffer_rev[reverse_layers_list.index(layer)-3])
                 else:
                     # last part of the network will start with flatten
+                    # go back three steps, because activation and max pooling layers
                     head_start = buffer_rev[reverse_layers_list.index(layer)-3]
  
                 # insert layers that need to be deleted into to_delete list
