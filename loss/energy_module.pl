@@ -12,10 +12,12 @@ problem(config_tuning) :- \+high_power, \+diff_flops.
 % rules for power constraints
 t(0.4)::action(new_config, config_problem).
 t(0.5)::action(dec_layers, config_tuning).
+t(0.5)::action(dec_fc, config_tuning).
 
 %problem rules
 0.4::action(new_config,config_problem):- problem(config_problem).
 0.5::action(dec_layers,config_tuning):- problem(config_tuning).
+0.5::action(dec_fc,config_tuning):- problem(config_tuning).
 
 %expanding old rules
 0.5::action(new_fc_layer):- \+problem(config_tuning).

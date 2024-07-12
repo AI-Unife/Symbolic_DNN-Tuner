@@ -128,6 +128,12 @@ class tuning_rules_symbolic:
         """
         self.controller.remove_conv_section(True)
 
+    def dec_fc(self):
+        """
+        method used to remove a dense layer from the neural network
+        """
+        self.controller.remove_fully_connected(True)
+
     def new_config(self):
         """
         method used to manage the hardware configurations, trying to find
@@ -147,7 +153,7 @@ class tuning_rules_symbolic:
 
         # iterate over each tuning rules and eveluate them, passing parameters if necessary
         for d in sym_tuning:
-            if d != 'reg_l2' and d != 'data_augmentation' and d != 'new_fc_layer' and d != 'new_conv_layer' and d != 'dec_layers' and d != 'new_config':
+            if d != 'reg_l2' and d != 'data_augmentation' and d != 'new_fc_layer' and d != 'new_conv_layer' and d != 'dec_layers' and d != 'dec_fc' and d != 'new_config':
                 d = "self." + d + "(params)"
             else:
                 d = "self." + d + "()"

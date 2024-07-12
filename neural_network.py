@@ -190,7 +190,6 @@ class neural_network:
                 name = "dense_1"
             else:
                 name = layer.name
-
             # create list of input layers iterating over the dict, searching for the
             # value of each layer of new_output_tensor_of in input_layers_of
             layer_input = [network_dict['new_output_tensor_of'][layer_aux]
@@ -220,7 +219,7 @@ class neural_network:
                     raise ValueError('position must be: before, after or replace')
 
                 # check if the current layer isn't not the last layer with a softmax activation
-                if not 'Softmax' in layer_output_name or not 'softm' in layer_output_name:
+                if not 'softmax' in layer_output_name or not 'softm' in layer_output_name:
 
                     # if the flag indcatiding the addition of batch normalization is true
                     # and there's no batch normalization layers already, add it in the network
@@ -239,7 +238,7 @@ class neural_network:
                             # add a number of dense layers equal to those given in the parameter
                             for _ in range(num_fc):
                                 self.counter_fc += 1
-                                x = Dense(params['new_fc'], name='dense_{}'.format(time()))(x)
+                                x = Dense(params['new_fc'], input_shape=(x.shape[0],), name='dense_{}'.format(time()))(x)
                         else:
                             # add a dense layer
                             x = Dense(params['new_fc'], name='dense_{}'.format(time()))(x)
@@ -514,8 +513,8 @@ class neural_network:
         print(f"\n#### removed ####\n{removed_name}\n")
 
         return Model(inputs=new_inputs, outputs=x)
-
-    def training(self, params, new, new_fc, new_conv, rem_conv, da, space):
+        
+    def training(self, params, new, new_fc, new_conv, rem_conv, rem_fc, da, space):
         """
         Function for compiling and running training
         :param params, new, new_fc, new_conv, rem_conv, da, space: parameters to indicate a possible operation on the network structure and hyperparameter search space
@@ -550,6 +549,13 @@ class neural_network:
                     self.dense = False
                     self.rgl = False
                     model = self.remove_conv_layer(model, params)
+                # if the flag for the removal of a dense layer is true
+                if rem_fc:
+                    self.conv = False
+                    self.dense = False
+                    self.rgl = False
+                    model = self.remove_fc(model)
+
         except Exception as e:
             print(colors.FAIL, e, colors.ENDC)
         
@@ -625,7 +631,6 @@ class neural_network:
         model = tf.keras.models.model_from_json(model_json)
         model.load_weights("Weights/weights-{}.weights.h5".format(model_name_id))
         return score, history, model
-
 
 if __name__ == '__main__':
     X_train, X_test, Y_train, Y_test, n_classes = cifar_data()

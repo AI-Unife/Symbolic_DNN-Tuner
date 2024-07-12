@@ -25,7 +25,7 @@ class controller:
     """
     def __init__(self, X_train, Y_train, X_test, Y_test, n_classes):
         """
-        All attributes for managing the training of the neural network are initialised,
+        All attributes for managing the training of the neural network are initialized,
         as well as auxiliary classes such as the one for interfacing with the symbolic part
         and the one for storing the training progress on DB.
         """
@@ -51,6 +51,7 @@ class controller:
         self.new_fc = None
         self.new_conv = None
         self.rem_conv = None
+        self.rem_fc = None
         self.da = None
         self.model = None
         self.params = None
@@ -88,6 +89,12 @@ class controller:
         """
         self.rem_conv = rem_conv
 
+    def remove_fully_connected(self, rem_fc):
+        """
+        indicates, based on the value of the boolean 'rem_fc', if a dense layer needs to be removed
+        """
+        self.rem_fc = rem_fc
+
     def set_data_augmentation(self, da):
         """
         indicates, based on the value of the boolean 'da', if data augmentation is necessary
@@ -102,7 +109,7 @@ class controller:
         :return: list of smoothed values
         """
         # init variables, last will be the first el of the list,
-        # smoothed is initialised as an empty list
+        # smoothed is initialized as an empty list
         last = scalars[0]
         smoothed = list()
 
@@ -137,7 +144,7 @@ class controller:
         print(colors.OKBLUE, "|  --> START TRAINING\n", colors.ENDC)
         K.clear_session()
         self.nn = neural_network(self.X_train, self.Y_train, self.X_test, self.Y_test, self.n_classes)
-        self.score, self.history, self.model = self.nn.training(params, self.new, self.new_fc, self.new_conv, self.rem_conv, self.da,
+        self.score, self.history, self.model = self.nn.training(params, self.new, self.new_fc, self.new_conv, self.rem_conv, self.rem_fc, self.da,
                                                                 self.space)
 
         # update state of modules
@@ -152,6 +159,7 @@ class controller:
 
         # increase the number of iterations
         self.rem_conv = False
+        self.rem_fc = False
         self.iter += 1
 
         # if no module has been loaded or is incorrect for the symbolic part
