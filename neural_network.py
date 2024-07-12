@@ -469,9 +469,10 @@ class neural_network:
                     d+=1
                 removed |= {i.name : i}
 
-        # if the total number of dense layers, not including the output one,
-        # is less than or equal to 1, don't remove any layers and return the model
-        if d <= 1:
+        # if the total number of dense layers is less than or equal to 2, 
+        # specifically the output layer and a dense layer after the flatten,
+        # don't remove any layers and return the model
+        if d <= 2:
             return model
 
         # reverse the dict that maps the architecture of the neural network
