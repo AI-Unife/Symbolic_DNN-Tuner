@@ -219,7 +219,7 @@ class neural_network:
                     raise ValueError('position must be: before, after or replace')
 
                 # check if the current layer isn't not the last layer with a softmax activation
-                if not 'softmax' in layer_output_name or not 'softm' in layer_output_name:
+                if not 'Softmax' in layer_output_name or not 'softm' in layer_output_name:
 
                     # if the flag indcatiding the addition of batch normalization is true
                     # and there's no batch normalization layers already, add it in the network
@@ -238,7 +238,7 @@ class neural_network:
                             # add a number of dense layers equal to those given in the parameter
                             for _ in range(num_fc):
                                 self.counter_fc += 1
-                                x = Dense(params['new_fc'], input_shape=(x.shape[0],), name='dense_{}'.format(time()))(x)
+                                x = Dense(params['new_fc'], name='dense_{}'.format(time()))(x)
                         else:
                             # add a dense layer
                             x = Dense(params['new_fc'], name='dense_{}'.format(time()))(x)
