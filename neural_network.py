@@ -452,7 +452,7 @@ class neural_network:
   
             # get the name of the current layer class from which it's derived
             layer_name = i.__class__.__name__
-  
+            
             # boolean indicating if the current layer is dense
             dense_type = ('dense' in i.name or 'dense' in layer_name)
 
@@ -469,10 +469,9 @@ class neural_network:
                     d+=1
                 removed |= {i.name : i}
 
-        # If the total number of dense layers is less than or equal to 2, 
-        # specifically the output layer and a dense layer after the flatten,
-        # don't remove any layers and return the model
-        if d <= 2:
+        # if the total number of dense layers, not including the output one,
+        # is less than or equal to 1, don't remove any layers and return the model
+        if d <= 1:
             return model
 
         # reverse the dict that maps the architecture of the neural network
@@ -495,7 +494,7 @@ class neural_network:
                 new_inputs = Input(new_input)
                 x = new_inputs
             elif 'Conv' in layer_name:
-                x = Conv2D(layer.kernel.shape[-1], layer.kernel_size, padding='same', name=layer_key)(x)
+                x = Conv2D(layer.kernel.shape[-1], layer.kernel_size, padding=layer.padding, name=layer_key)(x)
             elif 'Activation' in layer_name:
                 activation_name = layer.activation.__name__ if hasattr(layer, 'activation') else layer.output.name
                 x = Activation(activation_name, name=layer_key)(x)
@@ -508,7 +507,7 @@ class neural_network:
             elif 'Dropout' in layer_name:
                 x = Dropout(layer.rate, name=layer_key)(x)
             elif 'Max' in layer_name:
-                x = MaxPooling2D(pool_size=(2, 2), name=layer_key)(x)
+                x = MaxPooling2D(layer.pool_size, name=layer_key)(x)
 
         print(f"\n#### removed ####\n{removed_name}\n")
 
