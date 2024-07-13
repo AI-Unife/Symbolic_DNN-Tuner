@@ -454,7 +454,7 @@ class neural_network:
             layer_name = i.__class__.__name__
             
             # boolean indicating if the current layer is dense
-            dense_type = ('dense' in i.name or 'dense' in layer_name)
+            dense_type = ('dense' in i.name or 'Dense' in layer_name)
 
             # if the layer is dense and if it's not the output layer and 
             # i haven't found the layer to remove, then save the name of the layer to remove
