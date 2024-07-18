@@ -425,68 +425,75 @@ class neural_network:
         return Model(inputs=new_input_model, outputs=x)
 
     def remove_fc(self, model):
-        """
-        Method used for removing a dense layer from the neural network
-        :param model: neural network model from which a dense layer needs to be removed
-        :return: model without a dense layer
-        """
+        # booleans used during the search of layers to be removed
+        # the first indicates if you're inside a dense section during the search
+        # the second indicates if a dense section that can be removed was found
+        fc_section, fc_found = False, False
+
         # dense layer counter set to 0
         d = 0
-
-        # get the layers of neural network and reverse the list
-        # scan the architecture in reverse in order to find the dense layer to remove
-        layers_list = model.layers
-        layers_list = layers_list[::-1]
-
-        # boolean to indicate if the layer to be removed was found
-        first_dense = False
 
         # initialize dict containing the neural network layers after removal as empty
         removed = {}
 
-        # initialize the name of the layer to be removed as an empty string
+        # initialize the name of layers to be removed as an empty string
         removed_name = ""
+
+        # get the layers of neural network
+        layers_list = model.layers
 
         # iterate over each layer
         for i in layers_list:
   
             # get the name of the current layer class from which it's derived
             layer_name = i.__class__.__name__
-            
+
             # boolean indicating if the current layer is dense
             dense_type = ('dense' in i.name or 'Dense' in layer_name)
 
-            # if the layer is dense and if it's not the output layer and 
-            # i haven't found the layer to remove, then save the name of the layer to remove
-            if dense_type and i.output.shape[1] != 10 and not first_dense:
-                d+= 1
-                first_dense = True
-                removed_name = i.name
+            # if the current layer is dense and doesn't have the same number
+            # of neurons as the network output, increases the dense layer counter
+            if dense_type and i.output.shape[1] != 10:
+                d += 1
+                
+            # if i'm not in a dense section, haven't already found a dense section to remove
+            # and the current layer is a dense layer, it means that i've found the a dense section.
+            if not fc_section and not fc_found and dense_type:
+                # set the corresponding boolean to true and add its name in the string of layers to remove
+                fc_section = True
+                removed_name += i.name + '\n'
+            elif fc_section:
+                # otherwise if i'm inside a dense section
+                # if the current layer is not one of those that can be part of the dense section,
+                # it means that i reached the end of the that section
+                if not layer_name in ['Activation', 'BatchNormalization', 'Dropout']:
+                    # set the corresponding boolean to false,
+                    # set the boolean indicating a dense section was found to true and
+                    # and add the current layer to the final architecture
+                    fc_section = False
+                    fc_found = True
+                    removed |= {i.name : i}
+                else:
+                    # otherwise if the layer is part of the dense section,
+                    # add its name in the string of layers to removed
+                    removed_name += i.name + '\n'
             else:
-                # otherwise if it's a dense layer, increases the dense layer counter and
-                # save the layer into the dict that maps the network architecture
-                if dense_type:
-                    d+=1
+                # add the current layer to the final archiecture after removal
                 removed |= {i.name : i}
 
-        # if the total number of dense layers is less than or equal to 2, 
-        # specifically the output layer and a dense layer after the flatten,
-        # don't remove any layers and return the model
-        if d <= 2:
+        # if the total number of dense section is less than or equal to 1, 
+        # or didn't find any dense sections to remove, return the original model
+        if d <= 1 or not fc_found:
             return model
 
-        # reverse the dict that maps the architecture of the neural network
-        removed_order = {}
-        for i in removed.keys():
-            removed_order = {i : removed[i]} | removed_order
-            
+        # set variables containing respectively the new network archiecture and input layer to 'None'
         x = None
         new_inputs = None
 
         # build a new neural network, based on the previously saved layers,
         # adding a specific layer based on the type of layer saved before
-        for layer_key in removed_order.keys():
-            layer = removed_order[layer_key]
+        for layer_key in removed.keys():
+            layer = removed[layer_key]
             layer_name = layer.__class__.__name__
             if 'Input' in layer_name:
                 new_input = layer._input_tensor if hasattr(layer, '_input_tensor') else layer.input
@@ -510,7 +517,7 @@ class neural_network:
             elif 'Max' in layer_name:
                 x = MaxPooling2D(layer.pool_size, name=layer_key)(x)
 
-        print(f"\n#### removed ####\n{removed_name}\n")
+        print(f"\n#### removed ####\n{removed_name}")
 
         return Model(inputs=new_inputs, outputs=x)
         
