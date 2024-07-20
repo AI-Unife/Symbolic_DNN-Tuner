@@ -41,7 +41,7 @@ class neural_network:
         self.train_data /= 255
         self.test_data /= 255
         self.n_classes = n_classes
-        self.epochs = 200
+        self.epochs = 2
         self.last_dense = 0
         self.counter_fc = 0
         self.counter_conv = 0
@@ -182,6 +182,25 @@ class neural_network:
             _d[i] = __d[i]
         network_dict.pop('input_layers_of')
         network_dict['input_layers_of'] = _d
+
+        # rebuild dictionary to add missing layers,
+        # iterating over all the layers of the model
+        # and for each one associates its input layer
+        new_dict = {}
+        init_layer = True
+        init_name = ""
+        for layer_key in model.layers:
+            if init_layer:
+                # save the name of the input layer
+                init_layer = False
+                init_name = layer_key.name
+            else:
+                # add the current layer pair and the corresponding input layer to the dict
+                new_dict |= {layer_key.name : [init_name]}
+                init_name = layer_key.name
+
+        # update the value of the dictionary that maps the network structure
+        network_dict['input_layers_of'] = new_dict
 
         # iterate over all layers after the input and build the new network
         for layer in model.layers[1:]:
@@ -425,6 +444,11 @@ class neural_network:
         return Model(inputs=new_input_model, outputs=x)
 
     def remove_fc(self, model):
+        """
+        method used to remove a dense section, with all layers associated with it
+        :param: model from which to remove the dense section
+        :return: model without dense section
+        """
         # booleans used during the search of layers to be removed
         # the first indicates if you're inside a dense section during the search
         # the second indicates if a dense section that can be removed was found
@@ -486,14 +510,78 @@ class neural_network:
         if d <= 1 or not fc_found:
             return model
 
+        print(f"\n#### removed ####\n{removed_name}")
+
+        return self.model_from_dict(removed)
+
+    def insert_fc_section(self, model, params, n_fc):
+        """
+        method used for inserting a new dense section
+        :param model params n_fc: insert into the model a n_fc dense sections with params values
+        :return: model with new dense sections
+        """
+
+        # count the dense sections of the network and, if their number is greater than or equal to the max,
+        # return the model without adding more layers
+        if ([('Dense' in i.__class__.__name__) and (i.output.shape[1] != 10) for i in model.layers].count(True) >= self.tot_fc):
+            return model
+        
+        # boolean used to identify where to insert the new dense section
+        flatten_found = False
+
+        # initialize dict containing the neural network layers after addition as empty
+        net_dense = {}
+
+        # get the layers of neural network
+        layers_list = model.layers
+
+        # iterate over each layer
+        for i in layers_list:
+            # get the name of the current layer class from which it's derived
+            layer_name = i.__class__.__name__
+
+            # add the current layer to the final archiecture
+            net_dense |= {i.name : i}
+
+            # if the current layer is the flatten and hasn't been found where to put the new dense section
+            if 'Flatten' in layer_name and not flatten_found:
+                # found the point at which to insert the dense section
+                # setting the corresponding boolean to true
+                flatten_found = True
+
+                # list containing the layers of dense section
+                fc_section = []
+
+                # insert 'n_fc' dense sections
+                for _ in range(n_fc):
+                    # the first layers of the section are the dense one and the related activation
+                    naming = '{}'.format(time())                 
+                    fc_section += [Dense(params['new_fc'], name='dense_{}'.format(naming)),
+                                   Activation(params['activation'], name='activation_{}'.format(naming))]
+
+                    # if batch normalization is already in the architecture
+                    # add it to the section
+                    if any(['batch' in i.name for i in model.layers]):
+                        fc_section += [BatchNormalization(name="batch_norm_{}".format(naming))]
+ 
+                    # add dropout to the dense section
+                    fc_section += [Dropout(params['dr_f'], name='dropout_{}'.format(naming))]
+
+                # add all the layers of the dense section to the final architecture
+                for x in fc_section:
+                    net_dense |= {x.name : x}
+
+        return self.model_from_dict(net_dense)
+
+    def model_from_dict(self, model_dict):
         # set variables containing respectively the new network archiecture and input layer to 'None'
         x = None
         new_inputs = None
 
         # build a new neural network, based on the previously saved layers,
         # adding a specific layer based on the type of layer saved before
-        for layer_key in removed.keys():
-            layer = removed[layer_key]
+        for layer_key in model_dict.keys():
+            layer = model_dict[layer_key]
             layer_name = layer.__class__.__name__
             if 'Input' in layer_name:
                 new_input = layer._input_tensor if hasattr(layer, '_input_tensor') else layer.input
@@ -517,8 +605,6 @@ class neural_network:
             elif 'Max' in layer_name:
                 x = MaxPooling2D(layer.pool_size, name=layer_key)(x)
 
-        print(f"\n#### removed ####\n{removed_name}")
-
         return Model(inputs=new_inputs, outputs=x)
         
     def training(self, params, new, new_fc, new_conv, rem_conv, rem_fc, da, space):
@@ -537,7 +623,7 @@ class neural_network:
                 if new_fc:
                     if new_fc[0]:
                         self.dense = True
-                        model = self.insert_layer(model, '.*dense.*', params, num_fc=new_fc[1])
+                        model = self.insert_fc_section(model, params, 1)
                 # if the flag for the addition of regularization is true
                 if new:
                     self.rgl = True
@@ -655,7 +741,22 @@ if __name__ == '__main__':
     n = neural_network(X_train, Y_train, X_test, Y_test, n_classes)
     
     model = n.build_network(default_params, None)
-    print(model.summary())
+    model.summary()
+
+    n.rgl = True
+    n.dense = False
+    model = n.insert_layer(model, '.*activation.*', default_params)
+    model.summary()
+
+    model = n.insert_fc_section(model, default_params, 1)
+    model.summary()
+
+    model = n.remove_conv_layer(model, default_params)
+    model.summary()
+
+    model = n.remove_fc(model)
+    model.summary()
+    quit()
     
     new_model = n.remove_conv_layer(model, default_params)
     model_name_id = time()

@@ -141,6 +141,7 @@ class controller:
         :return: model and training history self.nn = neural_network(X_train, Y_train, X_test, Y_test, n_classes)
         """
         self.params = params
+
         print(colors.OKBLUE, "|  --> START TRAINING\n", colors.ENDC)
         K.clear_session()
         self.nn = neural_network(self.X_train, self.Y_train, self.X_test, self.Y_test, self.n_classes)
@@ -158,6 +159,7 @@ class controller:
         self.modules.log()
 
         # increase the number of iterations
+        self.new_fc = False
         self.rem_conv = False
         self.rem_fc = False
         self.iter += 1
