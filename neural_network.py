@@ -610,7 +610,7 @@ class neural_network:
                 new_inputs = Input(new_input)
                 x = new_inputs
             elif model_dict[layer_key][0]:
-                x = model.get_layer(layer_key)(x)
+                x = model_dict[layer_key][1](x)
             elif 'Conv' in layer_name:
                 x = Conv2D(layer.kernel.shape[-1], layer.kernel_size, padding=layer.padding, name=layer_key)(x)
             elif 'Activation' in layer_name:
