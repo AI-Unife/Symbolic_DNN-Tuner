@@ -448,6 +448,9 @@ class neural_network:
         :param: model from which to remove the dense section
         :return: model without dense section
         """
+        # get output shape of the net
+        output_neurons = model.layers[-1].output.shape[1]
+
         # booleans used during the search of layers to be removed
         # the first indicates if you're inside a dense section during the search
         # the second indicates if a dense section that can be removed was found
@@ -476,7 +479,7 @@ class neural_network:
 
             # if the current layer is dense and doesn't have the same number
             # of neurons as the network output, increases the dense layer counter
-            if dense_type and i.output.shape[1] != 10:
+            if dense_type and i.output.shape[1] != output_neurons:
                 d += 1
                 
             # if i'm not in a dense section, haven't already found a dense section to remove
@@ -520,9 +523,12 @@ class neural_network:
         :return: model with new dense sections
         """
 
+        # get output shape of the net
+        output_neurons = model.layers[-1].output.shape[1]
+
         # count the dense sections of the network and, if their number is greater than or equal to the max,
         # return the model without adding more layers
-        if ([('Dense' in i.__class__.__name__) and (i.output.shape[1] != 10) for i in model.layers].count(True) >= self.tot_fc):
+        if ([('Dense' in i.__class__.__name__) and (i.output.shape[1] != output_neurons) for i in model.layers].count(True) >= self.tot_fc):
             return model
         
         # boolean used to identify where to insert the new dense section
@@ -598,7 +604,7 @@ class neural_network:
             elif 'Batch' in layer_name:
                 x = BatchNormalization(name=layer_key)(x)
             elif 'Dense' in layer_name:
-                x = Dense(layer.units, name=layer_key)(x)
+                x = Dense(layer.units, name=layer_key, activation=layer.activation)(x)
             elif 'Dropout' in layer_name:
                 x = Dropout(layer.rate, name=layer_key)(x)
             elif 'Max' in layer_name:
