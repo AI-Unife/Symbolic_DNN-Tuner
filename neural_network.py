@@ -448,6 +448,10 @@ class neural_network:
         :param: model from which to remove the dense section
         :return: model without dense section
         """
+
+        # boolean used to identify which layers in the new architecture can use the old weights
+        reused_weights = True
+
         # get output shape of the net
         output_neurons = model.layers[-1].output.shape[1]
 
@@ -488,6 +492,10 @@ class neural_network:
                 # set the corresponding boolean to true and add its name in the string of layers to remove
                 fc_section = True
                 removed_name += i.name + '\n'
+
+                # cannot use the old weights because of the size change,
+                # so set the corresponding boolean to false
+                reused_weights = False
             elif fc_section:
                 # otherwise if i'm inside a dense section
                 # if the current layer is not one of those that can be part of the dense section,
@@ -498,14 +506,14 @@ class neural_network:
                     # and add the current layer to the final architecture
                     fc_section = False
                     fc_found = True
-                    removed |= {i.name : i}
+                    removed |= {i.name : [reused_weights, i]}
                 else:
                     # otherwise if the layer is part of the dense section,
                     # add its name in the string of layers to removed
                     removed_name += i.name + '\n'
             else:
                 # add the current layer to the final archiecture after removal
-                removed |= {i.name : i}
+                removed |= {i.name : [reused_weights, i]}
 
         # if the total number of dense section is less than or equal to 1, 
         # or didn't find any dense sections to remove, return the original model
@@ -522,6 +530,9 @@ class neural_network:
         :param model params n_fc: insert into the model a n_fc dense sections with params values
         :return: model with new dense sections
         """
+
+        # boolean used to identify which layers in the new architecture can use the old weights
+        reused_weights = True
 
         # get output shape of the net
         output_neurons = model.layers[-1].output.shape[1]
@@ -546,13 +557,17 @@ class neural_network:
             layer_name = i.__class__.__name__
 
             # add the current layer to the final archiecture
-            net_dense |= {i.name : i}
+            net_dense |= {i.name : [reused_weights, i]}
 
             # if the current layer is the flatten and hasn't been found where to put the new dense section
             if 'Flatten' in layer_name and not flatten_found:
                 # found the point at which to insert the dense section
                 # setting the corresponding boolean to true
                 flatten_found = True
+
+                # cannot use the old weights because of the size change,
+                # so set the corresponding boolean to false
+                reused_weights = False
 
                 # list containing the layers of dense section
                 fc_section = []
@@ -574,7 +589,7 @@ class neural_network:
 
                 # add all the layers of the dense section to the final architecture
                 for x in fc_section:
-                    net_dense |= {x.name : x}
+                    net_dense |= {x.name : [reused_weights, x]}
 
         return self.model_from_dict(net_dense)
 
@@ -586,7 +601,7 @@ class neural_network:
         # build a new neural network, based on the previously saved layers,
         # adding a specific layer based on the type of layer saved before
         for layer_key in model_dict.keys():
-            layer = model_dict[layer_key]
+            layer = model_dict[layer_key][1]
             layer_name = layer.__class__.__name__
             if 'Input' in layer_name:
                 new_input = layer._input_tensor if hasattr(layer, '_input_tensor') else layer.input
@@ -594,6 +609,8 @@ class neural_network:
                     new_input = new_input.shape[1:]
                 new_inputs = Input(new_input)
                 x = new_inputs
+            elif model_dict[layer_key][0]:
+                x = model.get_layer(layer_key)(x)
             elif 'Conv' in layer_name:
                 x = Conv2D(layer.kernel.shape[-1], layer.kernel_size, padding=layer.padding, name=layer_key)(x)
             elif 'Activation' in layer_name:
@@ -745,11 +762,25 @@ if __name__ == '__main__':
 
     n = neural_network(X_train, Y_train, X_test, Y_test, n_classes)
     
-    model = n.build_network(default_params, None)
+    #model = n.build_network(default_params, None)
+    #model.summary()
+
+    from keras.applications.vgg16 import VGG16
+    model = VGG16()
+    model.summary()
+   
+    # first value of block5_conv1
+    print(model.layers[15].get_weights()[0][0][0][0][0])
+
+    model = n.insert_fc_section(model, default_params, 1)
     model.summary()
 
-    model = n.remove_conv_layer(model, default_params)
+    model = n.remove_fc(model)
     model.summary()
+
+    # first value of block5_conv1
+    print(model.layers[15].get_weights()[0][0][0][0][0])
+    quit()
 
     model = n.remove_conv_layer(model, default_params)
     model.summary()
