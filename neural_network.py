@@ -622,8 +622,7 @@ class neural_network:
                 if new_fc:
                     if new_fc[0]:
                         self.dense = True
-                        #model = self.insert_fc_section(model, params, 1)
-                        model = self.insert_layer(model, '.*dense.*', params, num_fc=new_fc[1])
+                        model = self.insert_fc_section(model, params, 1)
                 # if the flag for the addition of regularization is true
                 if new:
                     self.rgl = True
