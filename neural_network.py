@@ -176,7 +176,7 @@ class neural_network:
                 __d[d[i][1]] = [d[i][0]]
                 __d[i].pop(0)
 
-        # copy the elements of the dict used for mmultiple inputs search into
+        # copy the elements of the dict used for multiple inputs search into
         # the dictionary that maps the structure of the network
         for i in k:
             _d[i] = __d[i]
@@ -204,11 +204,9 @@ class neural_network:
 
         # iterate over all layers after the input and build the new network
         for layer in model.layers[1:]:
-            # use 'dense_1' instead of 'final' for continuity with dense layer network names
-            if layer.name == 'final':
-                name = "dense_1"
-            else:
-                name = layer.name
+            # use current layer name
+            name = layer.name
+
             # create list of input layers iterating over the dict, searching for the
             # value of each layer of new_output_tensor_of in input_layers_of
             layer_input = [network_dict['new_output_tensor_of'][layer_aux]
@@ -296,7 +294,8 @@ class neural_network:
                         # otherwise if it's a generic dense layer instead, add it
                         x = Dense(params['unit_d'])(x)
                     else:
-                        # if it's not a dense layer and doesn't match regular expressions, then it's the input
+                        # if it's not a dense layer and doesn't match regular expressions,
+                        # then add it, being a layer that isn't in the previous 'special cases'
                         x = layer(layer_input)
 
             # set new output tensor (the original one, or the one of the inserted layer)
@@ -419,7 +418,7 @@ class neural_network:
         # add the last part to the neural network architecture
         for e, i in enumerate(head):
             # based on the layer name, add a a layer with the same type
-            if 'dense' in i.name:
+            if 'dense' in i.name or 'final' in i.name:
                 x = Dense(i.units, name='dense_{}'.format(time()))(x)
             elif 'dropout' in i.name:
                 x = Dropout(i.rate, name='dropout_{}'.format(time()))(x)
@@ -438,7 +437,7 @@ class neural_network:
                     x = Activation('softmax', name='activation_{}'.format(time()))(x)
                 else:
                     x = Activation(params['activation'], name='activation_{}'.format(time()))(x)
-        
+
         # depending on the keras version, it's necessary to determine where to find the input tensor
         new_input_model = new_input._input_tensor if hasattr(new_input, '_input_tensor') else new_input.input             
         return Model(inputs=new_input_model, outputs=x)
@@ -623,7 +622,8 @@ class neural_network:
                 if new_fc:
                     if new_fc[0]:
                         self.dense = True
-                        model = self.insert_fc_section(model, params, 1)
+                        #model = self.insert_fc_section(model, params, 1)
+                        model = self.insert_layer(model, '.*dense.*', params, num_fc=new_fc[1])
                 # if the flag for the addition of regularization is true
                 if new:
                     self.rgl = True
@@ -743,19 +743,24 @@ if __name__ == '__main__':
     model = n.build_network(default_params, None)
     model.summary()
 
+    model = n.remove_conv_layer(model, default_params)
+    model.summary()
+
+    model = n.remove_conv_layer(model, default_params)
+    model.summary()
+
     n.rgl = True
     n.dense = False
+    n.conv = False
     model = n.insert_layer(model, '.*activation.*', default_params)
     model.summary()
 
     model = n.insert_fc_section(model, default_params, 1)
     model.summary()
 
-    model = n.remove_conv_layer(model, default_params)
-    model.summary()
-
     model = n.remove_fc(model)
     model.summary()
+
     quit()
     
     new_model = n.remove_conv_layer(model, default_params)
