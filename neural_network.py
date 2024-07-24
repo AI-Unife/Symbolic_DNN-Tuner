@@ -19,6 +19,7 @@ from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from dataset import cifar_data
 from LOLR import Lolr
 from search_space import search_space
+from dynamic_net import dynamic_net
 
 class neural_network:
     """
@@ -50,6 +51,7 @@ class neural_network:
         self.rgl = False
         self.dense = False
         self.conv = False
+        self.dnet = dynamic_net()
 
     def build_network(self, params, new):
         """
@@ -106,529 +108,63 @@ class neural_network:
 
         return model
 
-    def insert_layer(self, model, layer_regex, params, num_fc=0, num_cv=0, position='after'):
-        check = True
-        # Auxiliary dictionary to describe the network graph
-        K.clear_session()
-        network_dict = {'input_layers_of': {}, 'new_output_tensor_of': {}}
-        # set the input layers of each layer
+    def insert_conv_section(self, model, params, n_conv):
+        if self.dnet.count_layer_type(model, 'Conv2D') >= self.tot_conv:
+            return model
+
+        new_section = [Conv2D(params['unit_c2'], (3,3)), Activation(params['activation'])]
+        if self.dnet.any_batch(model):
+            new_section += [BatchNormalization()]
+        
+        return self.dnet.insert_section(model, n_conv, new_section, 'before', 'Flatten')
+
+    def insert_batch(self, model, params):
+        if self.dnet.any_batch(model):
+            return model
+
         for layer in model.layers:
-            # if the flag indicating the addition of batch normalization is true
-            # and the current layer is a convolutional layer
             if self.rgl:
-                if 'conv' in layer.name:
-                    # add to layer regularization the batch normalization, getting parameters from the search space
+                if 'Conv2D' in layer.__class__.__name__:
                     layer.kernel_regularizer = reg.l2(params['reg'])
-            # iterate over each output layer of the current layer
-            for node in layer._outbound_nodes:
-                # if the layer has multiple output
-                if len(layer._outbound_nodes) > 1:
-                    # if the current layer is dense and the flag for adding a new fully connected layer is false
-                    if 'dense' in layer.name and not self.dense and check:
-                        check = False
-                        pass
-                    else:
-                        # get the name of the layer depending on the version of keras
-                        # and if that name is not already a key, then add it to the dictionary
-                        # as a list with the input as the only element
-                        layer_name = node.operation.name if hasattr(node, 'operation') else node.outbound_layer.name
-                        if layer_name not in network_dict['input_layers_of']:
-                            network_dict['input_layers_of'].update(
-                                {layer_name: [layer.name]})
-                        else:
-                            # otherwise add it to the input layer list of the current layer
-                            network_dict['input_layers_of'][layer_name].append(layer.name)
-                        check = True
-                        break
-                else:
-                    # get the name of the layer depending on the version of keras
-                    # and if that name is not already a key, then add it to the dictionary
-                    # as a list with the input as the only element
-                    layer_name = node.operation.name if hasattr(node, 'operation') else node.outbound_layer.name
-                    if layer_name not in network_dict['input_layers_of']:
-                        network_dict['input_layers_of'].update(
-                            {layer_name: [layer.name]})
-                    else:
-                        # otherwise add it to the input layer list of the current layer
-                        network_dict['input_layers_of'][layer_name].append(layer.name)
 
-        # set the output tensor of the input layer
-        network_dict['new_output_tensor_of'].update(
-            {model.layers[0].name: model.input})
-
-        # get the input of each layer
-        # teh key is the name of a layer, while the value is the name of its input layer
-        d = network_dict['input_layers_of']
-        k = []
-        _d = {}
-        # iterate over each layer and put all the layers name in the k list
-        for i in d.keys():
-            k.append(i)
-        __d = d.copy()
-
-        # iterate over each pair of layer name and its content
-        for i, j in zip(d, k):
-            # if a layer has mutiple inputs
-            if len(d[i]) > 1:
-                # insert the name of the second input into the layer name list
-                # and insert into the dictionary the first input layer
-                k.insert(k.index(i), d[i][1])
-                __d[d[i][1]] = [d[i][0]]
-                __d[i].pop(0)
-
-        # copy the elements of the dict used for multiple inputs search into
-        # the dictionary that maps the structure of the network
-        for i in k:
-            _d[i] = __d[i]
-        network_dict.pop('input_layers_of')
-        network_dict['input_layers_of'] = _d
-
-        # rebuild dictionary to add missing layers,
-        # iterating over all the layers of the model
-        # and for each one associates its input layer
-        new_dict = {}
-        init_layer = True
-        init_name = ""
-        for layer_key in model.layers:
-            if init_layer:
-                # save the name of the input layer
-                init_layer = False
-                init_name = layer_key.name
-            else:
-                # add the current layer pair and the corresponding input layer to the dict
-                new_dict |= {layer_key.name : [init_name]}
-                init_name = layer_key.name
-
-        # update the value of the dictionary that maps the network structure
-        network_dict['input_layers_of'] = new_dict
-
-        # iterate over all layers after the input and build the new network
-        for layer in model.layers[1:]:
-            # use current layer name
-            name = layer.name
-
-            # create list of input layers iterating over the dict, searching for the
-            # value of each layer of new_output_tensor_of in input_layers_of
-            layer_input = [network_dict['new_output_tensor_of'][layer_aux]
-                           for layer_aux in network_dict['input_layers_of'][name]]
-
-            # get activation name if layer has that attribute
-            # this is used to get the name of the output layer based on the version of keras
-            layer_output_name = layer.activation.__name__ if hasattr(layer, 'activation') else layer.output.name
-
-            if len(layer_input) == 1:
-                # fix error keras >= 3.4
-                # 'input layer' is stored in list of lists [[...]] instead of a single list [...]
-                # if the first element is a list, extract it
-                if type(layer_input[0]) is list:
-                    layer_input = layer_input[0]
-                layer_input = layer_input[0]
-
-            # insert layer if name matches the regular expression and doesn't have the same size as the dnn output
-            if re.match(layer_regex, layer.name) and layer.output.shape[1] != 10:
-                if position == 'replace':
-                    x = layer_input
-                elif position == 'after':
-                    x = layer(layer_input)
-                elif position == 'before':
-                    pass
-                else:
-                    raise ValueError('position must be: before, after or replace')
-
-                # check if the current layer isn't not the last layer with a softmax activation
-                if not 'Softmax' in layer_output_name or not 'softm' in layer_output_name:
-
-                    # if the flag indcatiding the addition of batch normalization is true
-                    # and there's no batch normalization layers already, add it in the network
-                    if self.rgl and not any(['batch' in i.name for i in model.layers]):
-                        naming = '{}'.format(time())
-                        x = BatchNormalization(name="batch_norm_{}".format(naming))(x)
-                    # if the flag indcatiding the addition of dense layer is true
-                    # and if the current number of dense layers is less than the total maximum number
-                    elif self.dense and self.counter_fc < self.tot_fc:
-                        # if i need to add at least one dense layer, but that this number is greater than
-                        # the maximum number of dense layers, then set that parameter to 0
-                        if num_fc > 0:
-                            if num_fc > self.tot_fc:
-                                num_fc = 0
-
-                            # add a number of dense layers equal to those given in the parameter
-                            for _ in range(num_fc):
-                                self.counter_fc += 1
-                                x = Dense(params['new_fc'], name='dense_{}'.format(time()))(x)
-                        else:
-                            # add a dense layer
-                            x = Dense(params['new_fc'], name='dense_{}'.format(time()))(x)
-                        # store the size of the last dense layer
-                        self.last_dense = x.shape[1]
-
-                    # if the flag indicating the addition of a convolutional layer is true
-                    # and if the current number of conv layers is less than the total maximum number
-                    elif self.conv and self.counter_conv < self.tot_conv:
-                        # add a convolutional layer and an activation function layer
-                        self.counter_conv += 1
-                        naming = '{}'.format(time())
-                        x = Conv2D(params['unit_c2'], (3, 3), padding='same', name='conv_{}'.format(naming))(x)
-                        x = Activation(params['activation'], name='activation_{}'.format(naming))(x)
-                        # x = Conv2D(params['unit_c2'], (3, 3), name='conv_2_{}'.format(naming))(x)
-                        # x = Activation(params['activation'], name='activation_2_{}'.format(naming))(x)
-                        # x = MaxPooling2D(pool_size=(2, 2), name='maxpooling_{}'.format(naming))(x)
-                        # x = Dropout(params['dr1_2'], name='dropout_{}'.format(naming))(x)
-
-                # if the position to insert the layer is before
-                if position == 'before':
-                    x = layer(x)
-            else:
-                # if the size of the output matches the number of classes, it matches the regular expression,
-                # but it doesn't have a softmax activation function
-                if layer.output.shape[1] == 10 and re.match(layer_regex, layer.name) and not 'softmax' in \
-                                                                                             layer_output_name:
-                    # add a dense layer with the same size called 'final'
-                    x = Dense(layer.output.shape[1], name='final')(x) 
-                else:
-                    # if the layer is dense and the output size is equal classes number,
-                    # then it's the last layer in the network
-                    if self.conv and 'dense' in layer.name and layer.output.shape[1] == 10:
-                        x = Dense(layer.output.shape[1], name='final')(x)
-                    elif self.conv and 'dense' in layer.name:
-                        # otherwise if it's a generic dense layer instead, add it
-                        x = Dense(params['unit_d'])(x)
-                    else:
-                        # if it's not a dense layer and doesn't match regular expressions,
-                        # then add it, being a layer that isn't in the previous 'special cases'
-                        x = layer(layer_input)
-
-            # set new output tensor (the original one, or the one of the inserted layer)
-            network_dict['new_output_tensor_of'].update({layer.name: x})
-
-        input = model.inputs
-        return Model(inputs=input, outputs=x)
-
-    def remove_conv_layer(self, model, params):
-        """
-        Remove convolutional layer
-        :param model (_type_): keras model
-        :return: new_model : new updated keras model
-        """
-        # check if there's at least one batch normalization operation in the network
-        btc = any(['batch' in i.name for i in model.layers])
-
-        # count the number of convolutional layers in the network and if there is only one,
-        # return the model without removing further layers
-        c = 0
-        layers_list = model.layers
-        for i in layers_list:
-            if 'conv' in i.name:
-                c += 1
-        if c == 1:
-            return model
-
-        # get layer of input
-        new_input = model.get_layer(layers_list[0].name)
-
-        # reverse list of layers of the neural network
-        reverse_layers_list = layers_list[::-1]
-
-        # list used to map the final network structure after the removal of the conv layer
-        buffer_rev = reverse_layers_list
-
-        # init layers accumulators to empty lists
-        reused_layers, to_delete, head = [], [], []
-
-        # iterate over each layer of the dnn
-        for layer in reverse_layers_list:
-            # if the current layer is a convolutional layer
-            if 'conv' in layer.name:
-                # if there's at least one batch normalization in the network
-                if btc:
-                    # last part of the network will start with flatten
-                    # go back four steps, because activation, batch and max pooling layers
-                    to_delete.append(buffer_rev[reverse_layers_list.index(layer)-3])
-                    head_start = buffer_rev[reverse_layers_list.index(layer)-4]
-                    buffer_rev.remove(buffer_rev[reverse_layers_list.index(layer)-3])
-                else:
-                    # last part of the network will start with flatten
-                    # go back three steps, because activation and max pooling layers
-                    head_start = buffer_rev[reverse_layers_list.index(layer)-3]
- 
-                # insert layers that need to be deleted into to_delete list
-                # and remove them from the buffer_rev that maps the dnn architeture
-                # specifically the convolutional layer, the activation and the batch norm
-                to_delete.append(buffer_rev[reverse_layers_list.index(layer)-2])
-                to_delete.append(buffer_rev[reverse_layers_list.index(layer)-1])
-                to_delete.append(buffer_rev[reverse_layers_list.index(layer)])
-                buffer_rev.remove(buffer_rev[reverse_layers_list.index(layer)-2])
-                buffer_rev.remove(buffer_rev[reverse_layers_list.index(layer)-1])
-                buffer_rev.remove(buffer_rev[reverse_layers_list.index(layer)])
-                break
-        
-        # iterate over each layer
-        for layer in buffer_rev[:-1]:
-            # if the name of the first layer of the final part of the dnn is present in the buffer
-            if head_start.name in layer.name:
-                # put in the head part all layers that have been reused and the layer itself
-                head.extend(reused_layers)
-                reused_layers = []
-                head.append(buffer_rev[reverse_layers_list.index(layer)])
-            else:
-                # otherwise accumulate the layers in the list of reused layers
-                reused_layers.append(buffer_rev[reverse_layers_list.index(layer)])
-        
-        # return the model if there's only one conv layer in the neural network
-        if c == 1:
-            return model
-
-        # reverse layers accumulators in order to build the new dnn architeture
-        head.reverse()
-        to_delete.reverse()
-        reused_layers.reverse()
-        
-        # print result of the dnn architeture analysis, showing the head of the dnn and the reused layers
-        print("\n\n### head ###")
-        for i in head:
-            print(i.name)
-        print("\n\n### reuse ###")
-        for i in reused_layers:
-            print(i.name)
-
-        # generates the neural network by iterating over the previously constructed lists, starting from the input 
-        x = new_input.output
-        buff = None
-        for e, i in enumerate(reused_layers):
-            if e == len(reused_layers)-1:
-                if i.__class__ == buff.__class__:
-                    if 'max_pool' in i.name or 'activation' in i.name or 'dropout' in i.name:
-                        pass
-                else:
-                    # get current layer, the last one of the reused layer,
-                    # and put its output as the last of the second deleted element (activation)
-                    # this allows continuity of output size once the conv layer is removed
-                    _x = model.get_layer(i.name)
-                    _x._outbound_nodes[0] = to_delete[1]._outbound_nodes[0]
-                    x = _x(x)
-            else:
-                if i.__class__ == buff.__class__:
-                    if 'max_pool' in i.name or 'activation' in i.name or 'dropout' in i.name or 'batch' in i.name:
-                        pass
-                else:
-                    # concatenates the various layers based on reused layer list
-                    x = model.get_layer(i.name)(x)
-            buff = i
-    
-        # add the last part to the neural network architecture
-        for e, i in enumerate(head):
-            # based on the layer name, add a a layer with the same type
-            if 'dense' in i.name or 'final' in i.name:
-                x = Dense(i.units, name='dense_{}'.format(time()))(x)
-            elif 'dropout' in i.name:
-                x = Dropout(i.rate, name='dropout_{}'.format(time()))(x)
-            elif 'flatten' in i.name:
-                x = Flatten()(x)
-            elif 'max_p' in i.name:
-                x = MaxPooling2D(pool_size=(
-                    2, 2), name=i.name)(x)
-            elif 'batch' in i.name:
-                x = BatchNormalization(name=i.name)(x)
-            else:
-                # if the layer is an activation and the iteration 
-                # reached the last element of the list, add the output layer with softmax
-                # otherwise if it's a generic activation, add it to the network
-                if 'activation' in i.name and e == len(head)-1:
-                    x = Activation('softmax', name='activation_{}'.format(time()))(x)
-                else:
-                    x = Activation(params['activation'], name='activation_{}'.format(time()))(x)
-
-        # depending on the keras version, it's necessary to determine where to find the input tensor
-        new_input_model = new_input._input_tensor if hasattr(new_input, '_input_tensor') else new_input.input             
-        return Model(inputs=new_input_model, outputs=x)
-
-    def remove_fc(self, model):
-        """
-        method used to remove a dense section, with all layers associated with it
-        :param: model from which to remove the dense section
-        :return: model without dense section
-        """
-
-        # boolean used to identify which layers in the new architecture can use the old weights
-        reused_weights = True
-
-        # get output shape of the net
-        output_neurons = model.layers[-1].output.shape[1]
-
-        # booleans used during the search of layers to be removed
-        # the first indicates if you're inside a dense section during the search
-        # the second indicates if a dense section that can be removed was found
-        fc_section, fc_found = False, False
-
-        # dense layer counter set to 0
-        d = 0
-
-        # initialize dict containing the neural network layers after removal as empty
-        removed = {}
-
-        # initialize the name of layers to be removed as an empty string
-        removed_name = ""
-
-        # get the layers of neural network
-        layers_list = model.layers
-
-        # iterate over each layer
-        for i in layers_list:
-  
-            # get the name of the current layer class from which it's derived
-            layer_name = i.__class__.__name__
-
-            # boolean indicating if the current layer is dense
-            dense_type = ('dense' in i.name or 'Dense' in layer_name)
-
-            # if the current layer is dense and doesn't have the same number
-            # of neurons as the network output, increases the dense layer counter
-            if dense_type and i.output.shape[1] != output_neurons:
-                d += 1
-                
-            # if i'm not in a dense section, haven't already found a dense section to remove
-            # and the current layer is a dense layer, it means that i've found the a dense section.
-            if not fc_section and not fc_found and dense_type:
-                # set the corresponding boolean to true and add its name in the string of layers to remove
-                fc_section = True
-                removed_name += i.name + '\n'
-
-                # cannot use the old weights because of the size change,
-                # so set the corresponding boolean to false
-                reused_weights = False
-            elif fc_section:
-                # otherwise if i'm inside a dense section
-                # if the current layer is not one of those that can be part of the dense section,
-                # it means that i reached the end of the that section
-                if not layer_name in ['Activation', 'BatchNormalization', 'Dropout']:
-                    # set the corresponding boolean to false,
-                    # set the boolean indicating a dense section was found to true and
-                    # and add the current layer to the final architecture
-                    fc_section = False
-                    fc_found = True
-                    removed |= {i.name : [reused_weights, i]}
-                else:
-                    # otherwise if the layer is part of the dense section,
-                    # add its name in the string of layers to removed
-                    removed_name += i.name + '\n'
-            else:
-                # add the current layer to the final archiecture after removal
-                removed |= {i.name : [reused_weights, i]}
-
-        # if the total number of dense section is less than or equal to 1, 
-        # or didn't find any dense sections to remove, return the original model
-        if d <= 1 or not fc_found:
-            return model
-
-        print(f"\n#### removed ####\n{removed_name}")
-
-        return self.model_from_dict(removed)
+        activation_list = []
+        for layer in model.layers:
+            activation_name = layer.activation.__name__ if hasattr(layer, 'activation') else layer.output.name
+            layer_class = layer.__class__.__name__
+            if layer_class == 'Activation' and activation_name != 'softmax':
+                activation_list += [layer.name]
+      
+        return self.dnet.insert_section(model, 1, [BatchNormalization()], 'after', activation_list)
 
     def insert_fc_section(self, model, params, n_fc):
-        """
-        method used for inserting a new dense section
-        :param model params n_fc: insert into the model a n_fc dense sections with params values
-        :return: model with new dense sections
-        """
+        if self.dnet.count_layer_type(model, 'Dense') >= self.tot_fc:
+            return model 
 
-        # boolean used to identify which layers in the new architecture can use the old weights
-        reused_weights = True
+        new_section = [Dense(params['new_fc']),
+                       Activation(params['activation'])]
 
-        # get output shape of the net
-        output_neurons = model.layers[-1].output.shape[1]
+        if self.dnet.any_batch(model):
+            new_section += [BatchNormalization()]
 
-        # count the dense sections of the network and, if their number is greater than or equal to the max,
-        # return the model without adding more layers
-        if ([('Dense' in i.__class__.__name__) and (i.output.shape[1] != output_neurons) for i in model.layers].count(True) >= self.tot_fc):
+        new_section += [Dropout(params['dr_f'])]
+
+        return self.dnet.insert_section(model, n_fc, new_section, 'after', 'Flatten')
+
+    def remove_conv_section(self, model):
+        if self.dnet.count_layer_type(model, 'Conv2D') <= 1:
             return model
-        
-        # boolean used to identify where to insert the new dense section
-        flatten_found = False
 
-        # initialize dict containing the neural network layers after addition as empty
-        net_dense = {}
+        last_conv_start = self.dnet.get_last_section(model, 'Conv2D')
+        linked_section = ['Conv2D', 'Activation', 'BatchNormalization', 'MaxPooling2D']
+        return self.dnet.remove_section(model, last_conv_start, linked_section, True, True)
 
-        # get the layers of neural network
-        layers_list = model.layers
+    def remove_fc_section(self, model):
+        if self.dnet.count_layer_type(model, 'Dense') <= 2:
+            return model
 
-        # iterate over each layer
-        for i in layers_list:
-            # get the name of the current layer class from which it's derived
-            layer_name = i.__class__.__name__
+        linked_section = ['Activation', 'BatchNormalization', 'Dropout']
+        return self.dnet.remove_section(model, 'Dense', linked_section, True, True)
 
-            # add the current layer to the final archiecture
-            net_dense |= {i.name : [reused_weights, i]}
-
-            # if the current layer is the flatten and hasn't been found where to put the new dense section
-            if 'Flatten' in layer_name and not flatten_found:
-                # found the point at which to insert the dense section
-                # setting the corresponding boolean to true
-                flatten_found = True
-
-                # cannot use the old weights because of the size change,
-                # so set the corresponding boolean to false
-                reused_weights = False
-
-                # list containing the layers of dense section
-                fc_section = []
-
-                # insert 'n_fc' dense sections
-                for _ in range(n_fc):
-                    # the first layers of the section are the dense one and the related activation
-                    naming = '{}'.format(time())                 
-                    fc_section += [Dense(params['new_fc'], name='dense_{}'.format(naming)),
-                                   Activation(params['activation'], name='activation_{}'.format(naming))]
-
-                    # if batch normalization is already in the architecture
-                    # add it to the section
-                    if any(['batch' in i.name for i in model.layers]):
-                        fc_section += [BatchNormalization(name="batch_norm_{}".format(naming))]
- 
-                    # add dropout to the dense section
-                    fc_section += [Dropout(params['dr_f'], name='dropout_{}'.format(naming))]
-
-                # add all the layers of the dense section to the final architecture
-                for x in fc_section:
-                    net_dense |= {x.name : [reused_weights, x]}
-
-        return self.model_from_dict(net_dense)
-
-    def model_from_dict(self, model_dict):
-        # set variables containing respectively the new network archiecture and input layer to 'None'
-        x = None
-        new_inputs = None
-
-        # build a new neural network, based on the previously saved layers,
-        # adding a specific layer based on the type of layer saved before
-        for layer_key in model_dict.keys():
-            layer = model_dict[layer_key][1]
-            layer_name = layer.__class__.__name__
-            if 'Input' in layer_name:
-                new_input = layer._input_tensor if hasattr(layer, '_input_tensor') else layer.input
-                if(new_input.shape[0] == None):
-                    new_input = new_input.shape[1:]
-                new_inputs = Input(new_input)
-                x = new_inputs
-            elif model_dict[layer_key][0]:
-                x = model_dict[layer_key][1](x)
-            elif 'Conv' in layer_name:
-                x = Conv2D(layer.kernel.shape[-1], layer.kernel_size, padding=layer.padding, name=layer_key)(x)
-            elif 'Activation' in layer_name:
-                activation_name = layer.activation.__name__ if hasattr(layer, 'activation') else layer.output.name
-                x = Activation(activation_name, name=layer_key)(x)
-            elif 'Flatten' in layer_name:
-                x = Flatten()(x)
-            elif 'Batch' in layer_name:
-                x = BatchNormalization(name=layer_key)(x)
-            elif 'Dense' in layer_name:
-                x = Dense(layer.units, name=layer_key, activation=layer.activation)(x)
-            elif 'Dropout' in layer_name:
-                x = Dropout(layer.rate, name=layer_key)(x)
-            elif 'Max' in layer_name:
-                x = MaxPooling2D(layer.pool_size, name=layer_key)(x)
-
-        return Model(inputs=new_inputs, outputs=x)
-        
     def training(self, params, new, new_fc, new_conv, rem_conv, rem_fc, da, space):
         """
         Function for compiling and running training
@@ -645,31 +181,31 @@ class neural_network:
                 if new_fc:
                     if new_fc[0]:
                         self.dense = True
-                        model = self.insert_fc_section(model, params, 1)
+                        model = self.insert_fc_section(model, params, new_fc[1])
                 # if the flag for the addition of regularization is true
                 if new:
                     self.rgl = True
                     self.dense = False
-                    model = self.insert_layer(model, '.*activation.*', params)
+                    model = self.insert_batch(model, params)
                 # if the flag for the addition of a convolutional layer
                 if new_conv:
                     if new_conv[0]:
                         self.conv = True
                         self.dense = False
                         self.rgl = False
-                        model = self.insert_layer(model, '.*flatten.*', params, num_cv=new_conv[1], position='before')
+                        model = self.insert_conv_section(model, params, new_conv[1])
                 # if the flag for the removal of a convolutional layer is true
                 if rem_conv:
                     self.conv = False
                     self.dense = False
                     self.rgl = False
-                    model = self.remove_conv_layer(model, params)
+                    model = self.remove_conv_section(model)
                 # if the flag for the removal of a dense layer is true
                 if rem_fc:
                     self.conv = False
                     self.dense = False
                     self.rgl = False
-                    model = self.remove_fc(model)
+                    model = self.remove_fc_section(model)
 
         except Exception as e:
             print(colors.FAIL, e, colors.ENDC)
@@ -747,6 +283,7 @@ class neural_network:
         model.load_weights("Weights/weights-{}.weights.h5".format(model_name_id))
         return score, history, model
 
+
 if __name__ == '__main__':
     X_train, X_test, Y_train, Y_test, n_classes = cifar_data()
     ss = search_space()
@@ -762,43 +299,26 @@ if __name__ == '__main__':
 
     n = neural_network(X_train, Y_train, X_test, Y_test, n_classes)
     
-    #model = n.build_network(default_params, None)
-    #model.summary()
-
-    from keras.applications.vgg16 import VGG16
-    model = VGG16()
-    model.summary()
-   
-    # first value of block5_conv1
-    print(model.layers[15].get_weights()[0][0][0][0][0])
-
-    model = n.insert_fc_section(model, default_params, 1)
-    model.summary()
-
-    model = n.remove_fc(model)
-    model.summary()
-
-    # first value of block5_conv1
-    print(model.layers[15].get_weights()[0][0][0][0][0])
-    quit()
-
-    model = n.remove_conv_layer(model, default_params)
+    model = n.build_network(default_params, None)
     model.summary()
 
     n.rgl = True
-    n.dense = False
-    n.conv = False
-    model = n.insert_layer(model, '.*activation.*', default_params)
+    model = n.insert_batch(model, default_params)
+    model.summary()
+
+    model = n.insert_conv_section(model, default_params, 1)
+    model.summary()
+
+    model = n.remove_conv_section(model)
     model.summary()
 
     model = n.insert_fc_section(model, default_params, 1)
     model.summary()
 
-    model = n.remove_fc(model)
+    model = n.remove_fc_section(model)
     model.summary()
-
     quit()
-    
+
     new_model = n.remove_conv_layer(model, default_params)
     model_name_id = time()
     model_json = new_model.to_json()
