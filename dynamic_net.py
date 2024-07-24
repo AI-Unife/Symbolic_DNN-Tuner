@@ -240,7 +240,7 @@ class dynamic_net:
 if __name__ == '__main__':
 
     # instantiate the class
-    dynamicNet = DNET()
+    dynamicNet = dynamic_net()
 
     # load VGG16
     model = VGG16(weights='imagenet')
@@ -250,7 +250,7 @@ if __name__ == '__main__':
     linked_list = ['Conv2D', 'MaxPooling2D', 'Flatten', 'Dense']
     model = dynamicNet.remove_section(model, 'Conv2D', linked_list, False, False)
     # add 5 maxpool
-    model = dynamicNet.insert_section(model, 5, [MaxPooling2D()], 'after', 'input')
+    model = dynamicNet.insert_section(model, 5, [MaxPooling2D()], 'after', model.layers[0].name)
     # add two conv before each maxpool
     new_section = [Conv2D(256, (2,2), padding="same"), Activation('relu')]
     model = dynamicNet.insert_section(model, 2, new_section, 'before', 'MaxPooling2D')
