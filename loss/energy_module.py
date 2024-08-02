@@ -3,6 +3,10 @@ from colors import colors
 import os
 
 import flops_calculator as fc
+from pathlib import Path
+from tensorflow.keras import layers, models
+
+import profiler
 
 class energy_module(common_interface):
     """
@@ -11,7 +15,7 @@ class energy_module(common_interface):
     When there is no architecture powerful enough to contain the neural network, an attempt is made to decrease its size.
     """
     #facts and problems for creating the prolog model
-    facts = ['low_p', 'high_p', 'flops_w', 'last_flops']
+    facts = ['low_p', 'high_p', 'flops_w', 'last_flops', 'new_latency']
     problems = []
 
     #weight of the module for the final loss calculation
@@ -74,6 +78,7 @@ class energy_module(common_interface):
         self.flops, _ = fc.analyze_model(self.model)
         self.flops = self.flops.total_float_ops
         self.flops_w = (self.flops / 10**6) / self.power
+        self.latency = self.get_model_latency(self.model)
 
     def fix_configuration(self):
         # update last_flops to prevent the search for a new configuration at each iteration
@@ -164,11 +169,12 @@ class energy_module(common_interface):
 
     def obtain_values(self):
         # has to match the list of facts
-        return {'low_p' : self.current_range[0], 'high_p' : self.current_range[1], 'flops_w' : self.flops_w, 'last_flops' : self.last_flops}
+        return {'low_p' : self.current_range[0], 'high_p' : self.current_range[1], 'flops_w' : self.flops_w, 'last_flops' : self.last_flops, 'new_latency' : self.latency}
 
     def printing_values(self):
         print(colors.FAIL, f"ENERGY: {self.power}, MODEL: {self.flops_w} [MFLOPS/W]", colors.ENDC)
         print(colors.FAIL, f"CONFIG: {self.current_config} : {self.current_range[1]} [MFLOPS/W]", colors.ENDC)
+        print(colors.FAIL, "LATENCY: " + str(self.latency), colors.ENDC)
 
     def optimiziation_function(self, *args):
         return -self.power
@@ -178,3 +184,77 @@ class energy_module(common_interface):
 
     def log_function(self):
         pass
+
+    def LENET(self):
+        model = models.Sequential()
+        model.add(layers.Conv2D(6, 5, activation='tanh', input_shape=(32, 32, 1))) 
+        model.add(layers.AveragePooling2D(2))
+        model.add(layers.Activation('sigmoid'))
+        model.add(layers.Conv2D(16, 5, activation='tanh'))
+        model.add(layers.AveragePooling2D(2))
+        model.add(layers.Activation('sigmoid'))
+        #model.add(layers.Conv2D(120, 5, activation='tanh'))
+        model.add(layers.Flatten())
+        model.add(layers.Dense(120, activation='tanh'))
+        model.add(layers.Dense(84, activation='tanh'))
+        model.add(layers.Dense(10, activation='softmax'))
+        return model
+
+    def get_model_latency(self, model):
+    
+        total_latency = 0
+        
+        in_ch, out_ch, kernel, stride, padding, batch, bias, nvdla = 0, 0, 0, 0, 2, 1, False, ""
+        nvdla = "nv_small64_fp32.yaml"
+        log_file = "profiler_logs.txt"
+        
+        work_p = os.getcwd()
+        config_p = Path(work_p).joinpath('specs').joinpath(nvdla)
+        nvdla = profiler.nvdla(config_p)
+              
+        input_size = model.layers[0].output.shape
+        input_size = [batch, input_size[3], input_size[1], input_size[2]]
+
+        #model = self.LENET()
+        #input_size = [batch, 1, 28, 28]
+        
+        input_flag = False
+
+        for i in model.layers:
+            layer_class = i.__class__.__name__
+            if layer_class in ['Conv2D']:
+                
+                out_size = i.output.shape
+                out_size = [batch, out_size[3], out_size[1], out_size[2]]
+
+                in_ch = i.input.shape[-1]
+                out_ch = i.output.shape[-1]
+                kernel = i.kernel_size[0]
+                stride = i.strides[0]
+                bias = i.use_bias
+                
+                if input_flag:
+                    input_size = i.input.shape
+                    input_size = [batch, input_size[3], input_size[1], input_size[2]]
+                    if i.padding == 'valid':
+                        padding = 0
+                    else: padding = 2
+                
+                input_flag = True
+
+                conv_obj = profiler.Conv2d(nvdla, log_file, i.name, out_size, in_ch, out_ch, kernel, stride, padding, 1, bias)
+                total_latency += conv_obj.forward(input_size)
+                
+            elif layer_class in ['Dense']:
+                in_f = i.input.shape[-1]
+                out_f = i.output.shape[-1]
+                bias = i.use_bias
+                
+                out_size = [batch, out_f]
+                
+                dense_obj = profiler.Linear(nvdla, log_file, i.name, out_size, in_f, out_f, bias)
+                total_latency += dense_obj.forward([batch, in_f])
+                
+        #print(f"total latency: {total_latency}")
+
+        return total_latency
