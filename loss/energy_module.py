@@ -191,7 +191,7 @@ class energy_module(common_interface):
         :return: LeNet model
         """
         model = models.Sequential()
-        model.add(layers.Conv2D(6, 5, activation='tanh', input_shape=(32, 32, 1))) 
+        model.add(layers.Conv2D(6, 5, activation='tanh', padding="same", input_shape=(28, 28, 1))) 
         model.add(layers.AveragePooling2D(2))
         model.add(layers.Activation('sigmoid'))
         model.add(layers.Conv2D(16, 5, activation='tanh'))
@@ -217,7 +217,7 @@ class energy_module(common_interface):
         in_ch, out_ch, kernel, stride, padding, batch, bias = 0, 0, 0, 0, 2, 1, False
 
         # define the configuration on which to perform the evaluation and the log file name in which to save the informations
-        nvdla = "nv_small64_fp32.yaml"
+        nvdla = "nv_large2048_fp32.yaml"
         log_file = "profiler_logs.txt"
         
         # build the path where the configuration file is located
@@ -233,9 +233,6 @@ class energy_module(common_interface):
         #model = self.LENET()
         #input_size = [batch, 1, 28, 28]
         
-        # flag used to use use an arbitrary padding value for the first convolution, the one set above
-        input_flag = False
-
         # iterate over each layer of the model
         for i in model.layers:
             layer_class = i.__class__.__name__
@@ -253,18 +250,14 @@ class energy_module(common_interface):
                 kernel = i.kernel_size[0]
                 stride = i.strides[0]
                 bias = i.use_bias
-                
-                # if it isn't the first convolution, build the new input size list and
-                # set the padding value according to the one in the layer
-                if input_flag:
-                    input_size = i.input.shape
-                    input_size = [batch, input_size[3], input_size[1], input_size[2]]
-                    if i.padding == 'valid':
-                        padding = 0
-                    else: padding = 2
-                
-                # after the first convolution, use the input and padding data directly from the layer
-                input_flag = True
+
+                # set the padding value according to the padding type of the layer
+                input_size = i.input.shape
+                input_size = [batch, input_size[3], input_size[1], input_size[2]]
+                if i.padding == 'valid':
+                    padding = 0
+                else:
+                    padding = int((kernel - 1) / 2)
 
                 # build the profiler object that maps the convolutional layer and get its latency value
                 conv_obj = profiler.Conv2d(nvdla, log_file, i.name, out_size, in_ch, out_ch, kernel, stride, padding, 1, bias)
