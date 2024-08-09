@@ -21,7 +21,7 @@ class dynamic_net:
         # booleans used during the search of layers to be removed
         # the first indicates if you're inside section during the search
         # the second indicates if a section that can be removed was found
-        fc_section, fc_found = False, False
+        n_section, n_found = False, False
 
         # initialize dict containing the neural network layers after removal as empty
         removed = {}
@@ -39,18 +39,18 @@ class dynamic_net:
             layer_class = i.__class__.__name__
 
             # if i'm not inside a section, but the target does match with the searched layer class or a layer name
-            if not fc_section and not fc_found and (target in layer_class or target in i.name):
-                fc_section = True
+            if not n_section and not n_found and (target in layer_class or target in i.name):
+                n_section = True
                 removed_name += i.name + '\n'
 
                 # can't use the old weights for subsequent layers, because the size of layers will change
                 reused_weights = False
-            elif fc_section:
+            elif n_section:
                 # if the current layer is not among those connected to
                 # this section, it means that i've reached the end
                 if layer_class not in linked_layers and i.name not in linked_layers:
-                    fc_section = False
-                    fc_found = first_found
+                    n_section = False
+                    n_found = first_found
                     if delimiter:
                         removed |= {i.name : [reused_weights, {'class_name' : layer_class}, i.get_config()]}
                     else:
@@ -82,7 +82,7 @@ class dynamic_net:
         reused_weights = True
 
         # initialize dict containing the neural network layers after addition as empty
-        net_dense = {}
+        net_list = {}
 
         # get the layers of neural network
         layers_list = model.layers
@@ -101,14 +101,14 @@ class dynamic_net:
                 replace_flag = True
 
                 # list containing the layers the new section
-                fc_section = []
+                c_section = []
 
                 # insert 'n_section' sections, adding an ID to each name to make them unique
                 for _ in range(n_section):
-                    fc_section += self.add_names(new_section)
+                    c_section += self.add_names(new_section)
 
                 # add all the layers of the section to the final architecture
-                for x in fc_section:
+                for x in c_section:
                     section |= {x.name : [reused_weights, {'class_name' : x.__class__.__name__}, x.get_config()]}
 
             current_layer = {i.name : [reused_weights, {'class_name' : layer_class}, i.get_config()]}
@@ -116,16 +116,16 @@ class dynamic_net:
             # Depending on the value of the position, insert the new section
             # before, after, or replace the target layers
             if position == 'before':
-                net_dense |= (section | current_layer)
+                net_list |= (section | current_layer)
             elif position == 'after':
-                net_dense |= (current_layer | section)
+                net_list |= (current_layer | section)
             elif position == 'replace' and replace_flag:
                replace_flag = False
-               net_dense |= section
+               net_list |= section
             else:
-               net_dense |= current_layer
+               net_list |= current_layer
         
-        return self.build_model(model, net_dense)
+        return self.build_model(model, net_list)
 
     def build_model(self, model, model_dict):
         """
@@ -164,7 +164,7 @@ class dynamic_net:
             # if the current layer in the dictionary is the input layer, initialize the input of the new model
             if 'Input' in layer_name:
                 input_shape = model.input
- 
+
                 # fix for keras >= 3.4, the input layer is saved
                 # in lists of lists, instead of a single list
                 if isinstance(input_shape, list):
