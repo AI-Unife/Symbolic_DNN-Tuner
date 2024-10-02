@@ -12,19 +12,16 @@ from dynamic_net import dynamic_net
 class hardware_module(common_interface):
 
     #facts and problems for creating the prolog model
-    facts = ['hw_latency', 'max_latency', 'total_cost']
+    facts = ['hw_latency', 'lenet_latency']
     problems = ['out_range']
     
     #weight of the module for the final loss calculation
     weight = 0.5
 
     def __init__(self):
-	# cost value per square millimeter, 10K / mm2
+        # cost value per square millimeter, 10K / mm2
         self.cost_par = 10000
-	# maximum cost and latency values
-        self.max_cost = 50000
-        self.max_latency = 20000000
-	# attribute indicating how much cost weighs against latency value
+        # attribute indicating how much cost weighs against latency value
         self.weight_cost = 0.75
         
         nvdla_list = [{'name': "nv_small", 'path': "nv_small64_fp32.yaml", 'area': 2.824},
@@ -44,6 +41,11 @@ class hardware_module(common_interface):
             else:
                 print(colors.FAIL, f"|  --------- {config['name']} CONFIGURATION FILE DOESN'T EXIST  -------  |\n", colors.ENDC)
                 
+        # maximum cost and latency values
+        self.nvdla  = dict(sorted(self.nvdla.items(), key=lambda item: item[1]['cost'], reverse=True))
+        first_el = next(iter(self.nvdla))
+        self.max_cost = self.nvdla[first_el]['cost']
+        self.max_latency = 20000000
         self.last_flops = 0
         
     def update_state(self, *args):
@@ -56,7 +58,7 @@ class hardware_module(common_interface):
         if self.last_flops == self.flops:
             print(self.nvdla)
             return
-        
+
         # for each configuration calculate the latency and the total cost
         for config_key in self.nvdla:
             config_path = self.nvdla[config_key]['path']
@@ -75,19 +77,21 @@ class hardware_module(common_interface):
         self.cost = self.nvdla[first_el]['cost']
         self.total_cost = self.nvdla[first_el]['total_cost']
         self.current_config = first_el
+        self.leNet_latency = self.get_model_latency(self.LENET(), config_path)
         
         self.last_flops = self.flops
-                    
+       
         print(self.nvdla)
   
     def obtain_values(self):
         # has to match the list of facts
-        return {'hw_latency' : self.latency, 'max_latency' : self.max_latency, 'total_cost' : self.total_cost}
+        return {'hw_latency' : self.latency, 'lenet_latency' : self.leNet_latency}
 
     def printing_values(self):
         print(colors.FAIL, f"LATENCY: {self.latency} [{self.current_config}]", colors.ENDC)
         print(colors.FAIL, f"COST: {self.cost}$", colors.ENDC)
         print(colors.FAIL, f"TOTAL COST: {self.total_cost}", colors.ENDC)
+        print(colors.FAIL, f"LENET: {self.leNet_latency}, {self.latency / self.leNet_latency}", colors.ENDC)
 
     def optimiziation_function(self, *args):
         return -self.total_cost

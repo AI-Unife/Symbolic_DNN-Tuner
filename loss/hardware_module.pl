@@ -1,10 +1,8 @@
 % utils for hardware constraints
-high_latency :- hw_latency(L), max_latency(Max_L), L > (Max_L / 2).
-high_cost :- total_cost(C), C > 0.6.
+high_latency :- hw_latency(L), lenet_latency(LeNet_L), (L / LeNet_L) > 10.
 
 % rules for hardware constraints
 problem(out_range):- high_latency.
-problem(out_range):- high_cost.
 
 % rules for power constraints
 t(0.5)::action(dec_layers, out_range).
