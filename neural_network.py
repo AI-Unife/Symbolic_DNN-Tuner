@@ -21,6 +21,43 @@ from LOLR import Lolr
 from search_space import search_space
 from dynamic_net import dynamic_net
 
+# class wrapper used to add the functionality of the layer wise learning rate
+class Multiplier(Optimizer):
+    def __init__(self, new_keras, optimizer, multiplier, learning_rate=0.001, name="LRM", **kwargs):
+        if new_keras:
+            super().__init__(learning_rate, **kwargs)
+        else:
+            super().__init__(name, **kwargs)
+            self._set_hyper("learning_rate", kwargs.get("lr", learning_rate))            
+        self._optimizer = optimizer
+        self._multiplier = multiplier
+
+    # function used to apply a multiplier to a specific layer
+    def calculate_grad(self, grad, var):
+        # get layer name
+        layer_key = var.name.split('/')[0]      
+        # if there's a multiplier value associated with a layer, apply it to the gradient
+        if layer_key in self._multiplier:
+            grad /= self._multiplier[layer_key]
+        return grad
+            
+    # update step used in keras 3.X
+    def update_step(self, grad, var, learning_rate):       
+        self._optimizer.update_step(self.calculate_grad(grad, var), var, learning_rate)
+
+    def build(self, var_list):
+        super().build(var_list)
+        self._optimizer.build(var_list)
+        
+    # update step used in keras 2.X
+    @tf.function
+    def _resource_apply_dense(self, grad, var):
+        self._optimizer._resource_apply_dense(self.calculate_grad(grad, var), var)
+        
+    def _create_slots(self, var_list):
+        self._optimizer._create_slots(var_list)
+        
+
 class neural_network:
     """
     class used for the management of the neural network architecture,
@@ -219,7 +256,7 @@ class neural_network:
         # remove the first dense section in the model and all associated layers in linked_section
         linked_section = ['Activation', 'BatchNormalization', 'Dropout']
         return self.dnet.remove_section(model, 'Dense', linked_section, True, True)
-
+      
     def training(self, params, new, new_fc, new_conv, rem_conv, rem_fc, da, space):
         """
         Function for compiling and running training
@@ -293,11 +330,31 @@ class neural_network:
         # compiling and training
         _opt = params['optimizer'] + "(learning_rate=" + str(params['learning_rate']) + ")"
         opt = eval(_opt)
+
+        # create a dictionary with which to associate model layers with a multiplier (layer wise learning rate)
+        multiplier = {}
+        # trainable variables names
+        new_keras = hasattr(model.trainable_variables[0], 'path')   
+        trainable = [(layer.path if new_keras else layer.name).split('/')[0] for layer in model.trainable_variables]
+        # for each successive variable, i'll have a reduction by a factor of sqrt(2)
+        current_mul = 1
+        lr_factor = 1.414213
+        # iterate over each trainable layer, skipping one (kernel and bias pairs)
+        for layer in trainable[::2]:
+            # get layer class name
+            layer_type = model.get_layer(layer).__class__.__name__
+            # if the current layer is a type on which we want to apply a multiplier
+            if layer_type in ['Conv2D']:
+                multiplier |= {layer : current_mul}
+                current_mul *= lr_factor
+        
+        opt = Multiplier(new_keras, opt, multiplier)
+
         model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=['accuracy'])
         es1 = EarlyStopping(monitor='val_loss', min_delta=0.005, patience=15, verbose=1, mode='min')
         es2 = EarlyStopping(monitor='val_accuracy', min_delta=0.005, patience=15, verbose=1, mode='max')
         reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=5, verbose=1, min_lr=1e-4)
- 
+
         # if the flag of data augmentation is true
         if da:
             # define a generator in which are present the values of the data augmentation parameters
