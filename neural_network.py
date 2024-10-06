@@ -23,8 +23,8 @@ from dynamic_net import dynamic_net
 
 # class wrapper used to add the functionality of the layer wise learning rate
 class Multiplier(Optimizer):
-    def __init__(self, new_keras, optimizer, multiplier, learning_rate=0.001, name="LRM", **kwargs):
-        if new_keras:
+    def __init__(self, optimizer, multiplier, learning_rate=0.001, name="LRM", **kwargs):
+        if hasattr(optimizer, 'update_step'):
             super().__init__(learning_rate, **kwargs)
         else:
             super().__init__(name, **kwargs)
@@ -38,7 +38,7 @@ class Multiplier(Optimizer):
         layer_key = var.name.split('/')[0]      
         # if there's a multiplier value associated with a layer, apply it to the gradient
         if layer_key in self._multiplier:
-            grad /= self._multiplier[layer_key]
+            grad *= self._multiplier[layer_key]
         return grad
             
     # update step used in keras 3.X
@@ -79,7 +79,7 @@ class neural_network:
         self.train_data /= 255
         self.test_data /= 255
         self.n_classes = n_classes
-        self.epochs = 2
+        self.epochs = 5
         self.last_dense = 0
         self.counter_fc = 0
         self.counter_conv = 0
@@ -263,7 +263,6 @@ class neural_network:
         :param params, new, new_fc, new_conv, rem_conv, da, space: parameters to indicate a possible operation on the network structure and hyperparameter search space
         :return: training history, trained model and and performance evaluation score 
         """
-
         # build neural network
         model = self.build_network(params, new)
         try:
@@ -334,7 +333,7 @@ class neural_network:
         # create a dictionary with which to associate model layers with a multiplier (layer wise learning rate)
         multiplier = {}
         # trainable variables names
-        new_keras = hasattr(model.trainable_variables[0], 'path')   
+        new_keras = hasattr(opt, 'update_step')
         trainable = [(layer.path if new_keras else layer.name).split('/')[0] for layer in model.trainable_variables]
         # for each successive variable, i'll have a reduction by a factor of sqrt(2)
         current_mul = 1
@@ -346,9 +345,9 @@ class neural_network:
             # if the current layer is a type on which we want to apply a multiplier
             if layer_type in ['Conv2D']:
                 multiplier |= {layer : current_mul}
-                current_mul *= lr_factor
-        
-        opt = Multiplier(new_keras, opt, multiplier)
+                current_mul /= lr_factor
+
+        opt = Multiplier(opt, multiplier)
 
         model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=['accuracy'])
         es1 = EarlyStopping(monitor='val_loss', min_delta=0.005, patience=15, verbose=1, mode='min')
