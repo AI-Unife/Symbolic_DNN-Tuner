@@ -9,6 +9,8 @@ from tensorflow.keras import layers, models
 import profiler
 from dynamic_net import dynamic_net
 
+from math import sqrt
+
 class hardware_module(common_interface):
 
     #facts and problems for creating the prolog model
@@ -16,7 +18,7 @@ class hardware_module(common_interface):
     problems = ['out_range']
     
     #weight of the module for the final loss calculation
-    weight = 0.5
+    weight = 0
 
     def __init__(self):
         # cost value per square millimeter, 10K / mm2
@@ -40,14 +42,14 @@ class hardware_module(common_interface):
                                               'total_cost': 0}
             else:
                 print(colors.FAIL, f"|  --------- {config['name']} CONFIGURATION FILE DOESN'T EXIST  -------  |\n", colors.ENDC)
-                
+        
         # maximum cost and latency values
+        self.max_latency = 20000000
+        self.last_flops = 0
         self.nvdla  = dict(sorted(self.nvdla.items(), key=lambda item: item[1]['cost'], reverse=True))
         first_el = next(iter(self.nvdla))
         self.max_cost = self.nvdla[first_el]['cost']
-        self.max_latency = 20000000
-        self.last_flops = 0
-        
+       
     def update_state(self, *args):
         # import current model reference
         self.model = args[2]
@@ -56,7 +58,6 @@ class hardware_module(common_interface):
         self.flops = self.flops.total_float_ops
         
         if self.last_flops == self.flops:
-            print(self.nvdla)
             return
 
         # for each configuration calculate the latency and the total cost
@@ -71,7 +72,6 @@ class hardware_module(common_interface):
         # this will be useful to determine the optimal configuration
         sorted_config = dict(sorted(self.nvdla.items(), key=lambda item: item[1]['total_cost']))
         self.nvdla = sorted_config
-        
         first_el = next(iter(self.nvdla))
         self.latency = self.nvdla[first_el]['latency']
         self.cost = self.nvdla[first_el]['cost']
@@ -81,8 +81,6 @@ class hardware_module(common_interface):
         
         self.last_flops = self.flops
        
-        print(self.nvdla)
-  
     def obtain_values(self):
         # has to match the list of facts
         return {'hw_latency' : self.latency, 'lenet_latency' : self.leNet_latency}
@@ -91,8 +89,8 @@ class hardware_module(common_interface):
         print(colors.FAIL, f"LATENCY: {self.latency} [{self.current_config}]", colors.ENDC)
         print(colors.FAIL, f"COST: {self.cost}$", colors.ENDC)
         print(colors.FAIL, f"TOTAL COST: {self.total_cost}", colors.ENDC)
-        print(colors.FAIL, f"LENET: {self.leNet_latency}, {self.latency / self.leNet_latency}", colors.ENDC)
-
+        print(colors.FAIL, f"LENET: {self.leNet_latency}, {sqrt(self.latency) / sqrt(self.leNet_latency)}", colors.ENDC)
+   
     def optimiziation_function(self, *args):
         return -self.total_cost
 

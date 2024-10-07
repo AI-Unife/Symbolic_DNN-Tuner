@@ -1,5 +1,5 @@
 % utils for hardware constraints
-high_latency :- hw_latency(L), lenet_latency(LeNet_L), (L / LeNet_L) > 10.
+high_latency :- hw_latency(L), lenet_latency(LeNet_L), (sqrt(L) / sqrt(LeNet_L)) > 3.
 
 % rules for hardware constraints
 problem(out_range):- high_latency.

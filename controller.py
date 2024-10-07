@@ -60,7 +60,7 @@ class controller:
         self.hloss = 1.2
         self.levels = [7, 10, 13]
         self.imp_checker = ImprovementChecker(self.db, self.lfi)
-        self.modules = module(["energy_module", "new_flop_calculator", "accuracy_module"])
+        self.modules = module(["hardware_module"])
 
     # The following methods are used to determine actions to be applied to the network structure,
     # for example addition or removal of convolutions and dense layers
@@ -132,7 +132,7 @@ class controller:
         if energy_name in self.modules.modules_name:
             # get the index from the loaded modules and, once the object is obtained, call the function
             index = self.modules.modules_name.index(energy_name)
-            self.modules.modules_obj[index].fix_configuration()      
+            self.modules.modules_obj[index].fix_configuration()
 
     def training(self, params):
         """
@@ -165,9 +165,10 @@ class controller:
         self.iter += 1
 
         # if no module has been loaded or is incorrect for the symbolic part
+        # or all the weights of the loaded modules are zero
         # accuracy will be the value to be optimized
         # otherwise return the finale function value to be optimized
-        if (len(self.modules.modules_obj) == 0) or not self.modules.ready():
+        if (len(self.modules.modules_obj) == 0) or not self.modules.all_zeros_weights() or not self.modules.ready():
             return -self.score[1]
         else:
             _, _, opt_value = self.modules.optimiziation()
@@ -235,6 +236,9 @@ class controller:
         # close log files in which previous informations are stored
         diagnosis_logs.close()
         tuning_logs.close()
+        
+        print(self.symbolic_tuning)
+        print(self.symbolic_diagnosis)
 
         print(colors.CYAN, "| END SYMBOLIC DIAGNOSIS   ----------------------------------  |\n", colors.ENDC)
 

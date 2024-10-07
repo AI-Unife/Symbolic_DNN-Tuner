@@ -70,6 +70,13 @@ class module:
         :return: Boolean indicating if at least one module is suitable for inclusion in the prolog model
         """
         return any(self.modules_ready)
+     
+    def all_zeros_weights(self):
+        """
+        Check if all loaded modules have 0 as weights for loss calculation
+        :return: Boolean indicating if all loaded modules have 0 as weights for loss calculation
+        """
+        return (np.sum([module.weight for module in self.modules_obj]) > 0)
 
     def get_rules(self): 
         """
@@ -119,13 +126,12 @@ class module:
 
         return rules, actions, problems
     
-
     def state(self, *args):
         """
         Update internal state of modules
         """
         for index, module in enumerate(self.modules_obj):
-            module.update_state(*args) 
+            module.update_state(*args)
             
             # if the number of facts defined internally by the module and
             # the number of values returned are different, an error occurs and
