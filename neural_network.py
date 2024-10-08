@@ -43,7 +43,7 @@ class Multiplier(Optimizer):
             
     # update step used in keras 3.X
     def update_step(self, grad, var, learning_rate):
-        new_lr = self.mul_param(self._optimizer.learning_rate, var)
+        new_lr = self.mul_param(learning_rate, var)
         self._optimizer.update_step(grad, var, new_lr)
 
     def build(self, var_list):
