@@ -22,13 +22,13 @@ from search_space import search_space
 from dynamic_net import dynamic_net
 
 # class wrapper used to add the functionality of the layer wise learning rate
-class Multiplier(Optimizer):
-    def __init__(self, optimizer, multiplier, learning_rate=0.001, name="LRM", **kwargs):
+class LayerWiseLR(Optimizer):
+    def __init__(self, optimizer, multiplier, learning_rate=0.001, name="LWLR", **kwargs):
         if hasattr(optimizer, 'update_step'):
             super().__init__(learning_rate, **kwargs)
         else:
             super().__init__(name, **kwargs)
-            self._set_hyper("learning_rate", kwargs.get("lr", learning_rate))            
+            self._set_hyper("learning_rate", learning_rate)
         self._optimizer = optimizer
         self._multiplier = multiplier
 
@@ -52,10 +52,14 @@ class Multiplier(Optimizer):
         
     # update step used in keras 2.X
     @tf.function
-    def _resource_apply_dense(self, grad, var):
-        self._optimizer._resource_apply_dense(self.mul_param(grad, var), var)
+    def _resource_apply_dense(self, grad, var):       
+        new_lr = K.eval(self._get_hyper("learning_rate"))
+        new_lr = self.mul_param(new_lr, var)
+        self._optimizer.learning_rate.assign(new_lr)
+        self._optimizer._resource_apply_dense(grad, var)
 
     def _create_slots(self, var_list):
+        super()._create_slots(var_list)
         self._optimizer._create_slots(var_list)
      
 class neural_network:
@@ -79,7 +83,7 @@ class neural_network:
         self.train_data /= 255
         self.test_data /= 255
         self.n_classes = n_classes
-        self.epochs = 15
+        self.epochs = 6
         self.last_dense = 0
         self.counter_fc = 0
         self.counter_conv = 0
@@ -347,7 +351,7 @@ class neural_network:
                 multiplier |= {layer : current_mul}
                 current_mul /= lr_factor
 
-        opt = Multiplier(opt, multiplier, learning_rate=params['learning_rate'])
+        opt = LayerWiseLR(opt, multiplier, learning_rate=params['learning_rate'])
 
         model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=['accuracy'])
         es1 = EarlyStopping(monitor='val_loss', min_delta=0.005, patience=15, verbose=1, mode='min')
