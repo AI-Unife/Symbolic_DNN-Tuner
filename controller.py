@@ -15,7 +15,7 @@ from improvement_checker import ImprovementChecker
 from integral import integrals
 from shutil import copyfile
 
-from module import module
+from modules.module import module
 
 class controller:
     """

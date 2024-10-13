@@ -1,0 +1,43 @@
+bdma:
+  en: false
+cacc:
+  bank-depth: 128
+  banks: 8
+  bitwidth: 32
+cbuf:
+  bank-depth: 512
+  banks: 32
+cdp:
+  en: true
+  thpt: 1
+cmac:
+  atomic-c: 8
+  atomic-k: 8
+  batch-size: 1
+dtype: fp32
+name: nv_small
+pdp:
+  en: true
+  thpt: 1
+primary-dbb:
+  latency: 50
+  wordsize: 64
+rubik:
+  en: false
+sdp:
+  bn:
+    en: true
+    thpt: 1
+  bs:
+    en: true
+    thpt: 1
+  ew:
+    en: false
+    thpt: 0
+  lut:
+    en: false
+    thpt: 0
+secondary-dbb:
+  en: false
+  latency: 0
+  wordsize: 0

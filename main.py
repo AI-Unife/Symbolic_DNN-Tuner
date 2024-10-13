@@ -21,7 +21,7 @@ from params_checker import paramsChecker
 # FOLDER SECTION --------------------------------------------------------------------------------------------------------
 
 # list of folders that can be added to the tuner folder if missing
-new_dir = ['Model', 'Weights', 'database', 'checkpoints', 'log_folder', 'algorithm_logs', 'loss', 'dashboard/model']
+new_dir = ['Model', 'Weights', 'database', 'checkpoints', 'log_folder', 'algorithm_logs', 'dashboard/model']
 
 # iterate over each name in the list of folders and
 # if it doesn't exist, proceed with its creation
@@ -40,7 +40,12 @@ for folder in new_dir:
 # obtain images and labels from the cifar dataset
 X_train, X_test, Y_train, Y_test, n_classes = cifar_data()
 dt = datetime.datetime.now()
-max_evals = 30
+max_evals = 0
+
+X_train = X_train[:len(X_train)//100]
+X_test = X_test[:len(X_test)//100]
+Y_train = Y_train[:len(Y_train)//100]
+Y_test = Y_test[:len(Y_test)//100]
 
 # define the hyper-parameters search space, instantiating its class 
 # also instantiates the controller class
