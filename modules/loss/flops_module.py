@@ -38,8 +38,8 @@ class flops_module(common_interface):
         return dict(zip(self.facts, [self.flops, self.flops_th, self.nparams, self.nparams_th]))
 
     def printing_values(self):
-        print(colors.FAIL, "FLOPS: " + str(self.flops), colors.ENDC)
-        print(colors.FAIL, "PARAMS: " + str(self.nparams), colors.ENDC)
+        print("FLOPS: " + str(self.flops))
+        print("PARAMS: " + str(self.nparams))
 
     def optimiziation_function(self, *args):
         # norm flops between 0 - 1

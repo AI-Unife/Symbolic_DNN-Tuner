@@ -9,7 +9,7 @@ class accuracy_module(common_interface):
     problems = []
 
     #weight of the module for the final loss calculation
-    weight = 0.95
+    weight = 0.5
 
     def __init__(self):
         pass
@@ -22,7 +22,7 @@ class accuracy_module(common_interface):
         return {'new_acc' : self.accuracy}
 
     def printing_values(self):
-        print(colors.FAIL, "ACCURACY: " + str(self.accuracy), colors.ENDC)
+        print("ACCURACY: " + str(self.accuracy))
 
     def optimiziation_function(self, *args):
         return -self.accuracy

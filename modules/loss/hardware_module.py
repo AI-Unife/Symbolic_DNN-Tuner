@@ -7,24 +7,23 @@ from pathlib import Path
 from tensorflow.keras import layers, models
 
 import nvdla.profiler as profiler
-from dynamic_net import dynamic_net
-
 from math import sqrt
 
 class hardware_module(common_interface):
 
     #facts and problems for creating the prolog model
-    facts = ['hw_latency', 'lenet_latency']
+    facts = ['hw_latency', 'max_latency']
     problems = ['out_range']
     
     #weight of the module for the final loss calculation
-    weight = 0
+    weight = 0.5
 
     def __init__(self):
         # cost value per square millimeter, 10K / mm2
         self.cost_par = 10000
-        # attribute indicating how much cost weighs against latency value
-        self.weight_cost = 0.75
+        # attribute indicating how much cost weighs against latency value and max latency value in second
+        self.weight_cost = 0.9
+        self.max_latency = 0.010 #10 ms
         
         nvdla_list = [{'name': "nv_small", 'path': "nv_small64_fp32.yaml", 'area': 2.824},
                       {'name': "nv_small256", 'path': "nv_small256_fp32.yaml", 'area': 3.091},
@@ -46,8 +45,7 @@ class hardware_module(common_interface):
         if self.nvdla == {}:
             raise ModuleNotFoundError("No NVDLA configuration found")
 
-        # maximum cost and latency values
-        self.max_latency = 20000000
+        # maximum cost
         self.last_flops = 0
         self.nvdla  = dict(sorted(self.nvdla.items(), key=lambda item: item[1]['cost'], reverse=True))
         first_el = next(iter(self.nvdla))
@@ -66,7 +64,7 @@ class hardware_module(common_interface):
         # for each configuration calculate the latency and the total cost
         for config_key in self.nvdla:
             config_path = self.nvdla[config_key]['path']
-            self.nvdla[config_key]['latency'] = self.get_model_latency(self.model, config_path)
+            self.nvdla[config_key]['latency'] = self.get_model_latency(self.model, config_path) / (10**9)
             latency_temp = self.nvdla[config_key]['latency'] / self.max_latency
             cost_temp = self.nvdla[config_key]['cost'] / self.max_cost
             self.nvdla[config_key]['total_cost'] = round((cost_temp * self.weight_cost) + (latency_temp * (1-self.weight_cost)), 4)
@@ -80,20 +78,18 @@ class hardware_module(common_interface):
         self.cost = self.nvdla[first_el]['cost']
         self.total_cost = self.nvdla[first_el]['total_cost']
         self.current_config = first_el
-        self.leNet_latency = self.get_model_latency(self.LENET(), config_path)
-        
+
         self.last_flops = self.flops
-       
+
     def obtain_values(self):
         # has to match the list of facts
-        return {'hw_latency' : self.latency, 'lenet_latency' : self.leNet_latency}
+        return {'hw_latency' : self.latency, 'max_latency' : self.max_latency}
 
     def printing_values(self):
-        print(colors.FAIL, f"LATENCY: {self.latency} [{self.current_config}]", colors.ENDC)
-        print(colors.FAIL, f"COST: {self.cost}$", colors.ENDC)
-        print(colors.FAIL, f"TOTAL COST: {self.total_cost}", colors.ENDC)
-        print(colors.FAIL, f"LENET: {self.leNet_latency}, {sqrt(self.latency) / sqrt(self.leNet_latency)}", colors.ENDC)
-   
+        print(f"LATENCY: {self.latency} s",)
+        print(f"CURRENT HW: {self.current_config} [{self.cost}$]")
+        print(f"TOTAL COST: {self.total_cost}")
+
     def optimiziation_function(self, *args):
         return -self.total_cost
 

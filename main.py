@@ -13,7 +13,7 @@ from skopt.callbacks import CheckpointSaver
 from tensorflow.keras import backend as K
 
 from colors import colors
-from controller import controller
+from components.controller import controller
 from dataset import cifar_data, mnist
 from search_space import search_space
 from params_checker import paramsChecker
@@ -40,7 +40,7 @@ for folder in new_dir:
 # obtain images and labels from the cifar dataset
 X_train, X_test, Y_train, Y_test, n_classes = cifar_data()
 dt = datetime.datetime.now()
-max_evals = 0
+max_evals = 1
 
 X_train = X_train[:len(X_train)//100]
 X_test = X_test[:len(X_test)//100]

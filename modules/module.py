@@ -98,7 +98,7 @@ class module:
            if self.modules_ready[index]:
 
                # check if the current module defines a symbolic part to be included in the model
-               module_name = "loss/" + name + ".pl"
+               module_name = "modules/loss/" + name + ".pl"
                if os.path.exists(module_name):
 
                    # comment indicating which rules belong to a module
@@ -189,9 +189,11 @@ class module:
         """
         Printing module values
         """
+        print(colors.OKGREEN, "| MODULES VALUES --------------------------------------------  |\n", colors.ENDC)
         for index, module in enumerate(self.modules_obj):
             if self.modules_ready[index]:
                 module.printing_values()
+        print(colors.OKGREEN, "\n | -----------------------------------------------------------  |\n", colors.ENDC)
 
     def plot(self):
         """
