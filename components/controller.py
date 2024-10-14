@@ -2,14 +2,14 @@ import os
 from tensorflow.keras import backend as K
 import matplotlib.pyplot as plt
 
-from colors import colors
-from diagnosis import diagnosis
+from components.colors import colors
+from components.diagnosis import diagnosis
 from components.neural_network import neural_network
-from search_space import search_space
-from tuning_rules import tuning_rules
-from tuning_rules_symbolic import tuning_rules_symbolic
-from neural_sym_bridge import NeuralSymbolicBridge
-from lfi_integration import LfiIntegration
+from components.search_space import search_space
+from components.tuning_rules import tuning_rules
+from components.tuning_rules_symbolic import tuning_rules_symbolic
+from components.neural_sym_bridge import NeuralSymbolicBridge
+from components.lfi_integration import LfiIntegration
 from components.storing_experience import StoringExperience
 from components.improvement_checker import ImprovementChecker
 from components.integral import integrals

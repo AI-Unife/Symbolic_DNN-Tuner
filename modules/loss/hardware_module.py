@@ -1,8 +1,8 @@
 from modules.common_interface import common_interface
-from colors import colors
+from components.colors import colors
 import os
 
-import flops_calculator as fc
+import flops.flops_calculator as fc
 from pathlib import Path
 from tensorflow.keras import layers, models
 

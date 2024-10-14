@@ -4,7 +4,7 @@ from time import time
 import numpy as np
 from pytest import param
 import json
-from colors import colors
+from components.colors import colors
 
 import tensorflow as tf
 from tensorflow.keras import Model
@@ -16,10 +16,10 @@ from tensorflow.keras.layers import (Activation, Conv2D, Dense, Flatten, MaxPool
 from tensorflow.keras.optimizers import *
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
-from dataset import cifar_data
-from LOLR import Lolr
-from search_space import search_space
-from dynamic_net import dynamic_net
+from components.dataset import cifar_data
+from components.LOLR import Lolr
+from components.search_space import search_space
+from components.dynamic_net import dynamic_net
 
 # class wrapper used to add the functionality of the layer wise learning rate
 class LayerWiseLR(Optimizer):

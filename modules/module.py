@@ -1,5 +1,5 @@
 import importlib
-from colors import colors
+from components.colors import colors
 import os
 import numpy as np
 from modules.common_interface import common_interface
@@ -189,7 +189,7 @@ class module:
         """
         Printing module values
         """
-        print(colors.OKGREEN, "| MODULES VALUES --------------------------------------------  |\n", colors.ENDC)
+        print(colors.OKGREEN, "| MODULE VALUES ---------------------------------------------  |\n", colors.ENDC)
         for index, module in enumerate(self.modules_obj):
             if self.modules_ready[index]:
                 module.printing_values()

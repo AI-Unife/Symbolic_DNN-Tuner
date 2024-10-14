@@ -1,11 +1,11 @@
 from modules.common_interface import common_interface
 from tensorflow.keras.models import load_model
-from colors import colors
+from components.colors import colors
 import os
 import matplotlib.pyplot as plt
 import numpy as np
 
-import flops_calculator as fc
+import flops.flops_calculator as fc
 
 class flops_module(common_interface):
 

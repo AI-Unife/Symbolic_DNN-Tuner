@@ -1,5 +1,5 @@
 from modules.common_interface import common_interface
-from colors import colors
+from components.colors import colors
 import os
 
 class accuracy_module(common_interface):

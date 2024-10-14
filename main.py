@@ -12,11 +12,11 @@ from skopt import load
 from skopt.callbacks import CheckpointSaver
 from tensorflow.keras import backend as K
 
-from colors import colors
+from components.colors import colors
 from components.controller import controller
-from dataset import cifar_data, mnist
-from search_space import search_space
-from params_checker import paramsChecker
+from components.dataset import cifar_data, mnist
+from components.search_space import search_space
+from components.params_checker import paramsChecker
 
 # FOLDER SECTION --------------------------------------------------------------------------------------------------------
 
