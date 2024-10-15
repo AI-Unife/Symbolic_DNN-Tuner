@@ -42,11 +42,6 @@ X_train, X_test, Y_train, Y_test, n_classes = cifar_data()
 dt = datetime.datetime.now()
 max_evals = 1
 
-X_train = X_train[:len(X_train)//100]
-X_test = X_test[:len(X_test)//100]
-Y_train = Y_train[:len(Y_train)//100]
-Y_test = Y_test[:len(Y_test)//100]
-
 # define the hyper-parameters search space, instantiating its class 
 # also instantiates the controller class
 sp = search_space()
