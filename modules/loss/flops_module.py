@@ -14,11 +14,11 @@ class flops_module(common_interface):
     problems = ['latency', 'model_size']
 
     #weight of the module for the final loss calculation
-    weight = 0.05
+    weight = 0.5
 
     def __init__(self):
         self.epsilon = 0.33
-        self.flops_th = 1200
+        self.flops_th = 120000000
         self.nparams_th = 23851784 # inceptionV3 total params
         self.tuner_opt_function = []
         self.flops_gap = []
