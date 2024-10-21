@@ -378,7 +378,7 @@ class neural_network:
                 multiplier |= {layer : current_mul}
                 current_mul /= lr_factor
 
-        opt = LayerWiseLR(opt, multiplier, 0.001)
+        opt = LayerWiseLR(opt, multiplier, learning_rate=params['learning_rate'])
 
         model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=['accuracy'])
         es1 = EarlyStopping(monitor='val_loss', min_delta=0.005, patience=15, verbose=1, mode='min')
