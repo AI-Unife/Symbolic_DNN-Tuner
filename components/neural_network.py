@@ -83,7 +83,7 @@ class neural_network:
         self.train_data /= 255
         self.test_data /= 255
         self.n_classes = n_classes
-        self.epochs = 2
+        self.epochs = 5
         self.last_dense = 0
         self.counter_fc = 0
         self.counter_conv = 0
@@ -122,7 +122,7 @@ class neural_network:
             x = Conv2D(params['unit_c1'], (3, 3))(x)
             x = Activation(params['activation'])(x)
             x = MaxPooling2D(pool_size=(2, 2))(x)
-            #x = Dropout(params['dr1_2'])(x)
+            x = Dropout(params['dr1_2'])(x)
 
             x = Conv2D(params['unit_c2'], (3, 3), padding='same')(x)
             x = Activation(params['activation'])(x)
@@ -156,17 +156,39 @@ class neural_network:
         :return: model with new conv section
         """
 
-        # if the number of convolutions is greater than or equal to the max, then return the model
-        if self.dnet.count_layer_type(model, 'Conv2D') >= self.tot_conv:
+        # counts the current number of convolutional layers in the model
+        current_conv_count = self.dnet.count_layer_type(model, 'Conv2D')
+
+        # build the new convolutional section, consisting of two convolutions
+        # with their activations, a max pooling and dropout
+        # initialize the counter of new convolutions to zero and
+        # the list of layers of the new section to an empty list
+        new_conv_count = 0
+        new_section = []
+
+        # cycle to add at most two convolutions in the new conv section
+        for i in range(2):
+            # increase the counter to add a new convolutional layer
+            new_conv_count += 1
+            # if the sum of the model convolutions and the new ones is greater than the limit,
+            # then don't add any more layers
+            if (new_conv_count + current_conv_count) > self.tot_conv:
+                break
+            # otherwise add a convolutional layer and its activation
+            new_section += [Conv2D(params['unit_c2'], (3,3)), Activation(params['activation'])]
+            
+            # if batchNormalization is already in the model, add it to the new convolutional section
+            if self.dnet.any_batch(model):
+                new_section += [BatchNormalization()]
+                             
+        # if the new section is empty, because no more layers can be added,
+        # then return the original model
+        if not new_section:
             return model
-
-        # build the new convolutional section, consisting of a convolution and its activation
-        new_section = [Conv2D(params['unit_c2'], (3,3)), Activation(params['activation'])]
-
-        # if batchNormalization is already in the model, add it to the new convolutional section
-        if self.dnet.any_batch(model):
-            new_section += [BatchNormalization()]
         
+        # add max pooling and dropout to the convolutional section
+        new_section += [MaxPooling2D(pool_size=(2, 2)), Dropout(params['dr_f'])]
+
         # insert the new section before the flatten, so after the last convolutional section
         return self.dnet.insert_section(model, n_conv, new_section, 'before', 'Flatten')
 
@@ -221,7 +243,7 @@ class neural_network:
 
         # add dropout to the dense section
         new_section += [Dropout(params['dr_f'])]
-
+        
         # insert the new section after the flatten, so a the beggining of the dense section
         return self.dnet.insert_section(model, n_fc, new_section, 'after', 'Flatten')
 
@@ -233,15 +255,20 @@ class neural_network:
         """
         # if the number of convolutions is less than or equal to 1,
         # don't remove any convolution and return the model
-        if self.dnet.count_layer_type(model, 'Conv2D') <= 1:
+        current_conv_count = self.dnet.count_layer_type(model, 'Conv2D')
+        if current_conv_count <= 1:
             return model
 
         # get the name of the first layer of the last convolutional section
         last_conv_start = self.dnet.get_last_section(model, 'Conv2D')
- 
+        
         # remove the convolutional section starting from the convolution found earlier
         # and all associated layers in linked_section
-        linked_section = ['Conv2D', 'Activation', 'BatchNormalization', 'MaxPooling2D']
+        linked_section = ['Conv2D', 'Activation', 'BatchNormalization']
+        
+        if (current_conv_count % 2) == 1:
+            linked_section += ['MaxPooling2D', 'Dropout']
+        
         return self.dnet.remove_section(model, last_conv_start, linked_section, True, True)
 
     def remove_fc_section(self, model):
@@ -351,7 +378,7 @@ class neural_network:
                 multiplier |= {layer : current_mul}
                 current_mul /= lr_factor
 
-        opt = LayerWiseLR(opt, multiplier, learning_rate=params['learning_rate'])
+        opt = LayerWiseLR(opt, multiplier, 0.001)
 
         model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=['accuracy'])
         es1 = EarlyStopping(monitor='val_loss', min_delta=0.005, patience=15, verbose=1, mode='min')
