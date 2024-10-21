@@ -266,6 +266,9 @@ class neural_network:
         # and all associated layers in linked_section
         linked_section = ['Conv2D', 'Activation', 'BatchNormalization']
         
+        # If the number of convolutions is odd, it means that one of the two conv in
+        # the last convolutional block has already been eliminated
+        # it's then necessary to remove all layers of the block, including maxpool and dropout
         if (current_conv_count % 2) == 1:
             linked_section += ['MaxPooling2D', 'Dropout']
         
