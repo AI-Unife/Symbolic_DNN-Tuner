@@ -52,14 +52,14 @@ class dynamic_net:
                     n_section = False
                     n_found = first_found
                     if delimiter:
-                        removed |= {i.name : [reused_weights, {'class_name' : layer_class}, i.get_config()]}
+                        removed |= {i.name : [reused_weights, layer_class, i.get_config()]}
                     else:
                         removed_name += i.name + '\n'
                 else:
                     removed_name += i.name + '\n'
             else:
                 # add the current layer to the final archiecture
-                removed |= {i.name : [reused_weights, {'class_name' : layer_class}, i.get_config()]}
+                removed |= {i.name : [reused_weights, layer_class, i.get_config()]}
 
         print(f"\n#### removed ####\n{removed_name}")
 
@@ -109,9 +109,9 @@ class dynamic_net:
 
                 # add all the layers of the section to the final architecture
                 for x in c_section:
-                    section |= {x.name : [reused_weights, {'class_name' : x.__class__.__name__}, x.get_config()]}
+                    section |= {x.name : [reused_weights, x.__class__.__name__, x.get_config()]}
 
-            current_layer = {i.name : [reused_weights, {'class_name' : layer_class}, i.get_config()]}
+            current_layer = {i.name : [reused_weights, layer_class, i.get_config()]}
 
             # Depending on the value of the position, insert the new section
             # before, after, or replace the target layers
@@ -159,7 +159,7 @@ class dynamic_net:
         # build a new neural network, based on the previously saved layers
         for layer_key in model_dict.keys():
             layer = model_dict[layer_key][2]
-            layer_name = model_dict[layer_key][1]['class_name']
+            layer_name = model_dict[layer_key][1]
 
             # if the current layer in the dictionary is the input layer, initialize the input of the new model
             if 'Input' in layer_name:
@@ -297,7 +297,6 @@ if __name__ == '__main__':
     new_section = [Flatten(), Dense(256), Dense(10)]
     model = dynamicNet.insert_section(model, 1, new_section, 'after', last_max)
     model.summary()
-
 
     print(dynamicNet.any_batch(model))
     new_section = [BatchNormalization(), AveragePooling2D((2,2))]
