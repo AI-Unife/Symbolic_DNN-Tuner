@@ -34,7 +34,7 @@ class LayerWiseLR(Optimizer):
         self._optimizer = optimizer
         self._multiplier = multiplier
 
-    def apply_gradients(self, grads_and_vars):
+    def apply_gradients(self, grads_and_vars, name=None, experimental_aggregate_gradients=True):
         updated_grads_and_vars = []
         for grad, var in grads_and_vars:
             layer_name = var.name.split('/')[0]
