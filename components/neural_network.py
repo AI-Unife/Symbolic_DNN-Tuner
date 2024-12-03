@@ -21,7 +21,6 @@ from components.LOLR import Lolr
 from components.search_space import search_space
 from components.dynamic_net import dynamic_net
 
-# class wrapper used to add the functionality of the layer wise learning rate
 class LayerWiseLR(Optimizer):
     def __init__(self, optimizer, multiplier, learning_rate=0.001, name="LWLR", **kwargs):
         """
@@ -39,7 +38,7 @@ class LayerWiseLR(Optimizer):
             super().__init__(learning_rate, name, **kwargs)
 
         # storage of the attributes in the wrapper instance
-        self._learning_rate = learning_rate
+        self._learning_rate = tf.Variable(learning_rate, trainable=False, dtype=tf.float32) 
         self._optimizer = optimizer
         self._multiplier = multiplier
 
