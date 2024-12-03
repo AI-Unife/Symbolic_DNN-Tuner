@@ -48,8 +48,8 @@ class LayerWiseLR(Optimizer):
         updated_grads_and_vars = []
         # iterates over each pair
         for grad, var in grads_and_vars:
-            # get the current layer name, separating it from its type (kernel or bias)
-            layer_name = var.name.split('/')[0]
+            # get the current layer name, separating it from its type based on keras version
+            layer_name = (var.path if hasattr(var, 'path') else var.name).split('/')[0]
             # apply the multiplier to gradient based on current layer
             # if no multiplier is associated, applies 1 as default value
             scaled_grad = grad * self._multiplier.get(layer_name, 1.0)
