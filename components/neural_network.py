@@ -47,17 +47,20 @@ class LayerWiseLR(Optimizer):
         updated_grads_and_vars = []
         # iterates over each pair
         for grad, var in grads_and_vars:
-            # get the current layer name, separating it from its type based on keras version
-            layer_name = (var.path if hasattr(var, 'path') else var.name).split('/')[0]
-            # apply the multiplier to gradient based on current layer
-            # if no multiplier is associated, applies 1 as default value
-            scaled_grad = grad * self._multiplier.get(layer_name, 1.0)
-            # add the updated pair to the list
-            updated_grads_and_vars.append((scaled_grad, var))
+            if grad is not None:
+                # get the current layer name, separating it from its type based on keras version
+                layer_name = (var.path if hasattr(var, 'path') else var.name).split('/')[0]
+                # apply the multiplier to gradient based on current layer
+                # if no multiplier is associated, applies 1 as default value
+                scaled_grad = grad * self._multiplier.get(layer_name, 1.0)
+                # add the updated pair to the list
+                updated_grads_and_vars.append((scaled_grad, var))
+            else:  
+                updated_grads_and_vars.append((grad, var))
         # synchronize the learning rate of the base optimizer with that of the wrapper,
         # in order to apply changes due to callbacks, and then applies gradients
         self._optimizer.learning_rate.assign(self._learning_rate)
-        self._optimizer.apply_gradients(updated_grads_and_vars)
+        return self._optimizer.apply_gradients(updated_grads_and_vars)
         
     def _create_slots(self, var_list):
         # call the creation of the internal slots of the base optimizer
@@ -88,7 +91,7 @@ class neural_network:
         self.train_data /= 255
         self.test_data /= 255
         self.n_classes = n_classes
-        self.epochs = 5
+        self.epochs = 2
         self.last_dense = 0
         self.counter_fc = 0
         self.counter_conv = 0

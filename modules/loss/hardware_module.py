@@ -21,9 +21,12 @@ class hardware_module(common_interface):
     def __init__(self):
         # cost value per square millimeter, 10K / mm2
         self.cost_par = 10000
-        # attribute indicating how much cost weighs against latency value and max latency value in second
-        self.weight_cost = 0.9
-        self.max_latency = 0.010 #10 ms
+        # attribute indicating how much cost weighs against latency value
+        self.weight_cost = 0.7
+        # max latency value in second 
+        self.max_latency = 0.033 #30FPS
+        # max manifacturing cost value
+        self.max_cost = 40000
         
         nvdla_list = [{'name': "nv_small", 'path': "nv_small64_fp32.yaml", 'area': 2.824},
                       {'name': "nv_small256", 'path': "nv_small256_fp32.yaml", 'area': 3.091},
@@ -35,10 +38,14 @@ class hardware_module(common_interface):
         # iterate over each configuration
         for config in nvdla_list:
             if os.path.exists('nvdla/specs/' + config['path']):
-                self.nvdla[config['name']] = {'path': config['path'],
-                                              'cost': round(self.cost_par*config['area'], 2),
-                                              'latency': 0,
-                                              'total_cost': 0}
+                # calculate the current manifacturing cost
+                current_cost = round(self.cost_par*config['area'], 2)
+                # inclusion of only configurations that are less expensive than the cost limit
+                if current_cost <= self.max_cost:
+                    self.nvdla[config['name']] = {'path': config['path'],
+                                                  'cost': current_cost,
+                                                  'latency': 0,
+                                                  'total_cost': 0}
             else:
                 print(colors.FAIL, f"|  --------- {config['name']} CONFIGURATION FILE DOESN'T EXIST  -------  |\n", colors.ENDC)
         
@@ -48,9 +55,7 @@ class hardware_module(common_interface):
         # maximum cost
         self.last_flops = 0
         self.nvdla  = dict(sorted(self.nvdla.items(), key=lambda item: item[1]['cost'], reverse=True))
-        first_el = next(iter(self.nvdla))
-        self.max_cost = self.nvdla[first_el]['cost']
-       
+
     def update_state(self, *args):
         # import current model reference
         self.model = args[2]
