@@ -21,6 +21,8 @@ from components.LOLR import Lolr
 from components.search_space import search_space
 from components.dynamic_net import dynamic_net
 
+from abc import ABC, abstractmethod
+
 # class wrapper used to add the functionality of the layer wise learning rate
 class LayerWiseLR(Optimizer):
     def __init__(self, optimizer, multiplier, learning_rate=0.001, name="LWLR", **kwargs):
@@ -62,7 +64,7 @@ class LayerWiseLR(Optimizer):
         super()._create_slots(var_list)
         self._optimizer._create_slots(var_list)
      
-class neural_network:
+class neural_network (ABC):
     """
     class used for the management of the neural network architecture,
     offering methods for training the dnn and adding and removing convolutional layers
@@ -94,203 +96,66 @@ class neural_network:
         self.conv = False
         self.dnet = dynamic_net()
 
+    @abstractmethod
+    def from_checkpoint(checkpoint):
+        """
+        Receives the json object loaded from file
+        """
+        raise NotImplementedError
+    
+    # TODO: add comments for following methods and double check methods in other files for comments
+    @abstractmethod
+    def from_scratch(input_shape, n_classes, params):
+        raise NotImplementedError
+
+    @abstractmethod
+    def insert_conv_section(self, model, params, n_conv):
+        raise NotImplementedError
+
+    @abstractmethod
+    def insert_batch(self, model, params):
+        raise NotImplementedError
+
+    @abstractmethod
+    def insert_fc_section(self, model, params, n_fc):
+        raise NotImplementedError
+
+    @abstractmethod
+    def remove_conv_section(self, model):
+        raise NotImplementedError
+
+    @abstractmethod
+    def remove_fc_section(self, model):
+        raise NotImplementedError
+    
+    # TODO: fix this: currently returns either pytorch_implementation.model.Model or keras.Model
     def build_network(self, params, new):
         """
         Function to define the network structure
         :param params new: network layer parameters
         :return: built model
         """
-        # try to resume the training of the last network, otherwise create a new one
+        
         try:
-            # sorts the models in the dedicated directory and try to open the last one created
-            # if this is successful, read the model in json format and deserialize it in keras format
-            list_ckpt = os.listdir("Model")
-            list_ckpt.sort()
-            f = open("Model/" + list_ckpt[len(list_ckpt)-1])
-            mj = json.load(f)
-            f.close()
-            model_json = json.dumps(mj)
-            model = tf.keras.models.model_from_json(model_json)
+            checkpoints_dir = "Model"
+            checkpoints = os.listdir(checkpoints_dir)
+            checkpoints.sort()
+
+            latest_checkpoint = os.path.join(checkpoints_dir, checkpoints[-1])
+
+            with open(latest_checkpoint, 'r') as f:
+                checkpoint = json.load(f)
+
             print("MODELLO PRECEDENTE")
+
+            model = self.from_checkpoint(checkpoint)
+
         except:
-            # if the last trained model cannot be loaded, create a new neural network
-            print(self.train_data.shape)
-
-            inputs = Input((self.train_data.shape[1:]))
-            x = Conv2D(params['unit_c1'], (3, 3), padding='same')(inputs)
-            x = Activation(params['activation'])(x)
-            x = Conv2D(params['unit_c1'], (3, 3))(x)
-            x = Activation(params['activation'])(x)
-            x = MaxPooling2D(pool_size=(2, 2))(x)
-            x = Dropout(params['dr1_2'])(x)
-
-            x = Conv2D(params['unit_c2'], (3, 3), padding='same')(x)
-            x = Activation(params['activation'])(x)
-            x = Conv2D(params['unit_c2'], (3, 3))(x)
-            x = Activation(params['activation'])(x)
-            x = MaxPooling2D(pool_size=(2, 2))(x)
-            x = Dropout(params['dr1_2'])(x)
-
-            x = Flatten()(x)
-            x = Dense(params['unit_d'])(x)
-            x = Activation(params['activation'])(x)
-            x = Dropout(params['dr_f'])(x)
-            x = Dense(self.n_classes)(x)
-            x = Activation('softmax')(x)
-
-            model = Model(inputs=inputs, outputs=x)
-            
-            ## provvisorio
-            # model_name_id = time()
-            # model_json = model.to_json()
-            # model_name = "Model/model-{}.json".format(model_name_id)
-            # with open(model_name, 'w') as json_file:
-            #     json_file.write(model_json)
+            return self.from_scratch(self.train_data.shape[1:], self.n_classes, params)
 
         return model
 
-    def insert_conv_section(self, model, params, n_conv):
-        """
-        method used for inserting a convolutional section
-        :param model params n_conv: insert in 'model' a number of 'n_conv' sections with 'params' parameters
-        :return: model with new conv section
-        """
 
-        # counts the current number of convolutional layers in the model
-        current_conv_count = self.dnet.count_layer_type(model, 'Conv2D')
-
-        # build the new convolutional section, consisting of two convolutions
-        # with their activations, a max pooling and dropout
-        # initialize the counter of new convolutions to zero and
-        # the list of layers of the new section to an empty list
-        new_conv_count = 0
-        new_section = []
-
-        # cycle to add at most two convolutions in the new conv section
-        for i in range(2):
-            # increase the counter to add a new convolutional layer
-            new_conv_count += 1
-            # if the sum of the model convolutions and the new ones is greater than the limit,
-            # then don't add any more layers
-            if (new_conv_count + current_conv_count) > self.tot_conv:
-                break
-            # otherwise add a convolutional layer and its activation
-            new_section += [Conv2D(params['unit_c2'], (3,3)), Activation(params['activation'])]
-            
-            # if batchNormalization is already in the model, add it to the new convolutional section
-            if self.dnet.any_batch(model):
-                new_section += [BatchNormalization()]
-                             
-        # if the new section is empty, because no more layers can be added,
-        # then return the original model
-        if not new_section:
-            return model
-        
-        # add max pooling and dropout to the convolutional section
-        new_section += [MaxPooling2D(pool_size=(2, 2)), Dropout(params['dr_f'])]
-
-        # insert the new section before the flatten, so after the last convolutional section
-        return self.dnet.insert_section(model, n_conv, new_section, 'before', 'Flatten')
-
-    def insert_batch(self, model, params):
-        """
-        method used for inserting batchNormalization operations
-        :param model params n_conv: insert in 'model' batchNormalization and regularization with 'params' parameters
-        :return: model with batchNormalization and regularization
-        """
-
-        # if batchnormalization is already in the model, then return it
-        if self.dnet.any_batch(model):
-            return model
-
-        # otherwise add regularization to each convolutional layer
-        for layer in model.layers:
-            if self.rgl:
-                if 'Conv2D' in layer.__class__.__name__:
-                    layer.kernel_regularizer = reg.l2(params['reg'])
-
-        # iterating over all the layers, search all the activations to which to add the batchNormalization
-        activation_list = []
-        for layer in model.layers:
-            # get the name of the activation function based on the version of keras
-            activation_name = layer.activation.__name__ if hasattr(layer, 'activation') else layer.output.name
-            layer_class = layer.__class__.__name__
-            # if the activation is not softmax, so the last layer of the network, then save the layer in the list
-            if layer_class == 'Activation' and activation_name != 'softmax':
-                activation_list += [layer.name]
-
-        # apply batchNormalization to all saved activations
-        return self.dnet.insert_section(model, 1, [BatchNormalization()], 'after', activation_list)
-
-    def insert_fc_section(self, model, params, n_fc):
-        """
-        method used for inserting a dense section
-        :param model params n_fc: insert in 'model' a number of 'n_fc' sections with 'params' parameters
-        :return: model with new dense section
-        """
-
-        # if the number of dense layers is greater than or equal to the max, then return the model
-        if self.dnet.count_layer_type(model, 'Dense') >= self.tot_fc:
-            return model 
-
-        # build the new dense section, consisting of a dense layer and its activation
-        new_section = [Dense(params['new_fc']),
-                       Activation(params['activation'])]
-
-        # if batchNormalization is already in the model, add it to the new dense section
-        if self.dnet.any_batch(model):
-            new_section += [BatchNormalization()]
-
-        # add dropout to the dense section
-        new_section += [Dropout(params['dr_f'])]
-        
-        # insert the new section after the flatten, so a the beggining of the dense section
-        return self.dnet.insert_section(model, n_fc, new_section, 'after', 'Flatten')
-
-    def remove_conv_section(self, model):
-        """
-        method used for removing a convolutional section
-        :param model: model from which to remove the convolutional section
-        :return: model without convolutional section
-        """
-        # if the number of convolutions is less than or equal to 1,
-        # don't remove any convolution and return the model
-        current_conv_count = self.dnet.count_layer_type(model, 'Conv2D')
-        if current_conv_count <= 1:
-            return model
-
-        # get the name of the first layer of the last convolutional section
-        last_conv_start = self.dnet.get_last_section(model, 'Conv2D')
-        
-        # remove the convolutional section starting from the convolution found earlier
-        # and all associated layers in linked_section
-        linked_section = ['Conv2D', 'Activation', 'BatchNormalization']
-        
-        # If the number of convolutions is odd, it means that one of the two conv in
-        # the last convolutional block has already been eliminated
-        # it's then necessary to remove all layers of the block, including maxpool and dropout
-        if (current_conv_count % 2) == 1:
-            linked_section += ['MaxPooling2D', 'Dropout']
-        
-        return self.dnet.remove_section(model, last_conv_start, linked_section, True, True)
-
-    def remove_fc_section(self, model):
-        """
-        method used for removing a dense section
-        :param model: model from which to remove the dense section
-        :return: model without dense section
-        """
-
-        # if the number of dense layers is less than or equal to 2,
-        # specifically a dense layer after the flatten and the output,
-        # don't remove any dense layer and return the model
-        if self.dnet.count_layer_type(model, 'Dense') <= 2:
-            return model
-
-        # remove the first dense section in the model and all associated layers in linked_section
-        linked_section = ['Activation', 'BatchNormalization', 'Dropout']
-        return self.dnet.remove_section(model, 'Dense', linked_section, True, True)
-      
     def training(self, params, new, new_fc, new_conv, rem_conv, rem_fc, da, space):
         """
         Function for compiling and running training
@@ -306,31 +171,31 @@ class neural_network:
                 if new_fc:
                     if new_fc[0]:
                         self.dense = True
-                        model = self.insert_fc_section(model, params, new_fc[1])
+                        model = self.dnet.insert_fc_section(model, params, new_fc[1])
                 # if the flag for the addition of regularization is true
                 if new:
                     self.rgl = True
                     self.dense = False
-                    model = self.insert_batch(model, params)
+                    model = self.dnet.insert_batch(model, params)
                 # if the flag for the addition of a convolutional layer
                 if new_conv:
                     if new_conv[0]:
                         self.conv = True
                         self.dense = False
                         self.rgl = False
-                        model = self.insert_conv_section(model, params, new_conv[1])
+                        model = self.dnet.insert_conv_section(model, params, new_conv[1])
                 # if the flag for the removal of a convolutional layer is true
                 if rem_conv:
                     self.conv = False
                     self.dense = False
                     self.rgl = False
-                    model = self.remove_conv_section(model)
+                    model = self.dnet.remove_conv_section(model)
                 # if the flag for the removal of a dense layer is true
                 if rem_fc:
                     self.conv = False
                     self.dense = False
                     self.rgl = False
-                    model = self.remove_fc_section(model)
+                    model = self.dnet.remove_fc_section(model)
 
         except Exception as e:
             print(colors.FAIL, e, colors.ENDC)
