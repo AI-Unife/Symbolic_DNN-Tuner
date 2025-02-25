@@ -195,3 +195,15 @@ class PytorchDynamicNet (dynamic_net):
             new_model.add_module(name, layer)
 
         return new_model
+    
+    def build_model(self, model, model_dict):
+        pass
+
+    def all_layers(self, layer_list):
+        """
+        Method to check if all elements of a list are PyTorch layers.
+        
+        :param layer_list: List of input layers
+        :return: Boolean indicating if all elements are PyTorch layers
+        """
+        return all(isinstance(layer, nn.Module) for layer in layer_list)

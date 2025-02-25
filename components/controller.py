@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 from components.colors import colors
 from components.diagnosis import diagnosis
-from components.neural_network import neural_network
+from tensorflow_implementation.neural_network import TensorflowNeuralNetwork
 from components.search_space import search_space
 from components.tuning_rules import tuning_rules
 from components.tuning_rules_symbolic import tuning_rules_symbolic
@@ -23,7 +23,7 @@ class controller:
     interfacing with the underlying modules, identifying possible problems affecting
     the architecture and how to solve them during iterations.
     """
-    def __init__(self, X_train, Y_train, X_test, Y_test, n_classes):
+    def __init__(self, neural_network_class, dynamic_net_class, X_train, Y_train, X_test, Y_test, n_classes):
         """
         All attributes for managing the training of the neural network are initialized,
         as well as auxiliary classes such as the one for interfacing with the symbolic part
@@ -61,6 +61,9 @@ class controller:
         self.levels = [7, 10, 13]
         self.imp_checker = ImprovementChecker(self.db, self.lfi)
         self.modules = module(["hardware_module", "accuracy_module"])
+
+        self.neural_network_class = neural_network_class
+        self.dynamic_net_class = dynamic_net_class
 
     # The following methods are used to determine actions to be applied to the network structure,
     # for example addition or removal of convolutions and dense layers
@@ -144,7 +147,7 @@ class controller:
 
         print(colors.OKBLUE, "|  --> START TRAINING\n", colors.ENDC)
         K.clear_session()
-        self.nn = neural_network(self.X_train, self.Y_train, self.X_test, self.Y_test, self.n_classes)
+        self.nn = self.neural_network_class(self.dynamic_net_class, self.X_train, self.Y_train, self.X_test, self.Y_test, self.n_classes)
         self.score, self.history, self.model = self.nn.training(params, self.new, self.new_fc, self.new_conv, self.rem_conv, self.rem_fc, self.da,
                                                                 self.space)
 

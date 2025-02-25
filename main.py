@@ -18,6 +18,8 @@ from components.dataset import cifar_data, mnist
 from components.search_space import search_space
 from components.params_checker import paramsChecker
 
+from pytorch_implementation import neural_network, dynamic_net
+
 # FOLDER SECTION --------------------------------------------------------------------------------------------------------
 
 # list of folders that can be added to the tuner folder if missing
@@ -46,7 +48,7 @@ max_evals = 1
 # also instantiates the controller class
 sp = search_space()
 spa = sp.search_sp()
-controller = controller(X_train, Y_train, X_test, Y_test, n_classes)
+controller = controller(neural_network.PytorchNeuralNetwork, dynamic_net.PytorchDynamicNet, X_train, Y_train, X_test, Y_test, n_classes)
 
 # initialises search space to empty, the set of hyperparameters will be the objective function
 space = {}
