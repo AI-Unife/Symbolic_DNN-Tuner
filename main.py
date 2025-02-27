@@ -15,32 +15,63 @@ from tensorflow.keras import backend as K
 from components.colors import colors
 from components.controller import controller
 from components.dataset import cifar_data, mnist
+from components.gesture_dataset import gesture_data
 from components.search_space import search_space
 from components.params_checker import paramsChecker
+
+
+import config as cfg
 
 # FOLDER SECTION --------------------------------------------------------------------------------------------------------
 
 # list of folders that can be added to the tuner folder if missing
-new_dir = ['Model', 'Weights', 'database', 'checkpoints', 'log_folder', 'algorithm_logs', 'dashboard/model']
+new_dir = ['Model', 'Weights', 'database', 'checkpoints', 'log_folder', 'algorithm_logs', 'dashboard/model', 'symbolic']
 
+# cfg.get_experiment_name()
+print(colors.MAGENTA, "|  ----------- USER PARAMS CONFIGURATION ----------  |\n", colors.ENDC)
+print("EXPERIMENT NAME: ", cfg.NAME_EXP)
+print("DATASET NAME: ", cfg.DATA_NAME)
+print("MAX NET EVAL: ", cfg.MAX_EVAL)
+print("EPOCHS FOR TRAINING: ", cfg.EPOCHS)
+print("MODULE LIST: ", cfg.MOD_LIST)
 # iterate over each name in the list of folders and
 # if it doesn't exist, proceed with its creation
+try:
+    if not os.path.exists("{}".format(cfg.NAME_EXP)):
+        os.makedirs(cfg.NAME_EXP)
+except OSError:
+    print(colors.FAIL, "|  ----------- FAILED TO CREATE FOLDER ----------  |\n", colors.ENDC)
+    exit()
 for folder in new_dir:
     try:
-        if not os.path.exists(folder):
-            os.makedirs(folder)
+        if not os.path.exists("{}/{}".format(cfg.NAME_EXP,folder)):
+            os.makedirs("{}/{}".format(cfg.NAME_EXP,folder))
     except OSError:
-        print(colors.FAIL, "|  ----------- FAILED TO CREATE FOLDER ----------  |\n", colors.ENDC)
+        print(colors.FAIL, "|  ----------- FAILED TO CREATE FOLDER {} ----------  |\n".format("{}/{}".format(cfg.NAME_EXP,folder)), colors.ENDC)
+        exit()
+try:
+    os.system("cp symbolic_base/* {}/symbolic/".format(cfg.NAME_EXP))
+except OSError:
+    print(colors.FAIL, "|  ----------- FAILED TO COPY SYMBOLIC DIR ----------  |\n".format("{}/{}".format(cfg.NAME_EXP,folder)), colors.ENDC)
+    exit()
+    
+if cfg.DATA_NAME == "MNIST":
+    # MNIST SECTION --------------------------------------------------------------------------------------------------------
+    X_train, X_test, Y_train, Y_test, n_classes = mnist()
+elif cfg.DATA_NAME == "CIFAR-10":
+    # CIFAR-10 SECTION -----------------------------------------------------------------------------------------------------
 
-# MNIST SECTION --------------------------------------------------------------------------------------------------------
-
-# X_train, X_test, Y_train, Y_test, n_classes = mnist()
-# CIFAR-10 SECTION -----------------------------------------------------------------------------------------------------
-
-# obtain images and labels from the cifar dataset
-X_train, X_test, Y_train, Y_test, n_classes = cifar_data()
+    # obtain images and labels from the cifar dataset
+    X_train, X_test, Y_train, Y_test, n_classes = cifar_data()
+elif cfg.DATA_NAME == "gesture":
+    # GestureDVS128 SECTION -----------------------------------------------------------------------------------------------------
+    X_train, X_test, Y_train, Y_test, n_classes = gesture_data()
+else:
+    print(colors.FAIL, "|  ----------- DATASET NOT FOUND ----------  |\n", colors.ENDC)
+    sys.exit()
+    
 dt = datetime.datetime.now()
-max_evals = 1
+max_evals = cfg.MAX_EVAL
 
 # define the hyper-parameters search space, instantiating its class 
 # also instantiates the controller class
@@ -78,7 +109,7 @@ def objective(params):
     for i, j in zip(search_space, params):
         space[i.name] = j
     print(space)
-    f = open("algorithm_logs/hyper-neural.txt", "a")
+    f = open("{}/algorithm_logs/hyper-neural.txt".format(cfg.NAME_EXP), "a")
     f.write(str(space) + "\n")
     to_optimize = controller.training(space)
     f.close()
@@ -114,7 +145,7 @@ def start(search_space, iter):
     """
     print(colors.MAGENTA, "|  ----------- START BAYESIAN OPTIMIZATION ----------  |\n", colors.ENDC)
 
-    checkpoint_saver = CheckpointSaver("checkpoints/checkpoint.pkl", compress=9)
+    checkpoint_saver = CheckpointSaver("{}/checkpoints/checkpoint.pkl".format(cfg.NAME_EXP), compress=9)
     # optimization of the objective function
     controller.set_case(False)
     search_res = gp_minimize(objective, search_space, acq_func='EI', n_calls=1, n_random_starts=1,
@@ -129,7 +160,7 @@ def start(search_space, iter):
         # restore checkpoint
         if len(new_space) == len(search_space):
             # controller.set_case(True)
-            res = load('checkpoints/checkpoint.pkl')
+            res = load('{}/checkpoints/checkpoint.pkl'.format(cfg.NAME_EXP))
 
             # if the new search space has the same length as the previous one,
             # proceed with the same bayesian optimization

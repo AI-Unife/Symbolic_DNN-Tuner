@@ -33,6 +33,7 @@ class tuning_rules:
                         if hp.name == 'learning_rate':
                             hp.high = params['learning_rate'] + (params['learning_rate'] / 2)
                     tuning_logs.write("I've try to fix UNDERFITTING decreasing the learning_rate\n")
+                    print("I've try to fix UNDERFITTING decreasing the learning_rate\n")
             else:
                 for hp in self.space:
                     if 'unit_c1' in hp.name:
@@ -43,6 +44,7 @@ class tuning_rules:
                         hp.low = params['unit_d'] - 1
 
                 tuning_logs.write("I've try to fix UNDERFITTING increasing the number of the node per layers\n")
+                print("I've try to fix UNDERFITTING increasing the number of the node per layers\n")
 
         if "increasing_loss" in diseases:
             for hp in self.space:
@@ -50,11 +52,12 @@ class tuning_rules:
                     hp.high = params['learning_rate'] + (params['learning_rate'] / 2)
 
             tuning_logs.write("I've try to fix INCREASING LOSS decreasing the learning_rate\n")
-
+            print("I've try to fix INCREASING LOSS decreasing the learning_rate\n")
         if "floating_loss" in diseases:
             for hp in self.space:
                 if hp.name == 'batch_size':
                     hp.low = params['batch_size'] - 1
             tuning_logs.write("I've try to fix FLOATING LOSS increasing the batch size\n")
+            print("I've try to fix FLOATING LOSS increasing the batch size\n")
 
         return self.space, model

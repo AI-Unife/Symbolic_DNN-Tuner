@@ -2,6 +2,7 @@ from problog.program import PrologString
 from problog.logic import Term
 from problog.learning import lfi
 
+import config as cfg
 
 class LfiIntegration:
     """
@@ -81,7 +82,7 @@ class LfiIntegration:
             # evidence.append(e2)
 
         # enters the evidence in the corresponding log file and db
-        e = open("algorithm_logs/evidence.txt", "a")
+        e = open("{}/algorithm_logs/evidence.txt".format(cfg.NAME_EXP), "a")
         e.write(str(evidence))
         self.db.insert_evidence(evidence[0])
         e.close()
@@ -98,7 +99,7 @@ class LfiIntegration:
         self.experience.append(evidence)
 
         # read the set of actions from the prolog file
-        f1 = open("symbolic/lfi.pl", "r")
+        f1 = open("{}/symbolic/lfi.pl".format(cfg.NAME_EXP), "r")
         to_learn = f1.read()
         f1.close()
 

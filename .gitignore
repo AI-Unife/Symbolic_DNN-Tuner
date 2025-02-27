@@ -11,3 +11,8 @@ database/*
 .idea
 .__pycache__
 .vscode
+depth_exp/*
+25_*/*
+slurm-*.out
+*.slurm
+prova.py

@@ -1,7 +1,7 @@
 from tensorflow.keras import callbacks
 
 from diagnosis import diagnosis
-
+import config as cfg
 
 class real_time_analysis(callbacks.Callback):
     def __init__(self):
@@ -26,7 +26,7 @@ class real_time_analysis(callbacks.Callback):
         self.hist['val_accuracy'].append(logs['val_accuracy'])
 
         if epoch % 10 == 0 and epoch > 0:
-            diagnosis_logs = open("algorithm_logs/diagnosis_logs.txt", "a")
+            diagnosis_logs = open("{}/algorithm_logs/diagnosis_logs.txt".format(cfg.NAME_EXP), "a")
             self.d = diagnosis()
             self.d.reset_diagnosis()
             self.score.append(self.hist['val_loss'][len(self.hist['val_loss']) - 1])

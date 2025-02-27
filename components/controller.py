@@ -17,6 +17,8 @@ from shutil import copyfile
 
 from modules.module import module
 
+import config as cfg
+
 class controller:
     """
     The controller class manages the training and tuning of the neural network,
@@ -60,7 +62,7 @@ class controller:
         self.hloss = 1.2
         self.levels = [7, 10, 13]
         self.imp_checker = ImprovementChecker(self.db, self.lfi)
-        self.modules = module(["hardware_module", "accuracy_module"])
+        self.modules = module(cfg.MOD_LIST)
 
     # The following methods are used to determine actions to be applied to the network structure,
     # for example addition or removal of convolutions and dense layers
@@ -180,8 +182,8 @@ class controller:
         :return: call to tuning method or hp_space, model and accuracy(*-1)
         """
         print(colors.CYAN, "| START SYMBOLIC DIAGNOSIS ----------------------------------  |\n", colors.ENDC)
-        diagnosis_logs = open("algorithm_logs/diagnosis_symbolic_logs.txt", "a")
-        tuning_logs = open("algorithm_logs/tuning_symbolic_logs.txt", "a")
+        diagnosis_logs = open("{}/algorithm_logs/diagnosis_symbolic_logs.txt".format(cfg.NAME_EXP), "a")
+        tuning_logs = open("{}/algorithm_logs/tuning_symbolic_logs.txt".format(cfg.NAME_EXP), "a")
 
         # check if there has been an improvement from the last iteration 
         # also saves loss and accuracy values in the DB
@@ -237,8 +239,13 @@ class controller:
         diagnosis_logs.close()
         tuning_logs.close()
         
-        #print(self.symbolic_tuning)
-        #print(self.symbolic_diagnosis)
+        # print(self.symbolic_tuning)
+        # print(self.symbolic_diagnosis)
+        for p in self.symbolic_diagnosis:
+            print("I've found a problem: ", p)
+        
+        for s in self.symbolic_tuning:
+            print("I've found a solution: ", s)
 
         print(colors.CYAN, "| END SYMBOLIC DIAGNOSIS   ----------------------------------  |\n", colors.ENDC)
 
@@ -258,7 +265,7 @@ class controller:
         print(colors.FAIL, "| START SYMBOLIC TUNING    ----------------------------------  |\n", colors.ENDC)
         # tuning_logs = open("algorithm_logs/tuning_logs.txt", "a")
         # new_space, self.model = self.tr.repair(self, self.symbolic_tuning, tuning_logs, self.model, self.params)
-        new_space, self.model = self.tr.repair(self.symbolic_tuning, self.model, self.params)
+        new_space, self.model = self.tr.repair(self.symbolic_tuning, self.symbolic_diagnosis, self.model, self.params)
         # tuning_logs.close()
         self.issues = []
         print(colors.FAIL, "| END SYMBOLIC TUNING      ----------------------------------  |\n", colors.ENDC)

@@ -4,6 +4,7 @@ from problog.program import PrologString
 from problog import get_evaluatable
 from problog.tasks import sample
 
+import config as cfg
 
 class NeuralSymbolicBridge:
     """
@@ -25,11 +26,11 @@ class NeuralSymbolicBridge:
         :return: logic program
         """
         # reading model from file
-        f = open("symbolic/symbolic_analysis.pl", "r")
+        f = open("{}/symbolic/symbolic_analysis.pl".format(cfg.NAME_EXP), "r")
         sym_model = f.read()
         f.close()
 
-        p = open("symbolic/sym_prob.pl", "r")
+        p = open("{}/symbolic/sym_prob.pl".format(cfg.NAME_EXP), "r")
         sym_prob = p.read()
         p.close()
 
@@ -38,7 +39,7 @@ class NeuralSymbolicBridge:
         for fa, i in zip(facts, self.initial_facts):
             sym_facts = sym_facts + i + "(" + str(fa) + ").\n"
 
-        output = open("symbolic/final.pl", "w")
+        output = open("{}/symbolic/final.pl".format(cfg.NAME_EXP), "w")
         output.write(sym_facts + "\n" + sym_prob + "\n" + sym_model + "\n" + rules)
         output.close()
 
@@ -111,7 +112,7 @@ class NeuralSymbolicBridge:
         :param problems: rules in which are defined new problems and the actions to use to solve them
         """
         # read the file containing the set of actions
-        base_model = open("symbolic/sym_prob_base.pl", "r").read()
+        base_model = open("{}/symbolic/sym_prob_base.pl".format(cfg.NAME_EXP), "r").read()
         
         # add the new problems from modules
         base_model += problems
@@ -139,7 +140,6 @@ class NeuralSymbolicBridge:
             if prob_rules is not None:
                 #get probabilty and action
                 base_prob, action = prob_rules.group(1), prob_rules.group(2)
-
                 # use the name of the action as a key
                 # each element of the dict has a list of two elements
                 # first is the rule's probability, the second a list of possible problems
@@ -163,7 +163,7 @@ class NeuralSymbolicBridge:
                 new_rule += " " + new_p +  ","    
             rules += new_rule[:-1] + ".\n"
 
-        f = open("symbolic/sym_prob.pl", "w")
+        f = open("{}/symbolic/sym_prob.pl".format(cfg.NAME_EXP), "w")
         f.write(rules)
         f.close()
 
@@ -173,24 +173,32 @@ class NeuralSymbolicBridge:
         :param sym_model: set of actions that need to be updated
         """
         # read the file containing the old set of actions
-        prev_model = open("symbolic/sym_prob.pl", "r").read()
+        prev_model = open("{}/symbolic/sym_prob.pl".format(cfg.NAME_EXP), "r").read()
 
         # get the new probabilities of the tuning actions as a result of reasoning,
         # this using a regular expression with the pattern defined as the first parameter
-        x = re.findall("[0-9][.].*[:][:]['a']", sym_model)
+        # x = re.findall("[0-9][.].*[:][:]['a']", sym_model)
+        # print("sym model: ", sym_model)
+        # print("Prev: ", prev_model)
+        # # iterate over each actions probabilty
+        # for i in range(len(x)):
+        #     # proceed using the same regular expression to get the old probabilities
+        #     # and replace them with the 'sub' function of regular expressions
+        #     xx = re.findall("[0-9][.].*[:][:]['a']", prev_model)
+        #     print(xx[i], ' --> ', x[i])
+        #     new = re.sub(xx[i], x[i], sym_model)
+        
+        # print("new final: ", new)
+        # print("sym model final: ", sym_model)
 
-        # iterate over each actions probabilty
-        for i in range(len(x)):
-            # proceed using the same regular expression to get the old probabilities
-            # and replace them with the 'sub' function of regular expressions
-            xx = re.findall("[0-9][.].*[:][:]['a']", prev_model)
-            new = re.sub(xx[i], x[i], sym_model)
+        new = sym_model
+            
 
         # call the method for completing each action with the body of the each rule
         new = self.complete_probs(new, prev_model.split("\n"))
 
         # updates the file on which the actions are stored
-        f = open("symbolic/sym_prob.pl", "w")
+        f = open("{}/symbolic/sym_prob.pl".format(cfg.NAME_EXP), "w")
         f.write(new)
         f.close()
 
@@ -208,6 +216,7 @@ class NeuralSymbolicBridge:
         # create symbolic model, joining the various parts
         symbolic_model = self.build_symbolic_model(facts, rules)
 
+        print("DEBUG: Symbolic Model Content:\n", str(symbolic_model))
         # based on the model, create a dict that maps each query term to its probability
         symbolic_evaluation = get_evaluatable().create_from(symbolic_model).evaluate()
 

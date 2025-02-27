@@ -27,7 +27,7 @@ class tuning_rules_symbolic:
         """
         self.count_br += 1
         if self.count_br <= 1:
-            print("I've try to fix OVERFITTING by adding regularization and batch normalization\n")
+            # print("I've try to fix OVERFITTING by adding regularization and batch normalization\n")
             model = 'batch'
             self.controller.set_case(True)
             new_p = {'reg': 1e-4}
@@ -143,7 +143,7 @@ class tuning_rules_symbolic:
   
     # ------------------------------------
 
-    def repair(self, sym_tuning, model, params):
+    def repair(self, sym_tuning, diagnosis, model, params):
         """
         Method for fix the issues
         :return: new hp_space and new model
@@ -152,11 +152,12 @@ class tuning_rules_symbolic:
         del self.controller.model
 
         # iterate over each tuning rules and eveluate them, passing parameters if necessary
-        for d in sym_tuning:
+        for i, d in enumerate(sym_tuning):
             if d != 'reg_l2' and d != 'data_augmentation' and d != 'new_fc_layer' and d != 'new_conv_layer' and d != 'dec_layers' and d != 'dec_fc' and d != 'new_config':
                 d = "self." + d + "(params)"
             else:
                 d = "self." + d + "()"
+            print(f"I've find {diagnosis[i]} and I'm trying to fix it with {d}.")
             eval(d)
 
         return self.space, model

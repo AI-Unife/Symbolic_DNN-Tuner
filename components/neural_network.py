@@ -1,25 +1,31 @@
 import re
 import os
 from time import time
+from datetime import datetime
 import numpy as np
 from pytest import param
 import json
-from components.colors import colors
 
 import tensorflow as tf
-from tensorflow.keras import Model
 from tensorflow.keras import backend as K
+from tensorflow.keras import Model
 from tensorflow.keras import regularizers as reg
 from tensorflow.keras.callbacks import TensorBoard, EarlyStopping, ReduceLROnPlateau
 from tensorflow.keras.layers import (Activation, Conv2D, Dense, Flatten, MaxPooling2D, Dropout, Input,
                                      BatchNormalization)
 from tensorflow.keras.optimizers import *
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.models import Sequential
 
+from components.gesture_dataset import gesture_data
 from components.dataset import cifar_data
 from components.LOLR import Lolr
 from components.search_space import search_space
 from components.dynamic_net import dynamic_net
+from components.colors import colors
+from components.custom_train import train_model, eval_model
+
+import config as cfg
 
 class LayerWiseLR(Optimizer):
     def __init__(self, optimizer, multiplier, learning_rate=0.001, name="LWLR", **kwargs):
@@ -88,10 +94,10 @@ class neural_network:
         self.test_labels = Y_test
         self.train_data = self.train_data.astype('float32')
         self.test_data = self.test_data.astype('float32')
-        self.train_data /= 255
-        self.test_data /= 255
+        # self.train_data /= 255
+        # self.test_data /= 255
         self.n_classes = n_classes
-        self.epochs = 2
+        self.epochs = cfg.EPOCHS
         self.last_dense = 0
         self.counter_fc = 0
         self.counter_conv = 0
@@ -101,6 +107,7 @@ class neural_network:
         self.dense = False
         self.conv = False
         self.dnet = dynamic_net()
+        self.best_score = 0
 
     def build_network(self, params, new):
         """
@@ -112,19 +119,24 @@ class neural_network:
         try:
             # sorts the models in the dedicated directory and try to open the last one created
             # if this is successful, read the model in json format and deserialize it in keras format
-            list_ckpt = os.listdir("Model")
-            list_ckpt.sort()
-            f = open("Model/" + list_ckpt[len(list_ckpt)-1])
-            mj = json.load(f)
-            f.close()
-            model_json = json.dumps(mj)
-            model = tf.keras.models.model_from_json(model_json)
+            # list_ckpt = os.listdir("Model")
+            # list_ckpt.sort()
+            # f = open("{}/Model/".format(cfg.NAME_EXP) + list_ckpt[len(list_ckpt)-1])
+            # mj = json.load(f)
+            # f.close()
+            # model_json = json.dumps(mj)
+            # model = tf.keras.models.model_from_json(model_json)
+            model = tf.keras.models.load_model("{}/dashboard/model/model.keras".format(cfg.NAME_EXP))
             print("MODELLO PRECEDENTE")
         except:
             # if the last trained model cannot be loaded, create a new neural network
             print(self.train_data.shape)
 
-            inputs = Input((self.train_data.shape[1:]))
+            if cfg.MODE == 'fwdPass':
+                input_shape = self.train_data.shape[2:]
+            else:
+                input_shape = self.train_data.shape[1:]
+            inputs = Input((input_shape))
             x = Conv2D(params['unit_c1'], (3, 3), padding='same')(inputs)
             x = Activation(params['activation'])(x)
             x = Conv2D(params['unit_c1'], (3, 3))(x)
@@ -345,10 +357,11 @@ class neural_network:
         
         # print the structure of the neural network and save it in a json file,
         # using the current time as identifier of the model
+        # model.build()
         print(model.summary())
-        model_name_id = time()
+        model_name_id = datetime.now().strftime("%y_%m_%d_%H_%M_%S_%f") #time()
         model_json = model.to_json()
-        model_name = "Model/model-{}.json".format(model_name_id)
+        model_name = "{}/Model/model-{}.json".format(cfg.NAME_EXP,model_name_id)
         with open(model_name, 'w') as json_file:
             json_file.write(model_json)
 
@@ -357,13 +370,13 @@ class neural_network:
 
         # try to load a set of weights 
         try:
-            model.load_weights("Weights/weights.h5")
+            model.load_weights("{}/Weights/weights.h5".format(cfg.NAME_EXP))
         except:
             print("Restart\n")
 
         # tensorboard logs
         tensorboard = TensorBoard(
-            log_dir="log_folder/logs/{}".format(model_name_id))
+            log_dir="{}/log_folder/logs/{}".format(cfg.NAME_EXP, model_name_id))
 
         # losses, lrs = self.lolr_checking(model, space, params['learning_rate'], params['batch_size'], self.train_data,
         #                                  self.train_labels, self.test_data, self.test_labels)
@@ -390,54 +403,84 @@ class neural_network:
 
         opt = LayerWiseLR(opt, multiplier, learning_rate=params['learning_rate'])
 
+        # if cfg.MODE == 'depth':
         model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=['accuracy'])
-        es1 = EarlyStopping(monitor='val_loss', min_delta=0.005, patience=15, verbose=1, mode='min')
-        es2 = EarlyStopping(monitor='val_accuracy', min_delta=0.005, patience=15, verbose=1, mode='max')
-        reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=5, verbose=1, min_lr=1e-4)
+        es1 = EarlyStopping(monitor='val_loss', min_delta=0.005, patience=15, verbose=0, mode='min')
+        es2 = EarlyStopping(monitor='val_accuracy', min_delta=0.005, patience=15, verbose=0, mode='max')
+        reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=5, verbose=0, min_lr=1e-4)
 
         # if the flag of data augmentation is true
         if da:
             # define a generator in which are present the values of the data augmentation parameters
-            datagen = ImageDataGenerator(
-                width_shift_range=0.1,
-                height_shift_range=0.1,
-                fill_mode='nearest',
-                cval=0.,
-                horizontal_flip=True)
-            datagen.fit(self.train_data)
-
-            # train the model
-            history = model.fit(
-                datagen.flow(self.train_data, self.train_labels, batch_size=params['batch_size']), epochs=self.epochs,
-                verbose=1, validation_data=(self.test_data, self.test_labels),
-                callbacks=[tensorboard, reduce_lr, es1, es2]).history
+            # datagen = ImageDataGenerator(
+            #     width_shift_range=0.1,
+            #     height_shift_range=0.1,
+            #     fill_mode='nearest',
+            #     cval=0.,
+            #     horizontal_flip=True)
+            # datagen.fit(self.train_data)
+            
+            data_augmentation = tf.keras.models.Sequential([
+                    tf.keras.layers.RandomFlip("horizontal"),
+                    tf.keras.layers.RandomTranslation(height_factor=0.1, width_factor=0.1, fill_mode='nearest'),
+                ])
+            model = tf.keras.Sequential([
+                data_augmentation,  # Aggiunto come primo strato
+                *model.layers       # Importa tutti gli strati esistenti
+            ])
+        #     # train the model
+        #     if cfg.MODE == 'fwdPass':
+        #         history = train_model(model, opt, self.train_data, self.train_labels, 
+        #                               self.test_data, self.test_labels, self.epochs,params, [tensorboard, reduce_lr, es1, es2])
+        #     else:
+        #         history = model.fit(
+        #         datagen.flow(self.train_data, self.train_labels, batch_size=params['batch_size']), epochs=self.epochs,
+        #         verbose=0, validation_data=(self.test_data, self.test_labels),
+        #         callbacks=[tensorboard, reduce_lr, es1, es2]).history
+        # else:
+        # train the network without data augmentation
+        if cfg.MODE == 'fwdPass':
+            history = train_model(model, opt, self.train_data, self.train_labels, 
+                                    self.test_data, self.test_labels, self.epochs,params, [tensorboard, reduce_lr, es1, es2])
         else:
-            # train the network without data augmentation
             history = model.fit(self.train_data, self.train_labels, epochs=self.epochs, batch_size=params['batch_size'],
-                                verbose=1,
-                                validation_data=(self.test_data, self.test_labels),
-                                callbacks=[tensorboard, reduce_lr, es1, es2]).history
+                            verbose=0,
+                            validation_data=(self.test_data, self.test_labels),
+                            callbacks=[tensorboard, reduce_lr, es1, es2]).history
 
         # evaluates model performance on test data
-        score = model.evaluate(self.test_data, self.test_labels)
+        if cfg.MODE == 'fwdPass':
+            score = eval_model(model, self.test_data, self.test_labels)
+        else:
+            score = model.evaluate(self.test_data, self.test_labels)
 
         # save the neural network weights and then reload them from the same json file you just saved
         # this avoids errors because of the changes in the network structure before training
-        weights_name = "Weights/weights-{}.weights.h5".format(model_name_id)
+        weights_name = "{}/Weights/weights-{}.weights.h5".format(cfg.NAME_EXP,model_name_id)
         model.save_weights(weights_name)
 
-        model.save("dashboard/model/model.keras")
+        model.save("{}/dashboard/model/model.keras".format(cfg.NAME_EXP))
         
-        f = open("Model/model-{}.json".format(model_name_id))
+        f = open("{}/Model/model-{}.json".format(cfg.NAME_EXP,model_name_id))
         mj = json.load(f)
         model_json = json.dumps(mj)
         model = tf.keras.models.model_from_json(model_json)
-        model.load_weights("Weights/weights-{}.weights.h5".format(model_name_id))
+        model.load_weights("{}/Weights/weights-{}.weights.h5".format(cfg.NAME_EXP, model_name_id))
+        if score[1] > self.best_score:
+            self.best_score = score
+            model.save("{}/Model/best-model.keras".format(cfg.NAME_EXP))
+            # os.system("mv {}/Weights/weights-{}.weights.h5 {}/Weights/best-weights.h5".format(cfg.NAME_EXP, model_name_id, cfg.NAME_EXP))
+            # os.system("mv {}/Model/model-{}.json {}/Model/best-model.json".format(cfg.NAME_EXP, model_name_id, cfg.NAME_EXP))
+        
+        os.system("rm {}/Weights/weights-{}.weights.h5".format(cfg.NAME_EXP, model_name_id))
+        os.system("rm {}/Model/model-{}.json".format(cfg.NAME_EXP, model_name_id))
         return score, history, model
 
 
+
+
 if __name__ == '__main__':
-    X_train, X_test, Y_train, Y_test, n_classes = cifar_data()
+    X_train, X_test, Y_train, Y_test, n_classes = cifar_data() #gesture_data()
     ss = search_space()
     space = ss.search_sp()
 
@@ -445,49 +488,58 @@ if __name__ == '__main__':
     #                   'dr_f': 0.045717734023783346, 'learning_rate': 0.08359864897019328, 'batch_size': 252,
     #                   'optimizer': 'RMSProp', 'activation': 'elu', 'reg': 0.05497168445820486, 'new_fc': 497}
 
-    default_params = {'unit_c1': 32, 'dr1_2': 0.1256695669329692, 'unit_c2': 64, 'unit_d': 315,
-                      'dr_f': 0.045717734023783346, 'learning_rate': 0.08359864897019328, 'batch_size': 252,
-                      'optimizer': 'RMSProp', 'activation': 'elu', 'reg': 0.05497168445820486, 'new_fc': 497}
+    default_params = {'unit_c1': 58, 'dr1_2': 0.24057804119568613, 'unit_c2': 86, 'unit_d': 344, 'dr_f': 0.09032792140581808, 
+                      'learning_rate': 0.0001861606710751586, 'batch_size': 63, 'optimizer': 'Adadelta', 'activation': 'relu', 'reg': 0.08651374042577238}
 
-    n = neural_network(X_train, Y_train, X_test, Y_test, n_classes)
     
-    model = n.build_network(default_params, None)
-    model.summary()
+    new = None
+    new_fc = None
+    new_conv = None
+    rem_conv = None
+    rem_fc = None
+    da = True
 
-    n.rgl = True
-    model = n.insert_batch(model, default_params)
-    model.summary()
-
-    model = n.insert_conv_section(model, default_params, 1)
-    model.summary()
-
-    model = n.remove_conv_section(model)
-    model.summary()
-
-    model = n.insert_fc_section(model, default_params, 1)
-    model.summary()
-
-    model = n.remove_fc_section(model)
-    model.summary()
-    quit()
-
-    new_model = n.remove_conv_layer(model, default_params)
-    model_name_id = time()
-    model_json = new_model.to_json()
-    model_name = "Model/model-{}.json".format(model_name_id)
-    with open(model_name, 'w') as json_file:
-                json_file.write(model_json)
+    nn = neural_network(X_train, Y_train, X_test, Y_test, n_classes)
+    score, history, model = nn.training(default_params, new, new_fc, new_conv, rem_conv, rem_fc, da, space)
+    # n = neural_network(X_train, Y_train, X_test, Y_test, n_classes)
     
-    print(new_model.summary())
-    
-    # model2 = n.build_network(default_params, None)
-    # print(model2.summary())
-    
-    n.conv = True
-    new_model3 = n.insert_layer(
-        new_model, '.*flatten.*', default_params, num_cv=1, position='before')
+    # model = n.build_network(default_params, None)
+    # model.summary()
 
-    print(new_model3.summary())
+    # n.rgl = True
+    # model = n.insert_batch(model, default_params)
+    # model.summary()
+
+    # model = n.insert_conv_section(model, default_params, 1)
+    # model.summary()
+
+    # model = n.remove_conv_section(model)
+    # model.summary()
+
+    # model = n.insert_fc_section(model, default_params, 1)
+    # model.summary()
+
+    # model = n.remove_fc_section(model)
+    # model.summary()
+    # quit()
+
+    # new_model = n.remove_conv_layer(model, default_params)
+    # model_name_id = time()
+    # model_json = new_model.to_json()
+    # model_name = "{}/Model/model-{}.json".format(cfg.NAME_EXP, model_name_id)
+    # with open(model_name, 'w') as json_file:
+    #             json_file.write(model_json)
+    
+    # print(new_model.summary())
+    
+    # # model2 = n.build_network(default_params, None)
+    # # print(model2.summary())
+    
+    # n.conv = True
+    # new_model3 = n.insert_layer(
+    #     new_model, '.*flatten.*', default_params, num_cv=1, position='before')
+
+    # print(new_model3.summary())
 
 
     # score, history, model = n.training(default_params, True, [True, 1], None, None, space)

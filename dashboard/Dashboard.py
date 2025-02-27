@@ -10,6 +10,7 @@ from dash.dependencies import Input, Output
 from dash.exceptions import PreventUpdate
 from ast import literal_eval
 
+
 app = dash.Dash(__name__,
                 title='Symbolic DNN-Tuner',
                 meta_tags=[{"name": "viewport", "content": "width=device-width, initial-scale=1"}]
@@ -18,7 +19,7 @@ app = dash.Dash(__name__,
 # Load extra layouts
 cyto.load_extra_layouts()
 
-database = "../database/database.db"
+database = "/hpc/home/bzzlca/Symbolic_DNN-Tuner/{}/database/experience.db".format("25_02_21_11_12_CIFAR_accuracy_module_flops_module_200_30")
 
 app.layout = html.Div(
     [

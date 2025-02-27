@@ -28,7 +28,7 @@ class search_space:
             Integer(256, 512, name='unit_d'),
             Real(0.03, 0.5, name='dr_f'),
             Real(1e-4, 1e-3, name='learning_rate'),
-            Integer(16, 256, name='batch_size'),
+            Integer(16, 64, name='batch_size'),
             Categorical(['Adam', 'Adamax', 'Adagrad', 'Adadelta'], name='optimizer'),
             Categorical(['relu', 'elu', 'selu', 'swish'], name='activation')
         ]
