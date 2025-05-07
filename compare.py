@@ -106,7 +106,7 @@ else:
     print("Created results.csv and saved.")
     
 
-data = data.sort_values('accuracy', ascending=False).groupby('name').head(3).reset_index()
+data = data.sort_values('accuracy', ascending=False).groupby('name').head(1).reset_index()
 print(data)
 configurations = [
     {"MODE": "depth", "FRAMES": 4, "CHANNEL": 4, "POL": 2},
@@ -160,7 +160,7 @@ for mode, keys in mode_grouped.items():
 
     for i, key in enumerate(keys):
         # varia leggermente la luminosità (entro range [0.4–0.85])
-        new_l = 0.4 + (0.45 * i / max(1, len(keys)-1))
+        new_l = 0.3 + (0.55 * i / max(1, len(keys)-1))
         new_rgb = colorsys.hls_to_rgb(h, new_l, s)
         color_map[key] = new_rgb
 
@@ -174,34 +174,41 @@ for i in range(len(data)):
     name = data['name'][i]
     color = get_color(name)
     name = f"F: {name.split('_')[1]} C: {name.split('_')[2]}"
-    plt.scatter(x, y, color=color, s=100)
+    size = data['flops'][i] / 1e6
+    plt.scatter(x, y, color=color, s=size)
 
 legend_elements = [mpatches.Patch(color=color_map[key], label=key) for key in config_keys] + [mpatches.Patch(color='gray', label='depth_X_X_1')]
 
-# Legenda per i gruppi MODE (colori base)
-# legend_elements = [
-#     mpatches.Patch(color=base_colors["depth"], label="depth"),
-#     mpatches.Patch(color=base_colors["fwdPass"], label="fwdPass"),
-#     mpatches.Patch(color=base_colors["hybrid"], label="hybrid")
-# ]
 
-plt.legend(handles=legend_elements, fontsize=10, title="Configurazioni", title_fontsize=12, loc='lower right')
+plt.legend(handles=legend_elements, fontsize=10, title="Configuration", title_fontsize=12, loc='lower right')
 
-plt.xlabel('Tempo CPU (ms)')
-plt.ylabel('Accuratezza')
-plt.title('Accuratezza vs Tempo CPU')
+plt.xlabel('CPU Time (ms)')
+plt.ylabel('Accuracy')
+plt.title('Accuracy vs CPU Time')
 plt.grid(True)
 plt.tight_layout()
 plt.savefig('CPU_acc.png')
 
 # Scatter plot: GPU time vs Accuracy
 plt.figure(figsize=(15, 15))
-plt.scatter(data['gpu_time'], data['accuracy'], color='green')
+
 for i in range(len(data)):
-    plt.text(data['gpu_time'][i]+0.02, data['accuracy'][i], data['name'][i], fontsize=16)
-plt.xlabel('Tempo GPU (ms)')
-plt.ylabel('Accuratezza')
-plt.title('Accuratezza vs Tempo GPU')
+    x = data['gpu_time'][i]
+    y = data['accuracy'][i]
+    name = data['name'][i]
+    color = get_color(name)
+    name = f"F: {name.split('_')[1]} C: {name.split('_')[2]}"
+    size = data['flops'][i] / 1e6
+    plt.scatter(x, y, color=color, s=size)
+
+legend_elements = [mpatches.Patch(color=color_map[key], label=key) for key in config_keys] + [mpatches.Patch(color='gray', label='depth_X_X_1')]
+
+
+plt.legend(handles=legend_elements, fontsize=10, title="Configuration", title_fontsize=12, loc='lower right')
+
+plt.xlabel('GPU Time (ms)')
+plt.ylabel('Accuracy')
+plt.title('Accuracy vs GPU Time')
 plt.grid(True)
 plt.tight_layout()
 plt.savefig('GPU_acc.png')
