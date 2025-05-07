@@ -2,6 +2,7 @@ import re
 import matplotlib.pyplot as plt
 import os
 import numpy as np
+from components.neural_network import evaluate_net
 
 
 def plot_with_trend(x, y, label, color, subplot_index, total_plots, best='min'):
@@ -87,9 +88,9 @@ def plot_per_exp(base_dir, file_path):
     plt.figure(figsize=(30, 7*n_plot))
     current_plot = 0
     
-    print("------------------- BEST RESULT -------------------")
+    print("------------------- BEST RESULT -------------------", flush=True)
     if accuracy_pattern:
-        print("Total Iterations:", len(accuracy_values) - 1)
+        print("Total Iterations:", len(accuracy_values) - 1, flush=True)
     elif flops_pattern:
         print("Total Iterations:", len(flops_values) - 1)
     elif latency_pattern:
@@ -98,7 +99,7 @@ def plot_per_exp(base_dir, file_path):
         max_accuracy = max(accuracy_values)  # Trova il valore massimo
         max_index = accuracy_values.index(max_accuracy)  # Trova l'indice del valore massimo
 
-        print("Accuracy massima:", max_accuracy, "Iterazione:", max_index + 1)
+        print("Accuracy massima:", max_accuracy, "Iterazione:", max_index, flush=True)
         current_plot += 1
         iterations = list(range(1, len(accuracy_values) + 1))
         plot_with_trend(iterations, accuracy_values, 'Accuracy', 'b', current_plot, n_plot, best='max')
@@ -107,7 +108,7 @@ def plot_per_exp(base_dir, file_path):
     if flops_values:
         min_flops = min(flops_values)  # Trova il valore minimo
         min_index = flops_values.index(min_flops)  # Trova l'indice del valore minimo   
-        print("FLOPS minimo:", min_flops, "Iterazione:", min_index + 1)
+        print("FLOPS minimo:", min_flops, "Iterazione:", min_index)
         current_plot += 1
         iterations = list(range(1, len(flops_values) + 1))
         plot_with_trend(iterations, flops_values, 'FLOPS', 'r', current_plot, n_plot)
@@ -115,7 +116,7 @@ def plot_per_exp(base_dir, file_path):
     if params_values:
         min_flops = min(params_values)  # Trova il valore minimo
         min_index = params_values.index(min_flops)  # Trova l'indice del valore minimo
-        print("Params minimo:", min_flops, "Iterazione:", min_index + 1)
+        print("Params minimo:", min_flops, "Iterazione:", min_index)
         current_plot += 1
         iterations = list(range(1, len(params_values) + 1))
         plot_with_trend(iterations, params_values, 'Params', 'g', current_plot, n_plot)
@@ -123,7 +124,7 @@ def plot_per_exp(base_dir, file_path):
     if latency_values:
         min_latency = min(latency_values)  # Trova il valore minimo
         min_index = latency_values.index(min_latency)  # Trova l'indice del valore minimo
-        print("Latency minima:", min_latency, "Iterazione:", min_index + 1)
+        print("Latency minima:", min_latency, "Iterazione:", min_index)
         current_plot += 1
         iterations = list(range(1, len(latency_values) + 1))
         plot_with_trend(iterations, latency_values, 'Latency', 'y', current_plot, n_plot)
@@ -131,21 +132,30 @@ def plot_per_exp(base_dir, file_path):
     if total_cost_values:
         min_total_cost = min(total_cost_values)  # Trova il valore minimo
         min_index = total_cost_values.index(min_total_cost)  # Trova l'indice del valore minimo
-        print("Total Cost minimo:", min_total_cost, "Iterazione:", min_index + 1)
+        print("Total Cost minimo:", min_total_cost, "Iterazione:", min_index)
         current_plot += 1
         iterations = list(range(1, len(total_cost_values) + 1))
         plot_with_trend(iterations, total_cost_values, 'Total Cost', 'm', current_plot, n_plot)
 
-    print("--------------------------------------------------")    
     plt.tight_layout()
     plt.savefig(os.path.join(base_dir, "output_plot.png"), dpi=300, bbox_inches='tight')
     plt.close()
+    try:
+        # print(base_dir.split("_")[6], base_dir.split("_")[-3], base_dir.split("_")[-2], base_dir.split("_")[-1])
+        time, score, flops, nparams = evaluate_net(base_dir + "/Model/best-model.keras", base_dir.split("_")[6], base_dir.split("_")[-3], base_dir.split("_")[-2], base_dir.split("_")[-1])
+        print(f"Time GPU: {time[0]}, Time CPU: {time[1]}, Loss: {score[0]:.4f}, Acc: {score[1]:.4f}, FLOPS: {flops:,}, Params: {nparams:,}", flush=True)
+    except Exception as e:
+        print(f"Time GPU: 0:00:00.00, Time CPU: 0:00:00.00, Loss: 0.00, Acc: 0.00, FLOPS: 0.00, Params: 0.00", flush=True)
+
+    print("--------------------------------------------------", flush=True)    
     
 if __name__ == "__main__":
-    for root, dirs, files in os.walk('/hpc/home/bzzlca/Symbolic_DNN-Tuner/'):
-        if os.path.basename(root).startswith("25_02_") and os.path.basename(root).find("fwdPass") >= 1:
+    for root, dirs, files in os.walk('/hpc/home/bzzlca/Symbolic_DNN-Tuner/results'):
+        if os.path.basename(root).startswith("25_") and os.path.basename(root).find("gesture") >= 1:
             for file in files:
-                if "old_exp" not in root:
-                    if file.endswith(".out") and file.startswith("25_02"):
-                        print("Dir:", root)
+                if "old_exp" not in root and "flops" not in root: # and "25_05" not in root:
+                    if file.endswith(".out")  and file.startswith("25_"):
+                        split_path = root.split("_")
+                        print(f"\n{root}\nExp: Mode {split_path[6]} - Frames {split_path[-3]} - channel {split_path[-2]} - Polarity {split_path[-1]}")
+                        # print(root)
                         plot_per_exp(root, file)

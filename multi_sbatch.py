@@ -1,46 +1,45 @@
-import itertools
 import os
 
-# Lista dei moduli disponibili
-MODULE_LIST = ["accuracy_module", "flops_module", "hardware_module"]
+# Definizione delle configurazioni
+configurations = [
+    # {"MODE": "depth", "FRAMES": 4, "CHANNEL": 4},
+    {"MODE": "depth", "FRAMES": 8, "CHANNEL": 8}, #mancano 2
+    # {"MODE": "depth", "FRAMES": 16, "CHANNEL": 16},
+    # {"MODE": "depth", "FRAMES": 32, "CHANNEL": 32},
+    # {"MODE": "depth", "FRAMES": 64, "CHANNEL": 64},
+    # {"MODE": "fwdPass", "FRAMES": 4, "CHANNEL": 2}, 
+    # {"MODE": "fwdPass", "FRAMES": 8, "CHANNEL": 2},
+    # {"MODE": "fwdPass", "FRAMES": 16, "CHANNEL": 2},
+    {"MODE": "fwdPass", "FRAMES": 32, "CHANNEL": 2}, # mancano 2
+    # {"MODE": "fwdPass", "FRAMES": 64, "CHANNEL": 2}, # annullato
+    {"MODE": "hybrid", "FRAMES": 16, "CHANNEL": 4},
+    {"MODE": "hybrid", "FRAMES": 16, "CHANNEL": 8},
+    {"MODE": "hybrid", "FRAMES": 32, "CHANNEL": 4},
+    {"MODE": "hybrid", "FRAMES": 32, "CHANNEL": 8},
+    # {"MODE": "hybrid", "FRAMES": 64, "CHANNEL": 4},# annullato
+    # {"MODE": "hybrid", "FRAMES": 64, "CHANNEL": 8},# annullato
+    # {"MODE": "hybrid", "FRAMES": 64, "CHANNEL": 16},# annullato
+]
 
-# Numero di esperimenti richiesti
-N_EXPERIMENTS = 7
+# Crea una directory per gli script
+os.makedirs("sbatch_scripts", exist_ok=True)
 
-DATA_NAME = "gesture"
-MODE = "fwdPass"
+# Testo comune del file sbatch
+header = """#!/bin/bash
 
-max_eval = 200
-epochs = 30
-
-# Genera tutte le combinazioni possibili dei moduli (da 1 a tutti)
-all_combinations = []
-for r in range(1, len(MODULE_LIST) + 1):
-    all_combinations.extend(itertools.combinations(MODULE_LIST, r))
-
-# Seleziona solo le prime N_EXPERIMENTS combinazioni
-selected_combinations = [MODULE_LIST[:1], MODULE_LIST[:2], MODULE_LIST]
-
-# Cartella per gli script generati
-# os.makedirs("generated_scripts", exist_ok=True)
-
-# Genera uno script SLURM per ogni combinazione selezionata
-for i, combination in enumerate(selected_combinations):
-    modules_str = " ".join(combination)  # Per il comando Python
-    modules_exp_name = "_".join(combination)  # Per il nome esperimento
-
-    script_content = f"""#!/bin/bash
-
-#SBATCH --job-name=Tuner_{i+1}
+#SBATCH --job-name={job_name}
 #SBATCH --partition=gpu
 #SBATCH --gres=gpu:GH100:1
-#SBATCH --mem=64G
-
 
 TIMESTAMP=$(date +%y_%m_%d_%H_%M_%S_%N)
+FRAMES={frames}
+CHANNEL={channel}
+EPOCH=20
+MAX_EVAL=100
+MODE="{mode}"
 
 # Genera il nome dell'esperimento
-NAME_EXP="$(date +%y_%m_%d_%H_%M)_{MODE}_{DATA_NAME}_{modules_exp_name}_{max_eval}_{epochs}"
+NAME_EXP="$(date +%y_%m_%d_%H)_${SLURM_JOB_ID}_${{MODE}}_gesture_accuracy_module_${{MAX_EVAL}}_${{EPOCH}}_${{FRAMES}}_${{CHANNEL}}_2"
 
 mkdir -p ${{NAME_EXP}}
 
@@ -51,22 +50,27 @@ module load cuda/12.2
 module load miniconda3/24.4.0
 conda activate tf
 
-python main.py --mod_list {modules_str} --name ${{NAME_EXP}} --max_eval {max_eval} --epochs {epochs} --data_name {DATA_NAME}
+cd ${{HOME}}/Symbolic_DNN-Tuner
+python main.py --mod_list accuracy_module --name ${{NAME_EXP}} --max_eval ${{MAX_EVAL}} --epochs ${{EPOCH}} --data_name gesture --mode ${{MODE}} --frames ${{FRAMES}} --channels ${{CHANNEL}}
 
 if [[ -n "$SLURM_JOB_ID" ]]; then
     mv slurm-${{SLURM_JOB_ID}}.out ${{NAME_EXP}}/
 fi
 """
 
-    # Scrive lo script in un file
-    script_filename = f"experiment_{i+1}.slurm"
-    with open(script_filename, "w") as script_file:
-        script_file.write(script_content)
+# Genera un file per ogni configurazione
+for config in configurations:
+    filename = f"sbatch_scripts/sbatch_{config['MODE']}_frames{config['FRAMES']}_channels{config['CHANNEL']}.slurm"
+    job_name = f"{config['MODE']}_{config['FRAMES']}_{config['CHANNEL']}"
+    
+    with open(filename, "w") as f:
+        f.write(header.format(
+            job_name=job_name,
+            frames=config["FRAMES"],
+            mode=config["MODE"],
+            channel=config["CHANNEL"],
+        ))
+    for i in range(5):
+        os.system(f"sbatch {filename}")
 
-    # Rende eseguibile lo script
-    # os.chmod(script_filename, 0o755)
-
-    # Avvia l'esperimento con sbatch
-    os.system(f"sbatch {script_filename}")
-
-print(f"Avviati {len(selected_combinations)} esperimenti con combinazioni diverse di moduli!")
+print("Script sbatch generati nella cartella 'sbatch_scripts' e run avviata 5 volte per esperimento.")

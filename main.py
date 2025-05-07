@@ -19,7 +19,6 @@ from components.gesture_dataset import gesture_data
 from components.search_space import search_space
 from components.params_checker import paramsChecker
 
-
 import config as cfg
 
 # FOLDER SECTION --------------------------------------------------------------------------------------------------------

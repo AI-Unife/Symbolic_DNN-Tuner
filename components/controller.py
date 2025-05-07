@@ -63,6 +63,7 @@ class controller:
         self.levels = [7, 10, 13]
         self.imp_checker = ImprovementChecker(self.db, self.lfi)
         self.modules = module(cfg.MOD_LIST)
+        self.best_score = 0
 
     # The following methods are used to determine actions to be applied to the network structure,
     # for example addition or removal of convolutions and dense layers
@@ -146,8 +147,8 @@ class controller:
 
         print(colors.OKBLUE, "|  --> START TRAINING\n", colors.ENDC)
         K.clear_session()
-        self.nn = neural_network(self.X_train, self.Y_train, self.X_test, self.Y_test, self.n_classes)
-        self.score, self.history, self.model = self.nn.training(params, self.new, self.new_fc, self.new_conv, self.rem_conv, self.rem_fc, self.da,
+        self.nn = neural_network(self.X_train, self.Y_train, self.X_test, self.Y_test, self.n_classes, self.best_score)
+        self.score, self.history, self.model, self.best_score = self.nn.training(params, self.new, self.new_fc, self.new_conv, self.rem_conv, self.rem_fc, self.da,
                                                                 self.space)
 
         # update state of modules

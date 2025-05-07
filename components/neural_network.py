@@ -81,7 +81,7 @@ class neural_network:
     class used for the management of the neural network architecture,
     offering methods for training the dnn and adding and removing convolutional layers
     """
-    def __init__(self, X_train, Y_train, X_test, Y_test, n_classes):
+    def __init__(self, X_train, Y_train, X_test, Y_test, n_classes, best_score=0):
         """
         initialized the attributes of the class.
         first part is used for storing the examples of the dataset,
@@ -107,7 +107,7 @@ class neural_network:
         self.dense = False
         self.conv = False
         self.dnet = dynamic_net()
-        self.best_score = 0
+        self.best_score = best_score
 
     def build_network(self, params, new):
         """
@@ -130,9 +130,8 @@ class neural_network:
             print("MODELLO PRECEDENTE")
         except:
             # if the last trained model cannot be loaded, create a new neural network
-            print(self.train_data.shape)
-
-            if cfg.MODE == 'fwdPass':
+            # exit()
+            if cfg.MODE == 'fwdPass' or cfg.MODE == 'hybrid':
                 input_shape = self.train_data.shape[2:]
             else:
                 input_shape = self.train_data.shape[1:]
@@ -403,7 +402,6 @@ class neural_network:
 
         opt = LayerWiseLR(opt, multiplier, learning_rate=params['learning_rate'])
 
-        # if cfg.MODE == 'depth':
         model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=['accuracy'])
         es1 = EarlyStopping(monitor='val_loss', min_delta=0.005, patience=15, verbose=0, mode='min')
         es2 = EarlyStopping(monitor='val_accuracy', min_delta=0.005, patience=15, verbose=0, mode='max')
@@ -428,18 +426,10 @@ class neural_network:
                 data_augmentation,  # Aggiunto come primo strato
                 *model.layers       # Importa tutti gli strati esistenti
             ])
-        #     # train the model
-        #     if cfg.MODE == 'fwdPass':
-        #         history = train_model(model, opt, self.train_data, self.train_labels, 
-        #                               self.test_data, self.test_labels, self.epochs,params, [tensorboard, reduce_lr, es1, es2])
-        #     else:
-        #         history = model.fit(
-        #         datagen.flow(self.train_data, self.train_labels, batch_size=params['batch_size']), epochs=self.epochs,
-        #         verbose=0, validation_data=(self.test_data, self.test_labels),
-        #         callbacks=[tensorboard, reduce_lr, es1, es2]).history
-        # else:
-        # train the network without data augmentation
-        if cfg.MODE == 'fwdPass':
+            model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=['accuracy'])
+
+        
+        if cfg.MODE == 'fwdPass' or cfg.MODE == 'hybrid':
             history = train_model(model, opt, self.train_data, self.train_labels, 
                                     self.test_data, self.test_labels, self.epochs,params, [tensorboard, reduce_lr, es1, es2])
         else:
@@ -449,7 +439,7 @@ class neural_network:
                             callbacks=[tensorboard, reduce_lr, es1, es2]).history
 
         # evaluates model performance on test data
-        if cfg.MODE == 'fwdPass':
+        if cfg.MODE == 'fwdPass' or cfg.MODE == 'hybrid':
             score = eval_model(model, self.test_data, self.test_labels)
         else:
             score = model.evaluate(self.test_data, self.test_labels)
@@ -466,18 +456,69 @@ class neural_network:
         model_json = json.dumps(mj)
         model = tf.keras.models.model_from_json(model_json)
         model.load_weights("{}/Weights/weights-{}.weights.h5".format(cfg.NAME_EXP, model_name_id))
+        print("acc: ", score[1], "loss: ", score[0], "best: ", self.best_score)
         if score[1] > self.best_score:
-            self.best_score = score
+            print("SAVE MODEL - Best score: ", score[1])
+            self.best_score = score[1]
             model.save("{}/Model/best-model.keras".format(cfg.NAME_EXP))
             # os.system("mv {}/Weights/weights-{}.weights.h5 {}/Weights/best-weights.h5".format(cfg.NAME_EXP, model_name_id, cfg.NAME_EXP))
             # os.system("mv {}/Model/model-{}.json {}/Model/best-model.json".format(cfg.NAME_EXP, model_name_id, cfg.NAME_EXP))
         
         os.system("rm {}/Weights/weights-{}.weights.h5".format(cfg.NAME_EXP, model_name_id))
         os.system("rm {}/Model/model-{}.json".format(cfg.NAME_EXP, model_name_id))
-        return score, history, model
+        return score, history, model, self.best_score
 
 
 
+
+def evaluate_net(path, mode, frames=32, channels=2, pol=2):
+    from flops import flops_calculator as fc
+    # print(f"-------------------------------- {mode} --------------------------------")
+    cfg.MODE = mode
+    cfg.FRAMES = int(frames)
+    cfg.NUM_CHANNELS = int(channels)
+    cfg.POLARITY = "both" if int(pol) == 2 else "sum" 
+    # print("cfg.FRAMES: ", cfg.FRAMES, "cfg.CHANNELS: ", cfg.NUM_CHANNELS, "cfg.POLARITY: ", cfg.POLARITY,)
+    X_train, X_test, Y_train, Y_test, n_classes = gesture_data() # gesture_data() cifar_data()
+    model = tf.keras.models.load_model(path) #"{}/Model/best-model.keras".format('25_03_04_12_03_depth_gesture_accuracy_module_100_20'))
+    # print(model.summary())
+    import io
+    summary_str = io.StringIO()
+    model.summary(print_fn=lambda x: summary_str.write(x + '\n'))
+    # print(model.summary())
+    model.compile(loss='categorical_crossentropy', optimizer='Adam', metrics=['accuracy'])
+    if mode == "depth":
+        score = model.evaluate(X_test, Y_test, verbose=0)
+    else:
+        score = eval_model(model, X_test, Y_test)
+    gpus = tf.config.list_physical_devices('GPU')
+    time_gpu = "0:00:00.0"
+    if len(gpus) > 0:
+        start = datetime.now()
+        if mode == "depth":
+            score = model.evaluate(X_test, Y_test, verbose=0)
+        else:
+            score = eval_model(model, X_test, Y_test)
+        # print("Time: ", datetime.now() - start)
+        # print("Accuracy: ", score[1], "Loss: ", score[0])
+        time_gpu = (datetime.now() - start) / X_test.shape[0]
+    with tf.device('/CPU:0'):
+        start = datetime.now()
+        if mode == "depth":
+            score = model.evaluate(X_test, Y_test, verbose=0)
+        else:
+            score = eval_model(model, X_test, Y_test)
+        # print("Time: ", datetime.now() - start)
+        # print("Accuracy: ", score[1], "Loss: ", score[0])
+        time_cpu = (datetime.now() - start) / X_test.shape[0]
+    flops, r_dict = fc.analyze_model(model)
+    trainableParams = np.sum([np.prod(v.shape)for v in model.trainable_weights])
+    nonTrainableParams = np.sum([np.prod(v.shape)for v in model.non_trainable_weights])
+    nparams = trainableParams + nonTrainableParams
+    return [time_gpu, time_cpu], score, flops.total_float_ops, nparams
+    # print(f"FLOPS: {flops.total_float_ops}")
+    # print(f"PARAMS: {nparams}")
+    
 
 if __name__ == '__main__':
     X_train, X_test, Y_train, Y_test, n_classes = cifar_data() #gesture_data()

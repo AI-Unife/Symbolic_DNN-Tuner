@@ -58,7 +58,8 @@ def train_model(model, optimizer, train_data, train_labels, test_data, test_labe
                     outputs_list.append(frame_outputs)
 
                 outputs = tf.stack(outputs_list, axis=1)
-
+                # print("target shape: ", targets.shape)
+                # print("output shape: ", outputs.shape)
                 loss = loss_fn(targets, outputs)
 
             # Calcolo gradienti e aggiornamento pesi

@@ -22,7 +22,8 @@ class ToOneHotTimeCoding:
 
     def __call__(self, target):
         one_hot = tf.one_hot(target, self.n_classes)  # Convert target to one-hot encoding
-        return tf.stack([one_hot] * self.n_frames)  # Repeat across time frames
+        to_stack = [one_hot] * self.n_frames
+        return tf.stack(to_stack)  # Repeat across time frames
 
 
 class SumPolarity:
@@ -48,6 +49,20 @@ class DropPolarity:
     """
     def __call__(self, image, p=0):
         return image[:, p, :]
+    
+class BothPolarity:
+    """
+    Keeps both polarity channels of an event-based frame.
+
+    Returns:
+    - tf.Tensor: Image with both polarity channels.
+    """
+    def __call__(self, image):
+        # print("image shape: ", image.shape)
+        
+        new_image = image.reshape(cfg.FRAMES*2, 64, 64)  # (FRAMES, Polarity,  64, 64) --> (FRAMES * Polarity , 64, 64)
+        
+        return new_image  
 
 
 class SubPolarity:
@@ -66,7 +81,8 @@ def select_polarity_transform(polarity):
     polarity_mapping = {
         "sum": SumPolarity(),
         "sub": SubPolarity(),
-        "drop": DropPolarity()
+        "drop": DropPolarity(),
+        "both": BothPolarity()
     }
     if polarity not in polarity_mapping:
         raise ValueError("Invalid polarity option! Choose from ['sum', 'sub', 'drop']")
@@ -81,18 +97,21 @@ def get_datasets_numpy():
     """
     
     dataset_path='/hpc/home/bzzlca/AIDA4Edge/data/'
-    n_frames=32 
-    polarity = "sum"
-    cache_dir= f"/hpc/home/bzzlca/AIDA4Edge/tf/cache/DVSGesture_{cfg.MODE}_{polarity}_{n_frames}/"
-    
+    polarity = cfg.POLARITY
+    n_pol = 2 if polarity == "both" else 1
+    cache_dir= f"/hpc/home/bzzlca/AIDA4Edge/tf/cache/DVSGesture_{cfg.MODE}_{polarity}_{cfg.FRAMES}_{cfg.NUM_CHANNELS}_{n_pol}/"
+    # print("cache_dir: ", cache_dir)
+    # exit()
     transform = [
         transforms.Denoise(filter_time=10000),
         transforms.Downsample(sensor_size=tonic.datasets.DVSGesture.sensor_size, target_size=(64, 64)),
-        transforms.ToFrame(sensor_size=(64, 64, 2), n_time_bins=n_frames)
+        transforms.ToFrame(sensor_size=(64, 64, 2), n_time_bins=cfg.FRAMES)
     ]
     
     if cfg.MODE == "fwdPass":
-        target_transform = ToOneHotTimeCoding(n_classes=11, n_frames=n_frames) 
+        target_transform = ToOneHotTimeCoding(n_classes=11, n_frames=cfg.FRAMES)
+    elif cfg.MODE == "hybrid":
+        target_transform = ToOneHotTimeCoding(n_classes=11, n_frames=cfg.FRAMES//cfg.NUM_CHANNELS)
     else:
         transform.append(select_polarity_transform(polarity))
         target_transform = None
@@ -115,9 +134,18 @@ def get_datasets_numpy():
     def dataset_to_numpy(dataset):
         x_list, y_list = [], []
         for x, y in dataset:
-            # print(np.shape(x))
             if cfg.MODE == "fwdPass":
                 x_list.append(np.transpose(np.array(x), (0, 2, 3, 1)))
+            elif cfg.MODE == "hybrid":
+                # Step 1: Reshape per raggruppare la prima dimensione in gruppi di 4
+                X_grouped = x.reshape(cfg.FRAMES//cfg.NUM_CHANNELS, cfg.NUM_CHANNELS, 2, 64, 64)  # (4 gruppi, 4 elementi, 2, 64, 64)
+
+                # Step 2: Portare la dimensione dei 4 elementi insieme ai 2 canali
+                X_transposed = X_grouped.transpose(0, 3, 4, 1, 2)  # (4, 64, 64, 4, 2)
+
+                # Step 3: Unire le ultime due dimensioni (4*2 = 8)
+                x_final = X_transposed.reshape(cfg.FRAMES//cfg.NUM_CHANNELS, 64, 64, cfg.NUM_CHANNELS * 2)    
+                x_list.append(x_final)
             else:
                 x_list.append(np.transpose(np.array(x), (1, 2, 0)))  # Convert to NumPy
             y_list.append(np.array(y))  # Convert to NumPy
@@ -133,8 +161,8 @@ def gesture_data():
     num_classes = 11
     # The data, split between train and test sets:
     (x_train, y_train), (x_test, y_test) = get_datasets_numpy()
-    print(x_train.shape[0], 'train samples')
-    print(x_test.shape[0], 'test samples')
+    # print(x_train.shape[0], 'train samples')
+    # print(x_test.shape[0], 'test samples')
 
     # Convert class vectors to binary class matrices.
     if cfg.MODE == "depth":
