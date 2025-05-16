@@ -1,0 +1,1312 @@
+miniconda3 module
+2025-05-12 17:17:55.844686: I tensorflow/core/util/port.cc:113] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+2025-05-12 17:17:55.869380: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+2025-05-12 17:17:55.869411: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+2025-05-12 17:17:55.870004: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+2025-05-12 17:17:55.873750: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: AVX2 AVX512F AVX512_VNNI AVX512_BF16 FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2025-05-12 17:17:57.144872: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_02_14_12_depth_gesture_accuracy_module_100_20_8_8_2
+Exp: Mode depth - Frames 8 - channel 8 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 21
+Accuracy massima: 0.8219696879386902 Iterazione: 62
+2025-05-12 17:18:06.691634: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+2025-05-12 17:18:08.787757: I external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:454] Loaded cuDNN version 8904
+2025-05-12 17:18:13.556771: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:18:13.556841: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:18:13.558064: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+WARNING:tensorflow:From /hpc/home/bzzlca/.conda/envs/tf/lib/python3.9/site-packages/tensorflow/python/ops/nn_ops.py:5256: tensor_shape_from_node_def_name (from tensorflow.python.framework.graph_util_impl) is deprecated and will be removed in a future version.
+Instructions for updating:
+This API was designed for TensorFlow v1. See https://www.tensorflow.org/guide/migrate for instructions on how to migrate your code to TensorFlow v2.
+WARNING:tensorflow:From /hpc/home/bzzlca/.conda/envs/tf/lib/python3.9/site-packages/tensorflow/python/ops/nn_ops.py:5256: tensor_shape_from_node_def_name (from tensorflow.python.framework.graph_util_impl) is deprecated and will be removed in a future version.
+Instructions for updating:
+This API was designed for TensorFlow v1. See https://www.tensorflow.org/guide/migrate for instructions on how to migrate your code to TensorFlow v2.
+shape of x_train:  (1077, 64, 64, 16)
+shape of y_train:  (1077, 11)
+shape of x_test:  (264, 64, 64, 16)
+shape of y_test:  (264, 11)
+Time GPU: 0:00:00.000418, Time CPU: 0:00:00.010195, Loss: 2.9328, Acc: 0.8220, FLOPS: 638,362,531, Params: 11,918,814
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_02_14_37_depth_gesture_accuracy_module_100_20_8_8_2
+Exp: Mode depth - Frames 8 - channel 8 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 35
+Accuracy massima: 0.7651515007019043 Iterazione: 6
+2025-05-12 17:18:21.470069: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:18:21.470157: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:18:21.471442: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 64, 64, 16)
+shape of y_train:  (1077, 11)
+shape of x_test:  (264, 64, 64, 16)
+shape of y_test:  (264, 11)
+Time GPU: 0:00:00.000390, Time CPU: 0:00:00.007902, Loss: 8.9687, Acc: 0.7652, FLOPS: 766,388,086, Params: 8,603,723
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_02_14_59_depth_gesture_accuracy_module_100_20_8_8_2
+Exp: Mode depth - Frames 8 - channel 8 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 40
+Accuracy massima: 0.8181818127632141 Iterazione: 4
+2025-05-12 17:18:29.719091: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:18:29.719158: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:18:29.720423: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 64, 64, 16)
+shape of y_train:  (1077, 11)
+shape of x_test:  (264, 64, 64, 16)
+shape of y_test:  (264, 11)
+Time GPU: 0:00:00.000380, Time CPU: 0:00:00.009240, Loss: 2.3498, Acc: 0.8182, FLOPS: 763,182,179, Params: 13,094,890
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_02_15_21_depth_gesture_accuracy_module_100_20_16_16_2
+Exp: Mode depth - Frames 16 - channel 16 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 25
+Accuracy massima: 0.7916666865348816 Iterazione: 22
+2025-05-12 17:18:40.064030: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:18:40.064098: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:18:40.065311: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 64, 64, 32)
+shape of y_train:  (1077, 11)
+shape of x_test:  (264, 64, 64, 32)
+shape of y_test:  (264, 11)
+Time GPU: 0:00:00.000454, Time CPU: 0:00:00.009506, Loss: 12.4365, Acc: 0.7917, FLOPS: 825,372,818, Params: 12,615,674
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_02_15_44_depth_gesture_accuracy_module_100_20_16_16_2
+Exp: Mode depth - Frames 16 - channel 16 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 27
+Accuracy massima: 0.8409090638160706 Iterazione: 73
+2025-05-12 17:18:48.860847: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:18:48.861126: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:18:48.862388: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 64, 64, 32)
+shape of y_train:  (1077, 11)
+shape of x_test:  (264, 64, 64, 32)
+shape of y_test:  (264, 11)
+Time GPU: 0:00:00.000471, Time CPU: 0:00:00.008944, Loss: 0.4854, Acc: 0.8409, FLOPS: 850,922,818, Params: 13,131,659
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_02_16_08_depth_gesture_accuracy_module_100_20_16_16_2
+Exp: Mode depth - Frames 16 - channel 16 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 31
+Accuracy massima: 0.8219696879386902 Iterazione: 30
+2025-05-12 17:18:58.318148: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:18:58.318214: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:18:58.319385: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 64, 64, 32)
+shape of y_train:  (1077, 11)
+shape of x_test:  (264, 64, 64, 32)
+shape of y_test:  (264, 11)
+Time GPU: 0:00:00.000441, Time CPU: 0:00:00.010597, Loss: 0.5080, Acc: 0.8220, FLOPS: 832,396,956, Params: 13,025,842
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_02_16_31_depth_gesture_accuracy_module_100_20_16_16_2
+Exp: Mode depth - Frames 16 - channel 16 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 21
+Accuracy massima: 0.7727272510528564 Iterazione: 57
+2025-05-12 17:19:07.011020: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:19:07.011087: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:19:07.012247: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 64, 64, 32)
+shape of y_train:  (1077, 11)
+shape of x_test:  (264, 64, 64, 32)
+shape of y_test:  (264, 11)
+Time GPU: 0:00:00.000456, Time CPU: 0:00:00.008741, Loss: 2.3018, Acc: 0.7727, FLOPS: 650,050,875, Params: 7,856,606
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_02_16_53_depth_gesture_accuracy_module_100_20_16_16_2
+Exp: Mode depth - Frames 16 - channel 16 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 19
+Accuracy massima: 0.7196969985961914 Iterazione: 77
+2025-05-12 17:19:14.422527: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:19:14.422602: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:19:14.423802: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 64, 64, 32)
+shape of y_train:  (1077, 11)
+shape of x_test:  (264, 64, 64, 32)
+shape of y_test:  (264, 11)
+Time GPU: 0:00:00.000443, Time CPU: 0:00:00.006247, Loss: 0.8743, Acc: 0.7197, FLOPS: 630,075,803, Params: 4,790,747
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_02_17_15_depth_gesture_accuracy_module_100_20_32_32_2
+Exp: Mode depth - Frames 32 - channel 32 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 30
+Accuracy massima: 0.8068181872367859 Iterazione: 55
+2025-05-12 17:19:25.098033: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:19:25.098101: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:19:25.099340: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 64, 64, 64)
+shape of y_train:  (1077, 11)
+shape of x_test:  (264, 64, 64, 64)
+shape of y_test:  (264, 11)
+Time GPU: 0:00:00.000544, Time CPU: 0:00:00.012054, Loss: 7.8621, Acc: 0.8068, FLOPS: 960,251,856, Params: 12,888,511
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_02_17_41_depth_gesture_accuracy_module_100_20_32_32_2
+Exp: Mode depth - Frames 32 - channel 32 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 35
+Accuracy massima: 0.689393937587738 Iterazione: 40
+2025-05-12 17:19:34.802350: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:19:34.802413: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:19:34.803583: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 64, 64, 64)
+shape of y_train:  (1077, 11)
+shape of x_test:  (264, 64, 64, 64)
+shape of y_test:  (264, 11)
+Time GPU: 0:00:00.000503, Time CPU: 0:00:00.008499, Loss: 17.3019, Acc: 0.6894, FLOPS: 795,118,455, Params: 8,275,211
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_02_18_08_depth_gesture_accuracy_module_100_20_32_32_2
+Exp: Mode depth - Frames 32 - channel 32 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 35
+Accuracy massima: 0.7045454382896423 Iterazione: 41
+2025-05-12 17:19:45.086871: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:19:45.087285: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:19:45.088469: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 64, 64, 64)
+shape of y_train:  (1077, 11)
+shape of x_test:  (264, 64, 64, 64)
+shape of y_test:  (264, 11)
+Time GPU: 0:00:00.000506, Time CPU: 0:00:00.009644, Loss: 9.8046, Acc: 0.7045, FLOPS: 724,347,277, Params: 12,413,568
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_02_18_38_depth_gesture_accuracy_module_100_20_32_32_2
+Exp: Mode depth - Frames 32 - channel 32 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 36
+Accuracy massima: 0.7007575631141663 Iterazione: 2
+2025-05-12 17:19:55.191474: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:19:55.191542: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:19:55.192740: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 64, 64, 64)
+shape of y_train:  (1077, 11)
+shape of x_test:  (264, 64, 64, 64)
+shape of y_test:  (264, 11)
+Time GPU: 0:00:00.000512, Time CPU: 0:00:00.010063, Loss: 6.0454, Acc: 0.7008, FLOPS: 998,325,309, Params: 10,614,587
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_02_19_02_depth_gesture_accuracy_module_100_20_32_32_2
+Exp: Mode depth - Frames 32 - channel 32 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 36
+Accuracy massima: 0.7121211886405945 Iterazione: 81
+2025-05-12 17:20:04.812071: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:20:04.812135: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:20:04.813330: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 64, 64, 64)
+shape of y_train:  (1077, 11)
+shape of x_test:  (264, 64, 64, 64)
+shape of y_test:  (264, 11)
+Time GPU: 0:00:00.000502, Time CPU: 0:00:00.008853, Loss: 0.9276, Acc: 0.7121, FLOPS: 803,310,694, Params: 6,259,278
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_02_19_27_depth_gesture_accuracy_module_100_20_64_64_2
+Exp: Mode depth - Frames 64 - channel 64 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 33
+Accuracy massima: 0.6969696879386902 Iterazione: 16
+2025-05-12 17:20:20.668790: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:20:20.668859: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:20:20.670101: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 64, 64, 128)
+shape of y_train:  (1077, 11)
+shape of x_test:  (264, 64, 64, 128)
+shape of y_test:  (264, 11)
+Time GPU: 0:00:00.000728, Time CPU: 0:00:00.014344, Loss: 6.9872, Acc: 0.6970, FLOPS: 1,138,582,778, Params: 12,145,160
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_02_20_25_depth_gesture_accuracy_module_100_20_64_64_2
+Exp: Mode depth - Frames 64 - channel 64 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 39
+Accuracy massima: 0.7803030014038086 Iterazione: 6
+2025-05-12 17:20:35.192896: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:20:35.192964: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:20:35.194124: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 64, 64, 128)
+shape of y_train:  (1077, 11)
+shape of x_test:  (264, 64, 64, 128)
+shape of y_test:  (264, 11)
+Time GPU: 0:00:00.000582, Time CPU: 0:00:00.015667, Loss: 0.7838, Acc: 0.7803, FLOPS: 1,278,303,900, Params: 13,080,274
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_02_21_07_depth_gesture_accuracy_module_100_20_64_64_2
+Exp: Mode depth - Frames 64 - channel 64 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 35
+Accuracy massima: 0.7121211886405945 Iterazione: 49
+2025-05-12 17:20:49.331672: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:20:49.331746: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:20:49.332945: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 64, 64, 128)
+shape of y_train:  (1077, 11)
+shape of x_test:  (264, 64, 64, 128)
+shape of y_test:  (264, 11)
+Time GPU: 0:00:00.000588, Time CPU: 0:00:00.013986, Loss: 3.5708, Acc: 0.7121, FLOPS: 1,000,426,785, Params: 11,951,060
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_02_21_49_depth_gesture_accuracy_module_100_20_64_64_2
+Exp: Mode depth - Frames 64 - channel 64 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 20
+Accuracy massima: 0.7310606241226196 Iterazione: 83
+2025-05-12 17:21:02.888284: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:21:02.888361: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:21:02.889546: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 64, 64, 128)
+shape of y_train:  (1077, 11)
+shape of x_test:  (264, 64, 64, 128)
+shape of y_test:  (264, 11)
+Time GPU: 0:00:00.000581, Time CPU: 0:00:00.012428, Loss: 0.8637, Acc: 0.7311, FLOPS: 1,302,250,819, Params: 12,358,523
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_02_22_30_depth_gesture_accuracy_module_100_20_64_64_2
+Exp: Mode depth - Frames 64 - channel 64 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 35
+Accuracy massima: 0.7045454382896423 Iterazione: 32
+2025-05-12 17:21:16.705550: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:21:16.705614: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:21:16.706807: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 64, 64, 128)
+shape of y_train:  (1077, 11)
+shape of x_test:  (264, 64, 64, 128)
+shape of y_test:  (264, 11)
+Time GPU: 0:00:00.000585, Time CPU: 0:00:00.013954, Loss: 25.6949, Acc: 0.7045, FLOPS: 1,077,249,135, Params: 10,879,788
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_02_23_12_fwdPass_gesture_accuracy_module_100_20_4_2_2
+Exp: Mode fwdPass - Frames 4 - channel 2 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 22
+Accuracy massima: 0.8106060606060606 Iterazione: 48
+2025-05-12 17:21:28.929906: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:21:28.929979: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:21:28.931229: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 4, 64, 64, 2)
+shape of y_train:  (1077, 4, 11)
+shape of x_test:  (264, 4, 64, 64, 2)
+shape of y_test:  (264, 4, 11)
+Time GPU: 0:00:00.000183, Time CPU: 0:00:00.023026, Loss: 1.7654, Acc: 0.8106, FLOPS: 512,999,391, Params: 8,004,822.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_03_00_28_fwdPass_gesture_accuracy_module_100_20_4_2_2
+Exp: Mode fwdPass - Frames 4 - channel 2 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 20
+Accuracy massima: 0.8106060606060606 Iterazione: 98
+2025-05-12 17:21:42.430969: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:21:42.431052: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:21:42.432262: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 4, 64, 64, 2)
+shape of y_train:  (1077, 4, 11)
+shape of x_test:  (264, 4, 64, 64, 2)
+shape of y_test:  (264, 4, 11)
+Time GPU: 0:00:00.000233, Time CPU: 0:00:00.028267, Loss: 1.7571, Acc: 0.8106, FLOPS: 605,277,646, Params: 11,975,850.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_03_01_25_fwdPass_gesture_accuracy_module_100_20_4_2_2
+Exp: Mode fwdPass - Frames 4 - channel 2 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 27
+Accuracy massima: 0.7954545454545454 Iterazione: 77
+2025-05-12 17:21:55.130675: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:21:55.130753: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:21:55.131957: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 4, 64, 64, 2)
+shape of y_train:  (1077, 4, 11)
+shape of x_test:  (264, 4, 64, 64, 2)
+shape of y_test:  (264, 4, 11)
+Time GPU: 0:00:00.000295, Time CPU: 0:00:00.025756, Loss: 1.7724, Acc: 0.7955, FLOPS: 520,552,754, Params: 9,605,270.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_03_02_16_fwdPass_gesture_accuracy_module_100_20_4_2_2
+Exp: Mode fwdPass - Frames 4 - channel 2 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 18
+Accuracy massima: 0.8446969696969697 Iterazione: 31
+2025-05-12 17:22:08.127896: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:22:08.127971: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:22:08.129172: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 4, 64, 64, 2)
+shape of y_train:  (1077, 4, 11)
+shape of x_test:  (264, 4, 64, 64, 2)
+shape of y_test:  (264, 4, 11)
+Time GPU: 0:00:00.000286, Time CPU: 0:00:00.029857, Loss: 1.7232, Acc: 0.8447, FLOPS: 641,156,550, Params: 11,667,283.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_03_03_23_fwdPass_gesture_accuracy_module_100_20_4_2_2
+Exp: Mode fwdPass - Frames 4 - channel 2 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 20
+Accuracy massima: 0.7727272727272727 Iterazione: 36
+2025-05-12 17:22:20.564812: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:22:20.564892: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:22:20.566161: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 4, 64, 64, 2)
+shape of y_train:  (1077, 4, 11)
+shape of x_test:  (264, 4, 64, 64, 2)
+shape of y_test:  (264, 4, 11)
+Time GPU: 0:00:00.000203, Time CPU: 0:00:00.027210, Loss: 1.7865, Acc: 0.7727, FLOPS: 693,940,134, Params: 12,801,174.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_03_04_15_fwdPass_gesture_accuracy_module_100_20_8_2_2
+Exp: Mode fwdPass - Frames 8 - channel 2 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 21
+Accuracy massima: 0.8787878787878788 Iterazione: 37
+2025-05-12 17:22:42.309387: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:22:42.309471: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:22:42.310841: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 8, 64, 64, 2)
+shape of y_train:  (1077, 8, 11)
+shape of x_test:  (264, 8, 64, 64, 2)
+shape of y_test:  (264, 8, 11)
+Time GPU: 0:00:00.000406, Time CPU: 0:00:00.054944, Loss: 1.7349, Acc: 0.8788, FLOPS: 623,148,069, Params: 7,598,068.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_03_05_48_fwdPass_gesture_accuracy_module_100_20_8_2_2
+Exp: Mode fwdPass - Frames 8 - channel 2 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 26
+Accuracy massima: 0.7424242424242424 Iterazione: 3
+2025-05-12 17:23:05.433918: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:23:05.433997: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:23:05.435192: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 8, 64, 64, 2)
+shape of y_train:  (1077, 8, 11)
+shape of x_test:  (264, 8, 64, 64, 2)
+shape of y_test:  (264, 8, 11)
+Time GPU: 0:00:00.000620, Time CPU: 0:00:00.063640, Loss: 1.8476, Acc: 0.7424, FLOPS: 683,435,337, Params: 12,978,072.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_03_07_11_fwdPass_gesture_accuracy_module_100_20_8_2_2
+Exp: Mode fwdPass - Frames 8 - channel 2 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 24
+Accuracy massima: 0.8977272727272727 Iterazione: 47
+2025-05-12 17:23:20.040177: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:23:20.040265: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:23:20.041472: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 8, 64, 64, 2)
+shape of y_train:  (1077, 8, 11)
+shape of x_test:  (264, 8, 64, 64, 2)
+shape of y_test:  (264, 8, 11)
+Time GPU: 0:00:00.000360, Time CPU: 0:00:00.034234, Loss: 1.7074, Acc: 0.8977, FLOPS: 354,982,395, Params: 9,615,552.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_03_08_42_fwdPass_gesture_accuracy_module_100_20_8_2_2
+Exp: Mode fwdPass - Frames 8 - channel 2 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 28
+Accuracy massima: 0.8484848484848485 Iterazione: 74
+2025-05-12 17:23:40.904204: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:23:40.904296: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:23:40.905740: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 8, 64, 64, 2)
+shape of y_train:  (1077, 8, 11)
+shape of x_test:  (264, 8, 64, 64, 2)
+shape of y_test:  (264, 8, 11)
+Time GPU: 0:00:00.000409, Time CPU: 0:00:00.058647, Loss: 1.7594, Acc: 0.8485, FLOPS: 687,127,611, Params: 13,081,083.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_03_10_11_fwdPass_gesture_accuracy_module_100_20_8_2_2
+Exp: Mode fwdPass - Frames 8 - channel 2 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 25
+Accuracy massima: 0.821969696969697 Iterazione: 22
+2025-05-12 17:24:02.041565: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:24:02.041642: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:24:02.042826: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 8, 64, 64, 2)
+shape of y_train:  (1077, 8, 11)
+shape of x_test:  (264, 8, 64, 64, 2)
+shape of y_test:  (264, 8, 11)
+Time GPU: 0:00:00.000459, Time CPU: 0:00:00.056547, Loss: 1.7940, Acc: 0.8220, FLOPS: 692,997,133, Params: 12,980,360.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_03_11_42_fwdPass_gesture_accuracy_module_100_20_16_2_2
+Exp: Mode fwdPass - Frames 16 - channel 2 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 19
+Accuracy massima: 0.9204545454545454 Iterazione: 33
+2025-05-12 17:24:34.260883: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:24:34.260957: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:24:34.262196: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 16, 64, 64, 2)
+shape of y_train:  (1077, 16, 11)
+shape of x_test:  (264, 16, 64, 64, 2)
+shape of y_test:  (264, 16, 11)
+Time GPU: 0:00:00.000952, Time CPU: 0:00:00.098606, Loss: 1.6981, Acc: 0.9205, FLOPS: 523,525,542, Params: 8,893,330.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_03_13_51_fwdPass_gesture_accuracy_module_100_20_16_2_2
+Exp: Mode fwdPass - Frames 16 - channel 2 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 23
+Accuracy massima: 0.9166666666666666 Iterazione: 32
+2025-05-12 17:25:08.921434: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:25:08.921506: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:25:08.922730: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 16, 64, 64, 2)
+shape of y_train:  (1077, 16, 11)
+shape of x_test:  (264, 16, 64, 64, 2)
+shape of y_test:  (264, 16, 11)
+Time GPU: 0:00:00.000793, Time CPU: 0:00:00.105994, Loss: 1.7097, Acc: 0.9167, FLOPS: 548,742,186, Params: 6,129,238.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_03_17_39_fwdPass_gesture_accuracy_module_100_20_16_2_2
+Exp: Mode fwdPass - Frames 16 - channel 2 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 18
+Accuracy massima: 0.928030303030303 Iterazione: 60
+2025-05-12 17:25:37.465308: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:25:37.465375: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:25:37.466603: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 16, 64, 64, 2)
+shape of y_train:  (1077, 16, 11)
+shape of x_test:  (264, 16, 64, 64, 2)
+shape of y_test:  (264, 16, 11)
+Time GPU: 0:00:00.000811, Time CPU: 0:00:00.084157, Loss: 1.7149, Acc: 0.9280, FLOPS: 436,675,806, Params: 9,938,568.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_03_20_48_fwdPass_gesture_accuracy_module_100_20_16_2_2
+Exp: Mode fwdPass - Frames 16 - channel 2 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 24
+Accuracy massima: 0.9318181818181818 Iterazione: 50
+2025-05-12 17:26:07.707605: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:26:07.707938: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:26:07.709127: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 16, 64, 64, 2)
+shape of y_train:  (1077, 16, 11)
+shape of x_test:  (264, 16, 64, 64, 2)
+shape of y_test:  (264, 16, 11)
+Time GPU: 0:00:00.000788, Time CPU: 0:00:00.090212, Loss: 1.6942, Acc: 0.9318, FLOPS: 480,041,035, Params: 12,683,703.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_03_22_52_fwdPass_gesture_accuracy_module_100_20_16_2_2
+Exp: Mode fwdPass - Frames 16 - channel 2 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 21
+Accuracy massima: 0.928030303030303 Iterazione: 44
+2025-05-12 17:26:35.822000: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:26:35.822072: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:26:35.823302: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 16, 64, 64, 2)
+shape of y_train:  (1077, 16, 11)
+shape of x_test:  (264, 16, 64, 64, 2)
+shape of y_test:  (264, 16, 11)
+Time GPU: 0:00:00.000613, Time CPU: 0:00:00.083089, Loss: 1.7065, Acc: 0.9280, FLOPS: 502,851,230, Params: 8,381,075.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_04_01_15_fwdPass_gesture_accuracy_module_100_20_32_2_2
+Exp: Mode fwdPass - Frames 32 - channel 2 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 28
+Accuracy massima: 0.9507575757575758 Iterazione: 85
+2025-05-12 17:27:58.077613: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:27:58.077982: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:27:58.079218: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 32, 64, 64, 2)
+shape of y_train:  (1077, 32, 11)
+shape of x_test:  (264, 32, 64, 64, 2)
+shape of y_test:  (264, 32, 11)
+Time GPU: 0:00:00.001977, Time CPU: 0:00:00.281973, Loss: 1.7163, Acc: 0.9508, FLOPS: 682,835,356, Params: 12,802,438
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_04_18_43_fwdPass_gesture_accuracy_module_100_20_32_2_2
+Exp: Mode fwdPass - Frames 32 - channel 2 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 27
+Accuracy massima: 0.9090909090909091 Iterazione: 1
+2025-05-12 17:29:09.780125: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:29:09.780445: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:29:09.781638: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 32, 64, 64, 2)
+shape of y_train:  (1077, 32, 11)
+shape of x_test:  (264, 32, 64, 64, 2)
+shape of y_test:  (264, 32, 11)
+Time GPU: 0:00:00.002004, Time CPU: 0:00:00.241633, Loss: 1.7234, Acc: 0.9091, FLOPS: 710,839,618, Params: 13,110,795.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_04_22_45_fwdPass_gesture_accuracy_module_100_20_32_2_2
+Exp: Mode fwdPass - Frames 32 - channel 2 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 22
+Accuracy massima: 0.9318181818181818 Iterazione: 10
+2025-05-12 17:29:47.618479: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:29:47.618555: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:29:47.619774: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 32, 64, 64, 2)
+shape of y_train:  (1077, 32, 11)
+shape of x_test:  (264, 32, 64, 64, 2)
+shape of y_test:  (264, 32, 11)
+Time GPU: 0:00:00.001315, Time CPU: 0:00:00.113674, Loss: 1.7407, Acc: 0.9318, FLOPS: 247,082,019, Params: 7,217,811.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_03_04_12_03_depth_gesture_accuracy_module_100_20_32_32_1
+Exp: Mode depth - Frames 32 - channel 32 - Polarity 1
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 22
+Accuracy massima: 0.7386363744735718 Iterazione: 89
+2025-05-12 17:30:05.780156: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:30:05.780230: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:30:05.781423: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 64, 64, 32)
+shape of y_train:  (1077, 11)
+shape of x_test:  (264, 64, 64, 32)
+shape of y_test:  (264, 11)
+Time GPU: 0:00:00.000398, Time CPU: 0:00:00.005938, Loss: 0.9195, Acc: 0.7386, FLOPS: 352,224,210, Params: 8,617,726
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_03_04_12_35_fwdPass_gesture_accuracy_module_100_20_32_2_2
+Exp: Mode fwdPass - Frames 32 - channel 2 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 23
+Accuracy massima: 0.9053030303030303 Iterazione: 79
+2025-05-12 17:30:43.858851: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:30:43.858923: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:30:43.860127: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 32, 64, 64, 2)
+shape of y_train:  (1077, 32, 11)
+shape of x_test:  (264, 32, 64, 64, 2)
+shape of y_test:  (264, 32, 11)
+Time GPU: 0:00:00.000801, Time CPU: 0:00:00.117170, Loss: 1.7524, Acc: 0.9053, FLOPS: 366,342,759, Params: 7,888,348.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_03_04_18_25_fwdPass_gesture_accuracy_module_100_20_32_2_2
+Exp: Mode fwdPass - Frames 32 - channel 2 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 15
+Accuracy massima: 0.9242424242424242 Iterazione: 10
+2025-05-12 17:31:55.086086: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:31:55.086420: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:31:55.087622: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 32, 64, 64, 2)
+shape of y_train:  (1077, 32, 11)
+shape of x_test:  (264, 32, 64, 64, 2)
+shape of y_test:  (264, 32, 11)
+Time GPU: 0:00:00.002074, Time CPU: 0:00:00.240406, Loss: 1.7151, Acc: 0.9242, FLOPS: 660,088,101, Params: 9,545,450.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_04_09_12_03_fwdPass_gesture_accuracy_module_100_20_16_2_2
+Exp: Mode fwdPass - Frames 16 - channel 2 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 20
+Accuracy massima: 0.9242424242424242 Iterazione: 74
+2025-05-12 17:32:21.592950: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:32:21.593021: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:32:21.594192: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 16, 64, 64, 2)
+shape of y_train:  (1077, 16, 11)
+shape of x_test:  (264, 16, 64, 64, 2)
+shape of y_test:  (264, 16, 11)
+Time GPU: 0:00:00.000791, Time CPU: 0:00:00.075699, Loss: 1.7680, Acc: 0.8788, FLOPS: 365,535,786, Params: 9,612,280.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_04_09_14_59_depth_gesture_accuracy_module_100_20_16_16_1
+Exp: Mode depth - Frames 16 - channel 16 - Polarity 1
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 34
+Accuracy massima: 0.7083333134651184 Iterazione: 20
+2025-05-12 17:32:30.621254: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:32:30.621324: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:32:30.622516: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 64, 64, 16)
+shape of y_train:  (1077, 11)
+shape of x_test:  (264, 64, 64, 16)
+shape of y_test:  (264, 11)
+Time GPU: 0:00:00.000386, Time CPU: 0:00:00.009450, Loss: 3.2618, Acc: 0.6667, FLOPS: 631,299,231, Params: 11,451,404
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_04_09_15_31_fwdPass_gesture_accuracy_module_100_20_64_2_2
+Exp: Mode fwdPass - Frames 64 - channel 2 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 20
+Accuracy massima: 0.9204545454545454 Iterazione: 59
+2025-05-12 17:33:48.700241: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:33:48.700316: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:33:48.701569: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 64, 64, 64, 2)
+shape of y_train:  (1077, 64, 11)
+shape of x_test:  (264, 64, 64, 64, 2)
+shape of y_test:  (264, 64, 11)
+Time GPU: 0:00:00.002124, Time CPU: 0:00:00.245113, Loss: 1.8456, Acc: 0.7917, FLOPS: 294,843,409, Params: 8,637,138.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_04_11_11_50_fwdPass_gesture_accuracy_module_100_20_8_2_2
+Exp: Mode fwdPass - Frames 8 - channel 2 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 20
+Accuracy massima: 0.9090909090909091 Iterazione: 100
+2025-05-12 17:34:04.987648: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:34:04.987720: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:34:04.988897: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 8, 64, 64, 2)
+shape of y_train:  (1077, 8, 11)
+shape of x_test:  (264, 8, 64, 64, 2)
+shape of y_test:  (264, 8, 11)
+Time GPU: 0:00:00.000333, Time CPU: 0:00:00.042488, Loss: 1.7113, Acc: 0.9091, FLOPS: 530,143,950, Params: 9,098,358.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_04_11_13_34_depth_gesture_accuracy_module_100_20_4_4_1
+Exp: Mode depth - Frames 4 - channel 4 - Polarity 1
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 34
+Accuracy massima: 0.7575757503509521 Iterazione: 9
+2025-05-12 17:34:12.254052: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:34:12.254117: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:34:12.255329: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 64, 64, 4)
+shape of y_train:  (1077, 11)
+shape of x_test:  (264, 64, 64, 4)
+shape of y_test:  (264, 11)
+Time GPU: 0:00:00.000213, Time CPU: 0:00:00.006994, Loss: 14.2991, Acc: 0.6553, FLOPS: 718,802,242, Params: 13,115,531
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_04_11_13_52_fwdPass_gesture_accuracy_module_100_20_4_2_2
+Exp: Mode fwdPass - Frames 4 - channel 2 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 21
+Accuracy massima: 0.7727272727272727 Iterazione: 75
+2025-05-12 17:34:24.784994: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:34:24.785067: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:34:24.786292: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 4, 64, 64, 2)
+shape of y_train:  (1077, 4, 11)
+shape of x_test:  (264, 4, 64, 64, 2)
+shape of y_test:  (264, 4, 11)
+Time GPU: 0:00:00.000297, Time CPU: 0:00:00.028301, Loss: 2.0752, Acc: 0.4811, FLOPS: 618,502,054, Params: 10,317,056.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_04_11_15_19_depth_gesture_accuracy_module_100_20_8_8_1
+Exp: Mode depth - Frames 8 - channel 8 - Polarity 1
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 28
+Accuracy massima: 0.7424242496490479 Iterazione: 80
+2025-05-12 17:34:33.123161: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:34:33.123227: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:34:33.124417: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 64, 64, 8)
+shape of y_train:  (1077, 11)
+shape of x_test:  (264, 64, 64, 8)
+shape of y_test:  (264, 11)
+Time GPU: 0:00:00.000221, Time CPU: 0:00:00.009437, Loss: 5.8295, Acc: 0.3258, FLOPS: 720,870,405, Params: 12,987,326
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_04_28_16_42_hybrid_gesture_accuracy_module_100_20_16_4_2
+Exp: Mode hybrid - Frames 16 - channel 4 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 23
+Accuracy massima: 0.8712121212121212 Iterazione: 97
+2025-05-12 17:34:46.480220: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:34:46.480301: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:34:46.481517: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 4, 64, 64, 8)
+shape of y_train:  (1077, 4, 11)
+shape of x_test:  (264, 4, 64, 64, 8)
+shape of y_test:  (264, 4, 11)
+Time GPU: 0:00:00.000294, Time CPU: 0:00:00.026765, Loss: 2.3943, Acc: 0.1174, FLOPS: 428,412,293, Params: 10,344,878
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_04_28_17_37_hybrid_gesture_accuracy_module_100_20_32_4_2
+Exp: Mode hybrid - Frames 32 - channel 4 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 20
+Accuracy massima: 0.9128787878787878 Iterazione: 38
+2025-05-12 17:35:10.159261: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:35:10.159332: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:35:10.160523: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 8, 64, 64, 8)
+shape of y_train:  (1077, 8, 11)
+shape of x_test:  (264, 8, 64, 64, 8)
+shape of y_test:  (264, 8, 11)
+Time GPU: 0:00:00.000610, Time CPU: 0:00:00.064692, Loss: 2.3410, Acc: 0.2045, FLOPS: 727,532,154, Params: 13,111,882.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_04_29_14_59_depth_gesture_accuracy_module_100_20_4_4_2
+Exp: Mode depth - Frames 4 - channel 4 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 29
+Accuracy massima: 0.8636363744735718 Iterazione: 18
+2025-05-12 17:35:17.831030: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:35:17.831095: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:35:17.832255: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 64, 64, 8)
+shape of y_train:  (1077, 11)
+shape of x_test:  (264, 64, 64, 8)
+shape of y_test:  (264, 11)
+Time GPU: 0:00:00.000218, Time CPU: 0:00:00.009397, Loss: 2.8930, Acc: 0.8636, FLOPS: 720,920,220, Params: 13,012,234
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_04_29_15_15_depth_gesture_accuracy_module_100_20_8_8_2
+Exp: Mode depth - Frames 8 - channel 8 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 26
+Accuracy massima: 0.875 Iterazione: 78
+2025-05-12 17:35:25.761471: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:35:25.761534: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:35:25.762696: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 64, 64, 16)
+shape of y_train:  (1077, 11)
+shape of x_test:  (264, 64, 64, 16)
+shape of y_test:  (264, 11)
+Time GPU: 0:00:00.000235, Time CPU: 0:00:00.009089, Loss: 0.3559, Acc: 0.8750, FLOPS: 763,232,386, Params: 13,119,994
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_04_29_15_38_depth_gesture_accuracy_module_100_20_16_16_2
+Exp: Mode depth - Frames 16 - channel 16 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 36
+Accuracy massima: 0.7916666865348816 Iterazione: 16
+2025-05-12 17:35:35.017678: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:35:35.017751: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:35:35.018917: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 64, 64, 32)
+shape of y_train:  (1077, 11)
+shape of x_test:  (264, 64, 64, 32)
+shape of y_test:  (264, 11)
+Time GPU: 0:00:00.000408, Time CPU: 0:00:00.010585, Loss: 6.3232, Acc: 0.7917, FLOPS: 827,224,555, Params: 12,897,924
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_04_29_16_02_fwdPass_gesture_accuracy_module_100_20_4_2_2
+Exp: Mode fwdPass - Frames 4 - channel 2 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 30
+Accuracy massima: 0.7083333333333334 Iterazione: 70
+2025-05-12 17:35:47.479513: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:35:47.479589: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:35:47.480813: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 4, 64, 64, 2)
+shape of y_train:  (1077, 4, 11)
+shape of x_test:  (264, 4, 64, 64, 2)
+shape of y_test:  (264, 4, 11)
+Time GPU: 0:00:00.000187, Time CPU: 0:00:00.028682, Loss: 1.8651, Acc: 0.7083, FLOPS: 709,360,962, Params: 13,110,795.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_04_29_16_50_fwdPass_gesture_accuracy_module_100_20_8_2_2
+Exp: Mode fwdPass - Frames 8 - channel 2 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 23
+Accuracy massima: 0.8939393939393939 Iterazione: 13
+2025-05-12 17:36:09.333298: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:36:09.333373: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:36:09.334562: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 8, 64, 64, 2)
+shape of y_train:  (1077, 8, 11)
+shape of x_test:  (264, 8, 64, 64, 2)
+shape of y_test:  (264, 8, 11)
+Time GPU: 0:00:00.000553, Time CPU: 0:00:00.061921, Loss: 1.7196, Acc: 0.8939, FLOPS: 705,615,653, Params: 12,982,666.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_04_29_17_06_fwdPass_gesture_accuracy_module_100_20_16_2_2
+Exp: Mode fwdPass - Frames 16 - channel 2 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 25
+Accuracy massima: 0.8787878787878788 Iterazione: 17
+2025-05-12 17:36:46.961098: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:36:46.961170: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:36:46.962346: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 16, 64, 64, 2)
+shape of y_train:  (1077, 16, 11)
+shape of x_test:  (264, 16, 64, 64, 2)
+shape of y_test:  (264, 16, 11)
+Time GPU: 0:00:00.000844, Time CPU: 0:00:00.119684, Loss: 1.7339, Acc: 0.8788, FLOPS: 682,041,854, Params: 13,002,976.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_04_29_19_27_depth_gesture_accuracy_module_100_20_32_32_2
+Exp: Mode depth - Frames 32 - channel 32 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 37
+Accuracy massima: 0.6818181872367859 Iterazione: 96
+2025-05-12 17:36:55.885251: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:36:55.885318: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:36:55.886489: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 64, 64, 64)
+shape of y_train:  (1077, 11)
+shape of x_test:  (264, 64, 64, 64)
+shape of y_test:  (264, 11)
+Time GPU: 0:00:00.000501, Time CPU: 0:00:00.006431, Loss: 3.1139, Acc: 0.6818, FLOPS: 537,260,669, Params: 9,006,054
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_04_30_14_51_hybrid_gesture_accuracy_module_100_20_16_8_2
+Exp: Mode hybrid - Frames 16 - channel 8 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 29
+Accuracy massima: 0.696969696969697 Iterazione: 40
+2025-05-12 17:37:05.426810: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:37:05.426883: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:37:05.428066: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 2, 64, 64, 16)
+shape of y_train:  (1077, 2, 11)
+shape of x_test:  (264, 2, 64, 64, 16)
+shape of y_test:  (264, 2, 11)
+Time GPU: 0:00:00.000141, Time CPU: 0:00:00.014691, Loss: 1.8318, Acc: 0.6970, FLOPS: 765,011,592, Params: 12,863,011.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_04_30_15_34_hybrid_gesture_accuracy_module_100_20_32_8_2
+Exp: Mode hybrid - Frames 32 - channel 8 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 22
+Accuracy massima: 0.8787878787878788 Iterazione: 83
+2025-05-12 17:37:17.706274: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:37:17.706345: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:37:17.707526: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 4, 64, 64, 16)
+shape of y_train:  (1077, 4, 11)
+shape of x_test:  (264, 4, 64, 64, 16)
+shape of y_test:  (264, 4, 11)
+Time GPU: 0:00:00.000280, Time CPU: 0:00:00.021044, Loss: 1.6981, Acc: 0.8788, FLOPS: 410,489,321, Params: 7,657,074.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_04_30_17_25_depth_gesture_accuracy_module_100_20_4_4_2
+Exp: Mode depth - Frames 4 - channel 4 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 22
+Accuracy massima: 0.8560606241226196 Iterazione: 4
+2025-05-12 17:37:24.252288: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:37:24.252356: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:37:24.253549: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 64, 64, 8)
+shape of y_train:  (1077, 11)
+shape of x_test:  (264, 64, 64, 8)
+shape of y_test:  (264, 11)
+Time GPU: 0:00:00.000226, Time CPU: 0:00:00.005533, Loss: 1.5446, Acc: 0.8561, FLOPS: 372,941,927, Params: 11,626,658
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_04_30_17_46_depth_gesture_accuracy_module_100_20_4_4_2
+Exp: Mode depth - Frames 4 - channel 4 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 30
+Accuracy massima: 0.875 Iterazione: 65
+2025-05-12 17:37:31.978910: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:37:31.978981: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:37:31.980165: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 64, 64, 8)
+shape of y_train:  (1077, 11)
+shape of x_test:  (264, 64, 64, 8)
+shape of y_test:  (264, 11)
+Time GPU: 0:00:00.000221, Time CPU: 0:00:00.009449, Loss: 0.8878, Acc: 0.8750, FLOPS: 720,870,405, Params: 12,987,326
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_04_30_18_02_depth_gesture_accuracy_module_100_20_4_4_2
+Exp: Mode depth - Frames 4 - channel 4 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 29
+Accuracy massima: 0.8939393758773804 Iterazione: 22
+2025-05-12 17:37:39.428836: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:37:39.428907: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:37:39.430098: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 64, 64, 8)
+shape of y_train:  (1077, 11)
+shape of x_test:  (264, 64, 64, 8)
+shape of y_test:  (264, 11)
+Time GPU: 0:00:00.000221, Time CPU: 0:00:00.008494, Loss: 0.6105, Acc: 0.8939, FLOPS: 725,973,060, Params: 13,065,250
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_04_30_18_20_depth_gesture_accuracy_module_100_20_4_4_2
+Exp: Mode depth - Frames 4 - channel 4 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 29
+Accuracy massima: 0.875 Iterazione: 4
+2025-05-12 17:37:47.169040: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:37:47.169109: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:37:47.170291: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 64, 64, 8)
+shape of y_train:  (1077, 11)
+shape of x_test:  (264, 64, 64, 8)
+shape of y_test:  (264, 11)
+Time GPU: 0:00:00.000220, Time CPU: 0:00:00.009384, Loss: 0.3575, Acc: 0.8750, FLOPS: 704,367,086, Params: 12,906,687
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_04_30_18_37_depth_gesture_accuracy_module_100_20_4_4_2
+Exp: Mode depth - Frames 4 - channel 4 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 0
+Total restarts: 0
+Accuracy massima: 0.47727271914482117 Iterazione: 0
+2025-05-12 17:37:53.334180: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:37:53.334241: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:37:53.335417: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 64, 64, 8)
+shape of y_train:  (1077, 11)
+shape of x_test:  (264, 64, 64, 8)
+shape of y_test:  (264, 11)
+Time GPU: 0:00:00.000221, Time CPU: 0:00:00.004979, Loss: 2.3464, Acc: 0.4773, FLOPS: 401,107,969, Params: 4,245,231.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_05_05_31_fwdPass_gesture_accuracy_module_100_20_32_2_2
+Exp: Mode fwdPass - Frames 32 - channel 2 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 21
+Accuracy massima: 0.9545454545454546 Iterazione: 91
+2025-05-12 17:38:58.163269: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:38:58.163344: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:38:58.164534: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 32, 64, 64, 2)
+shape of y_train:  (1077, 32, 11)
+shape of x_test:  (264, 32, 64, 64, 2)
+shape of y_test:  (264, 32, 11)
+Time GPU: 0:00:00.001576, Time CPU: 0:00:00.219055, Loss: 1.7387, Acc: 0.9545, FLOPS: 703,139,390, Params: 10,001,483
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_05_12_23_fwdPass_gesture_accuracy_module_100_20_32_2_2
+Exp: Mode fwdPass - Frames 32 - channel 2 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 35
+Accuracy massima: 0.9053030303030303 Iterazione: 59
+2025-05-12 17:40:09.819192: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:40:09.819520: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:40:09.820723: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 32, 64, 64, 2)
+shape of y_train:  (1077, 32, 11)
+shape of x_test:  (264, 32, 64, 64, 2)
+shape of y_test:  (264, 32, 11)
+Time GPU: 0:00:00.001992, Time CPU: 0:00:00.241675, Loss: 1.7489, Acc: 0.9053, FLOPS: 710,789,417, Params: 13,085,695.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_05_16_18_hybrid_gesture_accuracy_module_100_20_16_4_2
+Exp: Mode hybrid - Frames 16 - channel 4 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 21
+Accuracy massima: 0.8409090909090909 Iterazione: 99
+2025-05-12 17:40:20.868785: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:40:20.868859: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:40:20.870056: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 4, 64, 64, 8)
+shape of y_train:  (1077, 4, 11)
+shape of x_test:  (264, 4, 64, 64, 8)
+shape of y_test:  (264, 4, 11)
+Time GPU: 0:00:00.000252, Time CPU: 0:00:00.019101, Loss: 1.7357, Acc: 0.8409, FLOPS: 346,503,459, Params: 7,978,142.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_05_17_10_hybrid_gesture_accuracy_module_100_20_16_4_2
+Exp: Mode hybrid - Frames 16 - channel 4 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 22
+Accuracy massima: 0.7159090909090909 Iterazione: 100
+2025-05-12 17:40:34.143717: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:40:34.143789: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:40:34.144973: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 4, 64, 64, 8)
+shape of y_train:  (1077, 4, 11)
+shape of x_test:  (264, 4, 64, 64, 8)
+shape of y_test:  (264, 4, 11)
+Time GPU: 0:00:00.000216, Time CPU: 0:00:00.030120, Loss: 1.8541, Acc: 0.7159, FLOPS: 727,361,686, Params: 12,907,819.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_05_18_01_hybrid_gesture_accuracy_module_100_20_16_4_2
+Exp: Mode hybrid - Frames 16 - channel 4 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 29
+Accuracy massima: 0.8863636363636364 Iterazione: 22
+2025-05-12 17:40:48.495860: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:40:48.495935: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:40:48.497108: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 4, 64, 64, 8)
+shape of y_train:  (1077, 4, 11)
+shape of x_test:  (264, 4, 64, 64, 8)
+shape of y_test:  (264, 4, 11)
+Time GPU: 0:00:00.000257, Time CPU: 0:00:00.033231, Loss: 1.6902, Acc: 0.8864, FLOPS: 732,456,243, Params: 12,989,694
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_05_19_30_hybrid_gesture_accuracy_module_100_20_16_4_2
+Exp: Mode hybrid - Frames 16 - channel 4 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 30
+Accuracy massima: 0.7462121212121212 Iterazione: 63
+2025-05-12 17:41:02.367796: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:41:02.367867: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:41:02.369078: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 4, 64, 64, 8)
+shape of y_train:  (1077, 4, 11)
+shape of x_test:  (264, 4, 64, 64, 8)
+shape of y_test:  (264, 4, 11)
+Time GPU: 0:00:00.000307, Time CPU: 0:00:00.031867, Loss: 1.8184, Acc: 0.7462, FLOPS: 733,977,014, Params: 13,011,026.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_05_20_22_hybrid_gesture_accuracy_module_100_20_16_4_2
+Exp: Mode hybrid - Frames 16 - channel 4 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 33
+Accuracy massima: 0.7045454545454546 Iterazione: 8
+2025-05-12 17:41:15.212385: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:41:15.212456: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:41:15.213643: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 4, 64, 64, 8)
+shape of y_train:  (1077, 4, 11)
+shape of x_test:  (264, 4, 64, 64, 8)
+shape of y_test:  (264, 4, 11)
+Time GPU: 0:00:00.000217, Time CPU: 0:00:00.028180, Loss: 1.8539, Acc: 0.7045, FLOPS: 732,452,155, Params: 12,986,122.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_05_21_13_hybrid_gesture_accuracy_module_100_20_16_8_2
+Exp: Mode hybrid - Frames 16 - channel 8 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 17
+Accuracy massima: 0.7689393939393939 Iterazione: 20
+2025-05-12 17:41:24.680323: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:41:24.680395: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:41:24.681558: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 2, 64, 64, 16)
+shape of y_train:  (1077, 2, 11)
+shape of x_test:  (264, 2, 64, 64, 16)
+shape of y_test:  (264, 2, 11)
+Time GPU: 0:00:00.000180, Time CPU: 0:00:00.014693, Loss: 1.7764, Acc: 0.7689, FLOPS: 682,357,026, Params: 8,243,483.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_05_21_57_hybrid_gesture_accuracy_module_100_20_16_8_2
+Exp: Mode hybrid - Frames 16 - channel 8 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 29
+Accuracy massima: 0.7992424242424242 Iterazione: 96
+2025-05-12 17:41:34.409023: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:41:34.409098: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:41:34.410309: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 2, 64, 64, 16)
+shape of y_train:  (1077, 2, 11)
+shape of x_test:  (264, 2, 64, 64, 16)
+shape of y_test:  (264, 2, 11)
+Time GPU: 0:00:00.000160, Time CPU: 0:00:00.016242, Loss: 1.7309, Acc: 0.7992, FLOPS: 770,254,794, Params: 13,019,210
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_05_22_34_hybrid_gesture_accuracy_module_100_20_16_8_2
+Exp: Mode hybrid - Frames 16 - channel 8 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 31
+Accuracy massima: 0.6856060606060606 Iterazione: 1
+2025-05-12 17:41:43.673928: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:41:43.674001: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:41:43.675177: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 2, 64, 64, 16)
+shape of y_train:  (1077, 2, 11)
+shape of x_test:  (264, 2, 64, 64, 16)
+shape of y_test:  (264, 2, 11)
+Time GPU: 0:00:00.000132, Time CPU: 0:00:00.014389, Loss: 1.8655, Acc: 0.6856, FLOPS: 775,421,250, Params: 13,118,859.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_05_23_08_hybrid_gesture_accuracy_module_100_20_16_8_2
+Exp: Mode hybrid - Frames 16 - channel 8 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 22
+Accuracy massima: 0.6515151515151515 Iterazione: 7
+2025-05-12 17:41:53.865794: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:41:53.865867: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:41:53.867037: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 2, 64, 64, 16)
+shape of y_train:  (1077, 2, 11)
+shape of x_test:  (264, 2, 64, 64, 16)
+shape of y_test:  (264, 2, 11)
+Time GPU: 0:00:00.000157, Time CPU: 0:00:00.016348, Loss: 1.8881, Acc: 0.6515, FLOPS: 752,952,058, Params: 12,910,004.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_05_23_50_hybrid_gesture_accuracy_module_100_20_16_8_2
+Exp: Mode hybrid - Frames 16 - channel 8 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 29
+Total restarts: 6
+Accuracy massima: 0.6818181818181818 Iterazione: 9
+2025-05-12 17:42:03.359754: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:42:03.359826: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:42:03.361024: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 2, 64, 64, 16)
+shape of y_train:  (1077, 2, 11)
+shape of x_test:  (264, 2, 64, 64, 16)
+shape of y_test:  (264, 2, 11)
+Time GPU: 0:00:00.000133, Time CPU: 0:00:00.015474, Loss: 1.8615, Acc: 0.6818, FLOPS: 775,421,250, Params: 13,118,859.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_06_11_29740_depth_gesture_accuracy_module_100_20_4_2_2
+Exp: Mode depth - Frames 4 - channel 2 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 34
+Accuracy massima: 0.8484848737716675 Iterazione: 78
+2025-05-12 17:42:11.899328: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:42:11.899398: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:42:11.900572: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 64, 64, 8)
+shape of y_train:  (1077, 11)
+shape of x_test:  (264, 64, 64, 8)
+shape of y_test:  (264, 11)
+Time GPU: 0:00:00.000220, Time CPU: 0:00:00.008485, Loss: 12.2194, Acc: 0.8485, FLOPS: 732,506,058, Params: 13,014,602
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_06_12_29741_hybrid_gesture_accuracy_module_100_20_32_4_2
+Exp: Mode hybrid - Frames 32 - channel 4 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 24
+Accuracy massima: 0.696969696969697 Iterazione: 6
+2025-05-12 17:42:34.785001: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:42:34.785071: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:42:34.786271: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 8, 64, 64, 8)
+shape of y_train:  (1077, 8, 11)
+shape of x_test:  (264, 8, 64, 64, 8)
+shape of y_test:  (264, 8, 11)
+Time GPU: 0:00:00.000466, Time CPU: 0:00:00.062104, Loss: 1.8759, Acc: 0.6970, FLOPS: 709,468,670, Params: 13,006,324.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_06_13_29742_hybrid_gesture_accuracy_module_100_20_32_4_2
+Exp: Mode hybrid - Frames 32 - channel 4 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 22
+Accuracy massima: 0.9128787878787878 Iterazione: 18
+2025-05-12 17:42:57.450976: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:42:57.451049: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:42:57.452262: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 8, 64, 64, 8)
+shape of y_train:  (1077, 8, 11)
+shape of x_test:  (264, 8, 64, 64, 8)
+shape of y_test:  (264, 8, 11)
+Time GPU: 0:00:00.000550, Time CPU: 0:00:00.062106, Loss: 1.6674, Acc: 0.9129, FLOPS: 734,984,487, Params: 11,030,951.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_06_15_29743_hybrid_gesture_accuracy_module_100_20_32_4_2
+Exp: Mode hybrid - Frames 32 - channel 4 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 17
+Accuracy massima: 0.928030303030303 Iterazione: 50
+2025-05-12 17:43:12.118625: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:43:12.118696: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:43:12.119866: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 8, 64, 64, 8)
+shape of y_train:  (1077, 8, 11)
+shape of x_test:  (264, 8, 64, 64, 8)
+shape of y_test:  (264, 8, 11)
+Time GPU: 0:00:00.000273, Time CPU: 0:00:00.032084, Loss: 1.6671, Acc: 0.9280, FLOPS: 385,870,661, Params: 6,731,647.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_06_17_13095357997_hybrid_gesture_accuracy_module_100_20_32_8_2
+Exp: Mode hybrid - Frames 32 - channel 8 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 22
+Accuracy massima: 0.8825757575757576 Iterazione: 38
+2025-05-12 17:43:26.719778: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:43:26.719850: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:43:26.721038: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 4, 64, 64, 16)
+shape of y_train:  (1077, 4, 11)
+shape of x_test:  (264, 4, 64, 64, 16)
+shape of y_test:  (264, 4, 11)
+Time GPU: 0:00:00.000306, Time CPU: 0:00:00.032510, Loss: 1.6868, Acc: 0.8826, FLOPS: 776,849,705, Params: 13,093,759.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_06_18_07114738856_hybrid_gesture_accuracy_module_100_20_32_8_2
+Exp: Mode hybrid - Frames 32 - channel 8 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 22
+Accuracy massima: 0.9053030303030303 Iterazione: 12
+2025-05-12 17:43:36.766410: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:43:36.766481: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:43:36.767664: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 4, 64, 64, 16)
+shape of y_train:  (1077, 4, 11)
+shape of x_test:  (264, 4, 64, 64, 16)
+shape of y_test:  (264, 4, 11)
+Time GPU: 0:00:00.000188, Time CPU: 0:00:00.013965, Loss: 1.6798, Acc: 0.9053, FLOPS: 270,203,917, Params: 5,923,256.0
+--------------------------------------------------
+
+/hpc/home/bzzlca/Symbolic_DNN-Tuner/results/25_05_06_19_03091016497_hybrid_gesture_accuracy_module_100_20_32_8_2
+Exp: Mode hybrid - Frames 32 - channel 8 - Polarity 2
+------------------- BEST RESULT -------------------
+Total Iterations: 100
+Total restarts: 23
+Accuracy massima: 0.7083333333333334 Iterazione: 2
+2025-05-12 17:43:51.396155: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 1
+2025-05-12 17:43:51.396228: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+2025-05-12 17:43:51.397412: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1929] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 43605 MB memory:  -> device: 0, name: NVIDIA L40S, pci bus id: 0000:04:00.0, compute capability: 8.9
+shape of x_train:  (1077, 4, 64, 64, 16)
+shape of y_train:  (1077, 4, 11)
+shape of x_test:  (264, 4, 64, 64, 16)
+shape of y_test:  (264, 4, 11)
+Time GPU: 0:00:00.000249, Time CPU: 0:00:00.032098, Loss: 1.8572, Acc: 0.7083, FLOPS: 763,178,091, Params: 13,091,318.0
+--------------------------------------------------
