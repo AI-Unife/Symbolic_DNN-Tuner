@@ -46,7 +46,7 @@ except OSError as e:
 
 # Copy symbolic base files
 try:
-    os.system(f"cp /hpc/home/bzzlca/newTuner/symbolic_base/* {cfg.NAME_EXP}/symbolic/")
+    os.system(f"cp /hpc/home/bzzlca/Symbolic_DNN-Tuner/symbolic_base/* {cfg.NAME_EXP}/symbolic/")
 except OSError:
     print(colors.FAIL, "|  ----------- FAILED TO COPY SYMBOLIC DIR ----------  |\n", colors.ENDC)
     exit()

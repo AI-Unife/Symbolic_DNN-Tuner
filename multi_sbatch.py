@@ -50,7 +50,7 @@ module load cuda/12.2
 module load miniconda3/24.4.0
 conda activate tf
 
-cd ${{HOME}}/newTuner
+cd ${{HOME}}/Symbolic_DNN-Tuner
 python main.py --mod_list accuracy_module --name ${{NAME_EXP}} --max_eval ${{MAX_EVAL}} --epochs ${{EPOCH}} --data_name gesture --mode ${{MODE}} --frames ${{FRAMES}} --channels ${{CHANNEL}}
 
 if [[ -n "$SLURM_JOB_ID" ]]; then

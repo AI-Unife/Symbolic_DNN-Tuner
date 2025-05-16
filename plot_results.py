@@ -173,7 +173,7 @@ def plot_per_exp(base_dir, file_path):
     print("--------------------------------------------------", flush=True)    
     
 if __name__ == "__main__":
-    for root, dirs, files in os.walk('/hpc/home/bzzlca/newTuner'):
+    for root, dirs, files in os.walk('/hpc/home/bzzlca/Symbolic_DNN-Tuner'):
         if os.path.basename(root).startswith("25_05_12"):# and os.path.basename(root).find("cifar") >= 1:
             for file in files:
                 if "old_exp" not in root and "flops" not in root: # and "25_05" not in root:
