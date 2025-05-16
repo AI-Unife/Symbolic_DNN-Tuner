@@ -8,7 +8,7 @@ import matplotlib.cm as cm
 import matplotlib.colors as mcolors
 import colorsys
 
-with open("results.txt", "r") as file:
+with open("gesture_gpu.log", "r") as file:
     lines = file.readlines()
     start = 0
     end = 0
@@ -23,8 +23,9 @@ with open("results.txt", "r") as file:
     frames_pattern = re.compile(r"Frames\s([\d]+)")
     channel_pattern = re.compile(r"channel\s([\d]+)")
     pol_pattern = re.compile(r"Polarity\s([\w\.\-]+)")
+    n_restart_pattern = re.compile(r"Total restarts:\s([\d]+)")
     error_pattern = re.compile(r"Model not found or error in evaluation")
-    results = {'name': [], 'gpu_time': [], 'cpu_time': [], 'accuracy': [], 'flops': [], 'params': []}
+    results = {'name': [], 'gpu_time': [], 'cpu_time': [], 'accuracy': [], 'flops': [], 'params': [], 'restart': []}
     for line in lines:
         mode_match = mode_pattern.search(line)
         if mode_match:
@@ -66,6 +67,11 @@ with open("results.txt", "r") as file:
                 results['cpu_time'].append("0:00:00")
                 results['flops'].append("0,000,000")
                 results['params'].append("0,000,000")
+            restart_match = n_restart_pattern.search(line)
+            if restart_match:
+                n_restart = restart_match.group(1)
+                if int(n_restart) > 0:
+                    results['restart'].append(n_restart)
         if end_pattern.search(line):
             end = 1
             start = 0
@@ -83,7 +89,7 @@ data['cpu_time'] = pd.to_timedelta(data['cpu_time']).dt.total_seconds() * 1000
 data['flops'] = data['flops'].str.replace(',', '').astype(int)
 data['params'] = data['params'].str.replace(',', '').astype(int)
 data['accuracy'] = data['accuracy'].astype(float)
-
+data['restart'] = data['restart'].astype(int)
 
 combined_file = "results.csv"
 
@@ -176,9 +182,12 @@ for i in range(len(data)):
     name = f"F: {name.split('_')[1]} C: {name.split('_')[2]}"
     size = data['flops'][i] / 1e6
     plt.scatter(x, y, color=color, s=size)
+    plt.text(x, y, name, fontsize=8, ha='right', va='bottom', color="black")
 
 legend_elements = [mpatches.Patch(color=color_map[key], label=key) for key in config_keys] + [mpatches.Patch(color='gray', label='depth_X_X_1')]
 
+plt.xlim([0, 250])     # Asse X da 0 a 6
+plt.ylim([0.70, 1.0])    # Asse Y da 0 a 50
 
 plt.legend(handles=legend_elements, fontsize=10, title="Configuration", title_fontsize=12, loc='lower right')
 

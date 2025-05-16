@@ -5,7 +5,7 @@ import numpy as np
 from components.neural_network import evaluate_net
 
 
-def plot_with_trend(x, y, label, color, subplot_index, total_plots, best='min'):
+def plot_with_trend(x, y, label, color, subplot_index, total_plots, best='min', restart_points=None):
     plt.subplot(total_plots, 1, subplot_index)
     plt.plot(x, y, marker='o', linestyle='-', color=color, label=label)
 
@@ -19,6 +19,18 @@ def plot_with_trend(x, y, label, color, subplot_index, total_plots, best='min'):
         else:
             best_so_far = np.maximum.accumulate(y)
         plt.plot(x, best_so_far, linestyle="dashed", color="green", label="Best so far")
+        
+    # Aggiungi marcatori per i punti di riavvio della BO
+    if restart_points:
+        restart_x = [x[i] for i in restart_points]
+        restart_y = [y[i] for i in restart_points]
+        # restart_x =  [x[i] for i in range(len(x)) if i not in restart_points]
+        # restart_y  = [y[i] for i in range(len(y)) if i not in restart_points]
+
+        
+        plt.scatter(restart_x, restart_y, color='red', marker='X', s=300, label="BO Restart")
+
+ 
 
     plt.xlabel('Iterazione')
     plt.ylabel(label)
@@ -43,6 +55,7 @@ def plot_per_exp(base_dir, file_path):
     latency_pattern = None
     total_cost_pattern = None
     n_plot = 0
+    restart_indices = []
     if "accuracy_module" in base_dir:
         accuracy_pattern = re.compile(r"ACCURACY:\s([\d\.]+)")
         n_plot += 1
@@ -55,12 +68,21 @@ def plot_per_exp(base_dir, file_path):
         params_pattern = re.compile(r"PARAMS:\s([\d\.]+)")
         n_plot += 2
     
+    bo_restart_detected = False
     with open(os.path.join(base_dir, file_path), "r") as file:
         for line in file:
+            if "Other BO" in line:
+                # if "Inside BO" in line:
+                # print("BO Restart detected")
+                bo_restart_detected = True
             if accuracy_pattern:
                 accuracy_match = accuracy_pattern.search(line)
                 if accuracy_match:
                     accuracy_values.append(float(accuracy_match.group(1)))
+                    if bo_restart_detected:
+                        restart_indices.append(len(accuracy_values) - 1)
+                        bo_restart_detected = False  # Resetta il flag fino al prossimo riavvio
+
             
             if flops_pattern:
                 flops_match = flops_pattern.search(line)
@@ -81,7 +103,6 @@ def plot_per_exp(base_dir, file_path):
                 total_cost_match = total_cost_pattern.search(line)
                 if total_cost_match:
                     total_cost_values.append(float(total_cost_match.group(1)))
-            
 
 
     # Creazione dei grafici
@@ -89,12 +110,14 @@ def plot_per_exp(base_dir, file_path):
     current_plot = 0
     
     print("------------------- BEST RESULT -------------------", flush=True)
+    
     if accuracy_pattern:
         print("Total Iterations:", len(accuracy_values) - 1, flush=True)
     elif flops_pattern:
         print("Total Iterations:", len(flops_values) - 1)
     elif latency_pattern:
         print("Total Iterations:", len(latency_values) - 1)
+    print("Total restarts:", len(restart_indices), flush=True)
     if accuracy_values:
         max_accuracy = max(accuracy_values)  # Trova il valore massimo
         max_index = accuracy_values.index(max_accuracy)  # Trova l'indice del valore massimo
@@ -102,7 +125,7 @@ def plot_per_exp(base_dir, file_path):
         print("Accuracy massima:", max_accuracy, "Iterazione:", max_index, flush=True)
         current_plot += 1
         iterations = list(range(1, len(accuracy_values) + 1))
-        plot_with_trend(iterations, accuracy_values, 'Accuracy', 'b', current_plot, n_plot, best='max')
+        plot_with_trend(iterations, accuracy_values, 'Accuracy', 'b', current_plot, n_plot, best='max', restart_points=restart_indices)
         
 
     if flops_values:
@@ -151,7 +174,7 @@ def plot_per_exp(base_dir, file_path):
     
 if __name__ == "__main__":
     for root, dirs, files in os.walk('/hpc/home/bzzlca/Symbolic_DNN-Tuner/results'):
-        if os.path.basename(root).startswith("25_") and os.path.basename(root).find("gesture") >= 1:
+        if os.path.basename(root).startswith("25_0") and os.path.basename(root).find("gesture") >= 1:
             for file in files:
                 if "old_exp" not in root and "flops" not in root: # and "25_05" not in root:
                     if file.endswith(".out")  and file.startswith("25_"):
