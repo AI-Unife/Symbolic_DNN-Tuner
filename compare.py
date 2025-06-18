@@ -8,7 +8,8 @@ import matplotlib.cm as cm
 import matplotlib.colors as mcolors
 import colorsys
 
-with open("results.out", "r") as file:
+base_dir = "./"
+with open(base_dir+"results.out", "r") as file:
     lines = file.readlines()
     start = 0
     end = 0
@@ -17,15 +18,15 @@ with open("results.out", "r") as file:
     gpu_pattern = re.compile(r"GPU:\s([\d\:\d\:\d\.]+)")
     cpu_pattern = re.compile(r"CPU:\s([\d\:\d\:\d\.]+)")
     accuracy_pattern = re.compile(r"Accuracy massima:\s([\d\.]+)")
-    flops_pattern = re.compile(r"FLOPS:\s([\d\,]+)")
-    params_pattern = re.compile(r"Params:\s([\d\,]+)")
+    flops_pattern = re.compile(r"FLOPS:\s([\d\.]+)")
+    params_pattern = re.compile(r"Params:\s([\d\.]+)")
     mode_pattern = re.compile(r"Exp: Mode\s([\w\.\-]+)")
     frames_pattern = re.compile(r"Frames\s([\d]+)")
     channel_pattern = re.compile(r"channel\s([\d]+)")
     pol_pattern = re.compile(r"Polarity\s([\w\.\-]+)")
-    n_restart_pattern = re.compile(r"Total restarts:\s([\d]+)")
+    # n_restart_pattern = re.compile(r"Total restarts:\s([\d]+)")
     error_pattern = re.compile(r"Model not found or error in evaluation")
-    results = {'name': [], 'gpu_time': [], 'cpu_time': [], 'accuracy': [], 'flops': [], 'params': [], 'restart': []}
+    results = {'name': [], 'gpu_time': [], 'cpu_time': [], 'accuracy': [], 'flops': [], 'params': []} #, 'restart': []}
     for line in lines:
         mode_match = mode_pattern.search(line)
         if mode_match:
@@ -65,13 +66,13 @@ with open("results.out", "r") as file:
             if error_match:
                 results['gpu_time'].append("0:00:00")
                 results['cpu_time'].append("0:00:00")
-                results['flops'].append("0,000,000")
-                results['params'].append("0,000,000")
-            restart_match = n_restart_pattern.search(line)
-            if restart_match:
-                n_restart = restart_match.group(1)
-                if int(n_restart) > 0:
-                    results['restart'].append(n_restart)
+                results['flops'].append("0")
+                results['params'].append("0")
+            # restart_match = n_restart_pattern.search(line)
+            # if restart_match:
+            #     n_restart = restart_match.group(1)
+            #     if int(n_restart) > 0:
+            #         results['restart'].append(n_restart)
         if end_pattern.search(line):
             end = 1
             start = 0
@@ -86,12 +87,12 @@ data = pd.DataFrame(results)
 # Conversioni
 data['gpu_time'] = pd.to_timedelta(data['gpu_time']).dt.total_seconds() * 1000
 data['cpu_time'] = pd.to_timedelta(data['cpu_time']).dt.total_seconds() * 1000
-data['flops'] = data['flops'].str.replace(',', '').astype(int)
-data['params'] = data['params'].str.replace(',', '').astype(int)
+data['flops'] = data['flops'].str.replace(',', '').astype(float)
+data['params'] = data['params'].str.replace(',', '').astype(float)
 data['accuracy'] = data['accuracy'].astype(float)
-data['restart'] = data['restart'].astype(int)
+# data['restart'] = data['restart'].astype(int)
 
-combined_file = "results.csv"
+combined_file = base_dir+"results.csv"
 
 # Carica il file esistente se c'è
 if os.path.exists(combined_file):
@@ -112,7 +113,7 @@ else:
     print("Created results.csv and saved.")
     
 
-data = data.sort_values('accuracy', ascending=False).groupby('name').head(1).reset_index()
+data = data.sort_values('accuracy', ascending=False).groupby('name').head(3).reset_index()
 print(data)
 configurations = [
     {"MODE": "depth", "FRAMES": 4, "CHANNEL": 4, "POL": 2},
@@ -180,14 +181,14 @@ for i in range(len(data)):
     name = data['name'][i]
     color = get_color(name)
     name = f"F: {name.split('_')[1]} C: {name.split('_')[2]}"
-    size = data['flops'][i] / 1e6
+    size = data['flops'][i] +1000#/ 1e6
     plt.scatter(x, y, color=color, s=size)
     plt.text(x, y, name, fontsize=8, ha='right', va='bottom', color="black")
 
 legend_elements = [mpatches.Patch(color=color_map[key], label=key) for key in config_keys] + [mpatches.Patch(color='gray', label='depth_X_X_1')]
 
-plt.xlim([0, 250])     # Asse X da 0 a 6
-plt.ylim([0.70, 1.0])    # Asse Y da 0 a 50
+# plt.xlim([0, 250])     # Asse X da 0 a 6
+# plt.ylim([0.70, 1.0])    # Asse Y da 0 a 50
 
 plt.legend(handles=legend_elements, fontsize=10, title="Configuration", title_fontsize=12, loc='lower right')
 
@@ -196,7 +197,7 @@ plt.ylabel('Accuracy')
 plt.title('Accuracy vs CPU Time')
 plt.grid(True)
 plt.tight_layout()
-plt.savefig('CPU_acc.png')
+plt.savefig(base_dir+'CPU_acc.png')
 
 # Scatter plot: GPU time vs Accuracy
 plt.figure(figsize=(15, 15))
@@ -209,6 +210,7 @@ for i in range(len(data)):
     name = f"F: {name.split('_')[1]} C: {name.split('_')[2]}"
     size = data['flops'][i] / 1e6
     plt.scatter(x, y, color=color, s=size)
+    plt.text(x, y, name, fontsize=8, ha='right', va='bottom', color="black")
 
 legend_elements = [mpatches.Patch(color=color_map[key], label=key) for key in config_keys] + [mpatches.Patch(color='gray', label='depth_X_X_1')]
 
@@ -220,4 +222,4 @@ plt.ylabel('Accuracy')
 plt.title('Accuracy vs GPU Time')
 plt.grid(True)
 plt.tight_layout()
-plt.savefig('GPU_acc.png')
+plt.savefig(base_dir+'GPU_acc.png')

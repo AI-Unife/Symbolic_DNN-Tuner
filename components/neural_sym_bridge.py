@@ -38,7 +38,7 @@ class NeuralSymbolicBridge:
         sym_facts = ""
         for fa, i in zip(facts, self.initial_facts):
             sym_facts = sym_facts + i + "(" + str(fa) + ").\n"
-
+        # print("Symbolic facts: ", sym_facts, "\nSymbolic problems: ", sym_prob, "\nSymbolic model: ", sym_model, "\nrules: ", rules)
         output = open("{}/symbolic/final.pl".format(cfg.NAME_EXP), "w")
         output.write(sym_facts + "\n" + sym_prob + "\n" + sym_model + "\n" + rules)
         output.close()
@@ -60,6 +60,11 @@ class NeuralSymbolicBridge:
         # save the "eve" atom as the first element of the new model
         res = [] #[temp[0]]
         # iter on each pair of new and old actions
+        if len(temp) != len(prev_model):
+            if "" in prev_model:
+                prev_model.remove("")
+            if "" in temp:
+                temp.remove("")
         for a, p in zip(temp, prev_model):
             # if the eve atom is in the body of the rule,
             # remove it and end the body of the rule with a dot
@@ -68,11 +73,14 @@ class NeuralSymbolicBridge:
 
             # find the index to subdivide the head and body of the rule
             # and use it to get the problems of the current action
-            prob_st = p.find(":-")
-            problem = p[prob_st:]
-
+            # prob_st = p.find(":-")
+            # problem = p[prob_st:]
+            # print("p: ", p)
+            problem = p.split(":-")[-1].strip()
+            # print("Problem:\n", problem)
             # add them to the head with the new probability
-            new = a[:-1] + problem
+            new = a[:-1] + ":-" +problem
+            # print(new)
             res.append(new)
         
         # for t in temp[1:]:
@@ -161,7 +169,6 @@ class NeuralSymbolicBridge:
             for new_p in merged_problem:
                 new_rule += " " + new_p +  ","    
             rules += new_rule[:-1] + ".\n"
-
         f = open("{}/symbolic/sym_prob.pl".format(cfg.NAME_EXP), "w")
         f.write(rules)
         f.close()

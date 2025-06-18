@@ -20,7 +20,7 @@ class tuning_rules_symbolic:
         self.count_br = 0
         self.count_new_fc = 0
         self.count_new_cv = 0
-        self.max_fc = 3
+        self.max_fc = 100
         self.max_conv = self.count_max_conv()
         self.start_conv, self.start_fc = self.ss.count_initial_layers(self.space)
     
@@ -167,15 +167,25 @@ class tuning_rules_symbolic:
             if 'unit_d' in hp.name:
                 hp.high = params['unit_d'] + 16
             if 'new_conv' in hp.name:
-                hp.high = params[hp.name] + 16
+                try:
+                    hp.high = params[hp.name] + 16
+                except KeyError:
+                    continue
             if 'new_fc' in hp.name:
-                hp.high = params[hp.name] + 16
+                try:
+                    hp.high = params[hp.name] + 16
+                except KeyError:
+                    continue
 
     def dec_layers(self):
         """
         method used to remove a convolutional layer from the neural network
         """
         self.count_new_cv -= 1
+        if self.count_new_cv < 1:
+            print(colors.FAIL, "No more convolutional layers to remove", colors.ENDC)
+            self.count_new_cv = 0
+            return
         new_p = {f"new_conv_{self.count_new_cv}": 512}
         self.space = self.ss.remove_params(new_p)
         self.controller.remove_conv_section(True)
@@ -185,6 +195,10 @@ class tuning_rules_symbolic:
         method used to remove a dense layer from the neural network
         """
         self.count_new_fc -= 1
+        if self.count_new_fc < 1:
+            print(colors.FAIL, "No more dense layers to remove", colors.ENDC)
+            self.count_new_fc = 0
+            return
         new_p = {f"new_fc_{self.count_new_fc}": 512}
         self.space = self.ss.remove_params(new_p)
         self.controller.remove_fully_connected(True)

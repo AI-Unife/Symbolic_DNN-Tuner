@@ -13,7 +13,7 @@ from tensorflow.keras import backend as K
 
 from components.colors import colors
 from components.controller import controller
-from components.dataset import cifar_data, mnist
+from components.dataset import cifar_data, mnist, cifar_data_100
 from components.gesture_dataset import gesture_data
 from components.search_space import search_space
 from components.params_checker import paramsChecker
@@ -59,6 +59,8 @@ if cfg.DATA_NAME == "MNIST":
     X_train, X_test, Y_train, Y_test, n_classes = mnist()
 elif cfg.DATA_NAME == "CIFAR-10":
     X_train, X_test, Y_train, Y_test, n_classes = cifar_data()
+elif cfg.DATA_NAME == "CIFAR-100":
+    X_train, X_test, Y_train, Y_test, n_classes = cifar_data_100()
 elif cfg.DATA_NAME == "gesture":
     X_train, X_test, Y_train, Y_test, n_classes = gesture_data()
 else:

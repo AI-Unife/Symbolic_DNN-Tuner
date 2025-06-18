@@ -151,7 +151,7 @@ class controller:
         
         K.clear_session()
         self.nn = neural_network(self.X_train, self.Y_train, self.X_test, self.Y_test, self.n_classes, self.best_score)
-        self.score, self.history, self.mode, self.best_score = self.nn.training(params, self.new, self.new_fc, self.new_conv, 
+        self.score, self.history, self.model, self.best_score = self.nn.training(params, self.new, self.new_fc, self.new_conv, 
                                                                                 self.rem_conv, self.rem_fc, self.da)
         # update state of modules
         # each module will take the necessary args internally

@@ -164,8 +164,8 @@ def plot_per_exp(base_dir, file_path):
     plt.savefig(os.path.join(base_dir, "output_plot.png"), dpi=300, bbox_inches='tight')
     plt.close()
     try:
-        # print(base_dir.split("_")[6], base_dir.split("_")[-3], base_dir.split("_")[-2], base_dir.split("_")[-1])
-        time, score, flops, nparams = evaluate_net(base_dir + "/Model/best-model.keras", base_dir.split("_")[6], base_dir.split("_")[-3], base_dir.split("_")[-2], base_dir.split("_")[-1])
+        print(base_dir.split("_")[6], base_dir.split("_")[-3], base_dir.split("_")[-2], base_dir.split("_")[-1])
+        # time, score, flops, nparams = evaluate_net(base_dir + "/Model/best-model.keras", base_dir.split("_")[6], base_dir.split("_")[-3], base_dir.split("_")[-2], base_dir.split("_")[-1])
         print(f"Time GPU: {time[0]}, Time CPU: {time[1]}, Loss: {score[0]:.4f}, Acc: {score[1]:.4f}, FLOPS: {flops:,}, Params: {nparams:,}", flush=True)
     except Exception as e:
         print(f"Time GPU: 0:00:00.00, Time CPU: 0:00:00.00, Loss: 0.00, Acc: 0.00, FLOPS: 0.00, Params: 0.00", flush=True)
@@ -174,9 +174,9 @@ def plot_per_exp(base_dir, file_path):
     
 if __name__ == "__main__":
     for root, dirs, files in os.walk('/hpc/home/bzzlca/Symbolic_DNN-Tuner'):
-        if os.path.basename(root).startswith("25_05_12"):# and os.path.basename(root).find("cifar") >= 1:
+        if os.path.basename(root).startswith("25_06_17"): # or os.path.basename(root).startswith("25_06_05"):# and os.path.basename(root).find("cifar") >= 1:
             for file in files:
-                if "old_exp" not in root and "flops" not in root: # and "25_05" not in root:
+                if "old_exp" not in root and "results" not in root: # and "25_05" not in root:
                     if file.endswith(".out")  and file.startswith("25_"):
                         split_path = root.split("_")
                         print(f"\n{root}\nExp: Mode {split_path[6]} - Frames {split_path[-3]} - channel {split_path[-2]} - Polarity {split_path[-1]}")
