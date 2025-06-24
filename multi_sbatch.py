@@ -2,14 +2,14 @@ import os
 
 # Definizione delle configurazioni
 configurations = [
-    # {"dataset": "CIFAR-10", "MODULE": "accuracy_module"},
-    # {"dataset": "CIFAR-10", "MODULE": "accuracy_module flops_module"},
-    # {"dataset": "CIFAR-10", "MODULE": "accuracy_module flops_module hardware_module"},
-    # {"dataset": "CIFAR-10", "MODULE": "accuracy_module hardware_module"},
-    {"dataset": "CIFAR-100", "MODULE": "accuracy_module"},
-    {"dataset": "CIFAR-100", "MODULE": "accuracy_module flops_module"},
-    {"dataset": "CIFAR-100", "MODULE": "accuracy_module flops_module hardware_module"},
-    {"dataset": "CIFAR-100", "MODULE": "accuracy_module hardware_module"},
+    {"dataset": "CIFAR-10", "MODULE": "accuracy_module"},
+    {"dataset": "CIFAR-10", "MODULE": "accuracy_module flops_module"},
+    {"dataset": "CIFAR-10", "MODULE": "accuracy_module flops_module hardware_module"},
+    {"dataset": "CIFAR-10", "MODULE": "accuracy_module hardware_module"},
+    # {"dataset": "CIFAR-100", "MODULE": "accuracy_module"},
+    # {"dataset": "CIFAR-100", "MODULE": "accuracy_module flops_module"},
+    # {"dataset": "CIFAR-100", "MODULE": "accuracy_module flops_module hardware_module"},
+    # {"dataset": "CIFAR-100", "MODULE": "accuracy_module hardware_module"},
     
     # {"MODE": "depth", "FRAMES": 4, "CHANNEL": 4},
     # {"MODE": "depth", "FRAMES": 8, "CHANNEL": 8}, 
@@ -46,7 +46,7 @@ TIMESTAMP=$(date +%y_%m_%d_%H_%M_%S_%N)
 MODULE="{module}"
 DATASET="{dataset}"
 EPOCH=50
-MAX_EVAL=300
+MAX_EVAL=50
 
 # Genera il nome dell'esperimento
 NAME_EXP="$(date +%y_%m_%d_%H)_${{SLURM_JOB_ID}}_{mod_name}_${{MAX_EVAL}}_${{EPOCH}}"

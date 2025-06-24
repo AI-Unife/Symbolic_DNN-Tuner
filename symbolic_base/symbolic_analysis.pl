@@ -31,10 +31,9 @@ up_down_acc :- a(A),add_to_UpList(A,Usa), add_to_DownList(A,Dsa), isclose(Usa,Ds
 up_down_loss :- l(L),add_to_UpList(L,Usl), add_to_DownList(L,Dsl), isclose(Usl,Dsl,150), Usl > 0, Dsl > 0.
 to_low_lr :- area_sub(As), threshold_up(Th), As < Th.
 to_high_lr :- area_sub(As), threshold_down(Th), As > Th.
-gap_tr:- gap_tr_te_acc; gap_tr_te_loss.
 
 % POSSIBLE PROBLEMS
-problem(overfitting) :- gap_tr.
+problem(overfitting) :- gap_tr_te_acc; gap_tr_te_loss.
 problem(underfitting) :- low_acc; high_loss.
 problem(inc_loss) :- growing_loss_trend.
 problem(floating_loss) :- up_down_loss.

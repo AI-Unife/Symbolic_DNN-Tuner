@@ -161,7 +161,7 @@ class neural_network:
             x = Dense(params['unit_d'])(x)
             x = Activation(params['activation'])(x)
             x = Dropout(params['dr_f'])(x)
-            added_fcs = [k for k in params if re.match(r'new_fc_\d+$', k)]
+            added_fcs = [k for k in params if int(re.match(r'new_unit_d\d+$', k).group(0)) > 0]
             for layer in added_fcs:
                 x = Dense(params[layer])(x)
                 x = Activation(params['activation'])(x)
@@ -171,13 +171,6 @@ class neural_network:
             x = Activation('softmax')(x)
 
             model = Model(inputs=inputs, outputs=x)
-            
-            ## provvisorio
-            # model_name_id = time()
-            # model_json = model.to_json()
-            # model_name = "Model/model-{}.json".format(model_name_id)
-            # with open(model_name, 'w') as json_file:
-            #     json_file.write(model_json)
 
         return model
 
@@ -278,7 +271,7 @@ class neural_network:
         # build the new dense section, consisting of a dense layer and its activation
         
         # Filter keys that match the pattern 'new_fc_NUMBER'
-        fc_layers = [k for k in params if re.match(r'new_fc_\d+$', k)]
+        fc_layers = [k for k in params if int(re.match(r'new_unit_d\d+$', k).group(0)) > 0]
 
         # Find the key with the highest number
         last_layer = max(fc_layers, key=lambda k: int(re.search(r'\d+$', k).group()))
@@ -437,8 +430,8 @@ class neural_network:
         opt = LayerWiseLR(opt, multiplier, learning_rate=params['learning_rate'])
 
         # if cfg.MODE == 'depth':
-        es1 = EarlyStopping(monitor='val_loss', min_delta=0.005, patience=15, verbose=0, mode='min')
-        es2 = EarlyStopping(monitor='val_accuracy', min_delta=0.005, patience=15, verbose=0, mode='max')
+        es1 = EarlyStopping(monitor='val_loss', min_delta=0.005, patience=15, verbose=0, mode='min', restore_best_weights=True)
+        es2 = EarlyStopping(monitor='val_accuracy', min_delta=0.005, patience=15, verbose=0, mode='max', restore_best_weights=True)
         reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=5, verbose=0, min_lr=1e-4)
 
         # if the flag of data augmentation is true
@@ -501,58 +494,6 @@ class neural_network:
         os.system("rm {}/Model/model-{}.json".format(cfg.NAME_EXP, model_name_id))
         return score, history, model, self.best_score
 
-
-
-def evaluate_net(path, mode, frames=32, channels=2, pol=2):
-    from flops import flops_calculator as fc
-    # print(f"-------------------------------- {mode} --------------------------------")
-    cfg.MODE = mode
-    cfg.FRAMES = int(frames)
-    cfg.NUM_CHANNELS = int(channels)
-    cfg.POLARITY = "both" if int(pol) == 2 else "sum" 
-    if mode not in ["depth", "fwdPass", "hybrid"]:
-        print(colors.FAIL, "Mode not supported", colors.ENDC)
-        return ["0:00:00.0", "0:00:00.0"], 0.0, 0.0, 0.0
-    # print("cfg.FRAMES: ", cfg.FRAMES, "cfg.CHANNELS: ", cfg.NUM_CHANNELS, "cfg.POLARITY: ", cfg.POLARITY,)
-    X_train, X_test, Y_train, Y_test, n_classes = gesture_data() # gesture_data() cifar_data()
-    model = tf.keras.models.load_model(path) #"{}/Model/best-model.keras".format('25_03_04_12_03_depth_gesture_accuracy_module_100_20'))
-    # print(model.summary())
-    import io
-    summary_str = io.StringIO()
-    model.summary(print_fn=lambda x: summary_str.write(x + '\n'))
-    # print(model.summary())
-    model.compile(loss='categorical_crossentropy', optimizer='Adam', metrics=['accuracy'])
-    if mode == "depth":
-        score = model.evaluate(X_test, Y_test, verbose=0)
-    else:
-        score = eval_model(model, X_test, Y_test)
-    gpus = tf.config.list_physical_devices('GPU')
-    time_gpu = "0:00:00.0"
-    if len(gpus) > 0:
-        start = datetime.now()
-        if mode == "depth":
-            score = model.evaluate(X_test, Y_test, verbose=0)
-        else:
-            score = eval_model(model, X_test, Y_test)
-        # print("Time: ", datetime.now() - start)
-        # print("Accuracy: ", score[1], "Loss: ", score[0])
-        time_gpu = (datetime.now() - start) / X_test.shape[0]
-    with tf.device('/CPU:0'):
-        start = datetime.now()
-        if mode == "depth":
-            score = model.evaluate(X_test, Y_test, verbose=0)
-        else:
-            score = eval_model(model, X_test, Y_test)
-        # print("Time: ", datetime.now() - start)
-        # print("Accuracy: ", score[1], "Loss: ", score[0])
-        time_cpu = (datetime.now() - start) / X_test.shape[0]
-    flops, r_dict = fc.analyze_model(model)
-    trainableParams = np.sum([np.prod(v.shape)for v in model.trainable_weights])
-    nonTrainableParams = np.sum([np.prod(v.shape)for v in model.non_trainable_weights])
-    nparams = trainableParams + nonTrainableParams
-    return [time_gpu, time_cpu], score, flops.total_float_ops, nparams
-    # print(f"FLOPS: {flops.total_float_ops}")
-    # print(f"PARAMS: {nparams}")
     
 
 

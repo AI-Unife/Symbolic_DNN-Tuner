@@ -2,6 +2,8 @@ import tensorflow as tf
 import numpy as np
 import tonic
 import tonic.transforms as transforms
+from sklearn.model_selection import train_test_split
+from pathlib import Path
 
 import config as cfg
 
@@ -88,6 +90,46 @@ def select_polarity_transform(polarity):
         raise ValueError("Invalid polarity option! Choose from ['sum', 'sub', 'drop']")
     return polarity_mapping[polarity]
 
+class ROIDataset(tonic.dataset.Dataset):
+    def __init__(self, root, transform=None, target_transform=None):
+        super().__init__(save_to='.data/')
+        self.root = Path(root)
+        self.transform = transform
+        self.target_transform = target_transform
+
+        self.samples = []
+        self.targets = []
+        self.classes = []
+
+        # Raccoglie i file e classi (cartelle)
+        for class_dir in sorted(self.root.iterdir()):
+            if not class_dir.is_dir():
+                continue
+
+            class_name = class_dir.name
+            if class_name not in self.classes:
+                self.classes.append(class_name)
+
+            label = self.classes.index(class_name)
+
+            for file in class_dir.glob("*.npy"):
+                self.samples.append(file)
+                self.targets.append(label)
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, index):
+        events = np.load(self.samples[index])  # shape (N, 4)
+        label = self.targets[index]
+
+        if self.transform:
+            events = self.transform(events)
+        if self.target_transform:
+            label = self.target_transform(label)
+
+        return events, label
+
 def get_datasets_numpy():
     """
     Loads and processes the specified dataset using Tonic and returns NumPy arrays.
@@ -96,10 +138,11 @@ def get_datasets_numpy():
     - tuple: ((x_train, y_train), (x_test, y_test)) as NumPy arrays.
     """
     
-    dataset_path='/hpc/home/bzzlca/AIDA4Edge/data/'
+    # dataset_path='/hpc/home/bzzlca/AIDA4Edge/data/'
+    dataset_path = "datasets/DVS_ROI/"
     polarity = cfg.POLARITY
     n_pol = 2 if polarity == "both" else 1
-    cache_dir= f"/hpc/home/bzzlca/AIDA4Edge/tf/cache/DVSGesture_{cfg.MODE}_{polarity}_{cfg.FRAMES}_{cfg.NUM_CHANNELS}_{n_pol}/"
+    cache_dir= f"/hpc/home/bzzlca/AIDA4Edge/tf/cache/DVS_ROI_{cfg.MODE}_{polarity}_{cfg.FRAMES}_{cfg.NUM_CHANNELS}_{n_pol}/"
     # print("cache_dir: ", cache_dir)
     # exit()
     transform = [
@@ -118,13 +161,21 @@ def get_datasets_numpy():
     
     transform = transforms.Compose(transform)
     # Load dataset
-    train = tonic.datasets.DVSGesture(
-        save_to=dataset_path, transform=transform, target_transform=target_transform,
-        train=True
+    # train = tonic.datasets.DVSGesture(
+    #     save_to=dataset_path, transform=transform, target_transform=target_transform,
+    #     train=True
+    # )
+
+    # test = tonic.datasets.DVSGesture(
+    #     save_to=dataset_path, transform=transform, train=False, target_transform=target_transform
+    # )
+    
+    train = ROIDataset(
+        root=dataset_path+'/train', transform=transform, target_transform=target_transform
     )
 
-    test = tonic.datasets.DVSGesture(
-        save_to=dataset_path, transform=transform, train=False, target_transform=target_transform
+    test = ROIDataset(
+        root=dataset_path+'/test', transform=transform, target_transform=target_transform
     )
     
     cached_train = tonic.DiskCachedDataset(train, cache_path=cache_dir + 'train')

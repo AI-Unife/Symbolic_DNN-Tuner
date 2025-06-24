@@ -20,7 +20,7 @@ class tuning_rules_symbolic:
         self.count_br = 0
         self.count_new_fc = 0
         self.count_new_cv = 0
-        self.max_fc = 100
+        self.max_fc = 10
         self.max_conv = self.count_max_conv()
         self.start_conv, self.start_fc = self.ss.count_initial_layers(self.space)
     

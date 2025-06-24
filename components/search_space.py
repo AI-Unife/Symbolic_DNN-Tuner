@@ -28,12 +28,17 @@ class search_space:
             Integer(16, 64, name='unit_c1'),
             Real(0.002, 0.3, name='dr1_2'),
             Integer(64, 128, name='unit_c2'),
-            Integer(256, 512, name='unit_d'),
+            Integer(0, 2048, name='unit_d'),
             Real(0.03, 0.5, name='dr_f'),
             Real(1e-4, 1e-3, name='learning_rate'),
             Integer(16, 64, name='batch_size'),
             Categorical(['Adam', 'Adamax'], name='optimizer'), # removed 'Adagrad', 'Adadelta'
-            Categorical(['relu', 'elu', 'selu', 'swish'], name='activation')
+            Categorical(['relu', 'elu', 'selu', 'swish'], name='activation'),
+            Integer(0, 0, name='new_unit_d2'),
+            Integer(0, 0, name='new_unit_d3'),
+            Integer(0, 0, name='new_unit_d4'),
+            Integer(0, 0, name='new_unit_d5'),
+            Integer(0, 0, name='new_unit_d6')
         ])
 
         return self.search_space
