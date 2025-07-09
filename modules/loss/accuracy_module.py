@@ -32,8 +32,8 @@ class accuracy_module(common_interface):
         pass
 
     def log_function(self):
-        if os.path.exists(f"{cfg.NAME_EXP}/acc_report.txt"):
-            os.remove(f"{cfg.NAME_EXP}/acc_report.txt")
-        f = open(f"{cfg.NAME_EXP}/acc_report.txt", "a")
+        # if os.path.exists(f"{cfg.NAME_EXP}/acc_report.txt"):
+        #     os.remove(f"{cfg.NAME_EXP}/acc_report.txt")
+        f = open(f"{cfg.NAME_EXP}/algorithm_logs/acc_report.txt", "a")
         f.write(str(self.accuracy) + "\n")
         f.close()

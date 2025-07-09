@@ -161,7 +161,7 @@ class neural_network:
             x = Dense(params['unit_d'])(x)
             x = Activation(params['activation'])(x)
             x = Dropout(params['dr_f'])(x)
-            added_fcs = [k for k in params if int(re.match(r'new_unit_d\d+$', k).group(0)) > 0]
+            added_fcs = [k for k in params if re.match(r'new_unit_d\d+$', k)]
             for layer in added_fcs:
                 x = Dense(params[layer])(x)
                 x = Activation(params['activation'])(x)
@@ -271,7 +271,7 @@ class neural_network:
         # build the new dense section, consisting of a dense layer and its activation
         
         # Filter keys that match the pattern 'new_fc_NUMBER'
-        fc_layers = [k for k in params if int(re.match(r'new_unit_d\d+$', k).group(0)) > 0]
+        fc_layers = [k for k in params if re.match(r'new_unit_d\d+$', k)]
 
         # Find the key with the highest number
         last_layer = max(fc_layers, key=lambda k: int(re.search(r'\d+$', k).group()))

@@ -1,9 +1,8 @@
 import argparse
-from datetime import datetime
 
 # def get_experiment_name():
 parser = argparse.ArgumentParser()
-
+print("Symbolic DNN Tuner Configuration")
 parser.add_argument("--max_eval", type=int, default=6, help="Max number of evaluations")
 parser.add_argument("--epochs", type=int, default=2, help="Epochs for training")
 parser.add_argument("--mod_list", nargs="+", default=["accuracy_module"],
@@ -16,7 +15,6 @@ parser.add_argument("--channels", type=int, default=16, help="Number of channels
 parser.add_argument("--polarity", type=str, default="both", help="Polarity for the dataset (both, sum, sub, drop)")
 
 args = parser.parse_args()
-
 
 MAX_EVAL = args.max_eval
 EPOCHS = args.epochs

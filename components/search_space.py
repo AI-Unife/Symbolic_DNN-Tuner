@@ -34,11 +34,6 @@ class search_space:
             Integer(16, 64, name='batch_size'),
             Categorical(['Adam', 'Adamax'], name='optimizer'), # removed 'Adagrad', 'Adadelta'
             Categorical(['relu', 'elu', 'selu', 'swish'], name='activation'),
-            Integer(0, 0, name='new_unit_d2'),
-            Integer(0, 0, name='new_unit_d3'),
-            Integer(0, 0, name='new_unit_d4'),
-            Integer(0, 0, name='new_unit_d5'),
-            Integer(0, 0, name='new_unit_d6')
         ])
 
         return self.search_space

@@ -30,7 +30,10 @@ print("EXPERIMENT NAME: ", cfg.NAME_EXP)
 print("DATASET NAME: ", cfg.DATA_NAME)
 print("MAX NET EVAL: ", cfg.MAX_EVAL)
 print("EPOCHS FOR TRAINING: ", cfg.EPOCHS)
-print("MODULE LIST: ", cfg.MOD_LIST)
+print("MODULE LIST: ", cfg.MOD_LIST, flush=True)
+print("MODE: ", cfg.MODE, flush=True)
+print("POLARITY: ", cfg.POLARITY, flush=True)
+print("CHANNELS: ", cfg.NUM_CHANNELS, flush=True)
 
 # List of directories required for the experiment
 required_dirs = ['Model', 'Weights', 'database', 'checkpoints', 'log_folder', 'algorithm_logs', 'dashboard/model', 'symbolic']

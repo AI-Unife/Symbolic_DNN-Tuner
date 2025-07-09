@@ -105,7 +105,6 @@ class ROIDataset(tonic.dataset.Dataset):
         for class_dir in sorted(self.root.iterdir()):
             if not class_dir.is_dir():
                 continue
-
             class_name = class_dir.name
             if class_name not in self.classes:
                 self.classes.append(class_name)
@@ -138,12 +137,13 @@ def get_datasets_numpy():
     - tuple: ((x_train, y_train), (x_test, y_test)) as NumPy arrays.
     """
     
-    # dataset_path='/hpc/home/bzzlca/AIDA4Edge/data/'
-    dataset_path = "datasets/DVS_ROI/"
+    dataset_path='/hpc/home/bzzlca/AIDA4Edge/data/'
+    # dataset_path = "datasets/DVS_ROI/"
     polarity = cfg.POLARITY
     n_pol = 2 if polarity == "both" else 1
-    cache_dir= f"/hpc/home/bzzlca/AIDA4Edge/tf/cache/DVS_ROI_{cfg.MODE}_{polarity}_{cfg.FRAMES}_{cfg.NUM_CHANNELS}_{n_pol}/"
-    # print("cache_dir: ", cache_dir)
+    # cache_dir= f"/hpc/home/bzzlca/AIDA4Edge/tf/cache/DVS_ROI_{cfg.MODE}_{polarity}_{cfg.FRAMES}_{cfg.NUM_CHANNELS}_{n_pol}/"
+    cache_dir= f"/hpc/home/bzzlca/AIDA4Edge/tf/cache/DVSGesture_{cfg.MODE}_{polarity}_{cfg.FRAMES}_{cfg.NUM_CHANNELS}_{n_pol}/"
+    print("cache_dir: ", cache_dir)
     # exit()
     transform = [
         transforms.Denoise(filter_time=10000),
@@ -161,22 +161,22 @@ def get_datasets_numpy():
     
     transform = transforms.Compose(transform)
     # Load dataset
-    # train = tonic.datasets.DVSGesture(
-    #     save_to=dataset_path, transform=transform, target_transform=target_transform,
-    #     train=True
-    # )
+    train = tonic.datasets.DVSGesture(
+        save_to=dataset_path, transform=transform, target_transform=target_transform,
+        train=True
+    )
 
-    # test = tonic.datasets.DVSGesture(
-    #     save_to=dataset_path, transform=transform, train=False, target_transform=target_transform
-    # )
+    test = tonic.datasets.DVSGesture(
+        save_to=dataset_path, transform=transform, train=False, target_transform=target_transform
+    )
     
-    train = ROIDataset(
-        root=dataset_path+'/train', transform=transform, target_transform=target_transform
-    )
+    # train = ROIDataset(
+    #     root=dataset_path+'/train', transform=transform, target_transform=target_transform
+    # )
 
-    test = ROIDataset(
-        root=dataset_path+'/test', transform=transform, target_transform=target_transform
-    )
+    # test = ROIDataset(
+    #     root=dataset_path+'/test', transform=transform, target_transform=target_transform
+    # )
     
     cached_train = tonic.DiskCachedDataset(train, cache_path=cache_dir + 'train')
     cached_test = tonic.DiskCachedDataset(test, cache_path=cache_dir + 'test')
