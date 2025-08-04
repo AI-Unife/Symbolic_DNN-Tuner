@@ -96,10 +96,10 @@ def get_datasets_numpy():
     - tuple: ((x_train, y_train), (x_test, y_test)) as NumPy arrays.
     """
     
-    dataset_path='/hpc/home/bzzlca/AIDA4Edge/data/'
+    dataset_path='/Users/osamaabdouh/Documents/AIDA4Edge/data'
     polarity = cfg.POLARITY
     n_pol = 2 if polarity == "both" else 1
-    cache_dir= f"/hpc/home/bzzlca/AIDA4Edge/tf/cache/DVSGesture_{cfg.MODE}_{polarity}_{cfg.FRAMES}_{cfg.NUM_CHANNELS}_{n_pol}/"
+    cache_dir= f"/Users/osamaabdouh/Documents/AIDA4Edge/tf/cache/DVSGesture_{cfg.MODE}_{polarity}_{cfg.FRAMES}_{cfg.NUM_CHANNELS}_{n_pol}/"
     # print("cache_dir: ", cache_dir)
     # exit()
     transform = [

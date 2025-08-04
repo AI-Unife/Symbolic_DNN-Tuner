@@ -6,7 +6,7 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument("--max_eval", type=int, default=3, help="Max number of evaluations")
 parser.add_argument("--epochs", type=int, default=2, help="Epochs for training")
-parser.add_argument("--mod_list", nargs="+", default=["accuracy_module"],
+parser.add_argument("--mod_list", nargs="+", default=["hardware_module"],
                     help="Lista dei moduli separati da spazio (es: hardware_module accuracy_module)")
 parser.add_argument("--data_name", type=str, default="gesture", help="Dataset name")
 parser.add_argument("--name", type=str, default="gesture", help="Experiment name")
