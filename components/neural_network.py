@@ -25,6 +25,8 @@ from components.dynamic_net import dynamic_net
 from components.colors import colors
 from components.custom_train import train_model, eval_model
 
+import random
+
 import config as cfg
 
 class LayerWiseLR(Optimizer):
@@ -75,7 +77,7 @@ class LayerWiseLR(Optimizer):
     def get_config(self):
         # get the configuration containing the properties of the base optimizer
         return self._optimizer.get_config()
-     
+      
 class neural_network:
     """
     class used for the management of the neural network architecture,
@@ -94,8 +96,6 @@ class neural_network:
         self.test_labels = Y_test
         self.train_data = self.train_data.astype('float32')
         self.test_data = self.test_data.astype('float32')
-        # self.train_data /= 255
-        # self.test_data /= 255
         self.n_classes = n_classes
         self.epochs = cfg.EPOCHS
         self.last_dense = 0
@@ -107,7 +107,7 @@ class neural_network:
         self.dnet = dynamic_net()
         self.best_score = best_score
 
-    def build_network(self, params, new):
+    def build_network(self, params):
         """
         Function to define the network structure
         :param params new: network layer parameters
@@ -117,42 +117,38 @@ class neural_network:
         try:
             # sorts the models in the dedicated directory and try to open the last one created
             # if this is successful, read the model in json format and deserialize it in keras format
-            # list_ckpt = os.listdir("Model")
-            # list_ckpt.sort()
-            # f = open("{}/Model/".format(cfg.NAME_EXP) + list_ckpt[len(list_ckpt)-1])
-            # mj = json.load(f)
-            # f.close()
-            # model_json = json.dumps(mj)
-            # model = tf.keras.models.model_from_json(model_json)
             model = tf.keras.models.load_model("{}/dashboard/model/model.keras".format(cfg.NAME_EXP))
             print("MODELLO PRECEDENTE")
         except:
             # if the last trained model cannot be loaded, create a new neural network
-            # print(self.train_data.shape)
             added_fcs = []
             added_convs = []
-            if cfg.MODE == 'fwdPass' or cfg.MODE == 'hybrid':
+            if (cfg.MODE == 'fwdPass' or cfg.MODE == 'hybrid') and cfg.DATA_NAME == 'gesture':
                 input_shape = self.train_data.shape[2:]
             else:
                 input_shape = self.train_data.shape[1:]
+            if 'reg' in params:
+                reg_layer = reg.l2(params['reg'])
+            else:
+                reg_layer = None
             inputs = Input((input_shape))
-            x = Conv2D(params['unit_c1'], (3, 3), padding='same')(inputs)
+            x = Conv2D(params['unit_c1'], (3, 3), padding='same', kernel_regularizer=reg_layer)(inputs)
             x = Activation(params['activation'])(x)
-            x = Conv2D(params['unit_c1'], (3, 3))(x)
+            x = Conv2D(params['unit_c1'], (3, 3), kernel_regularizer=reg_layer)(x)
             x = Activation(params['activation'])(x)
             x = MaxPooling2D(pool_size=(2, 2))(x)
             x = Dropout(params['dr1_2'])(x)
 
-            x = Conv2D(params['unit_c2'], (3, 3), padding='same')(x)
+            x = Conv2D(params['unit_c2'], (3, 3), padding='same', kernel_regularizer=reg_layer)(x)
             x = Activation(params['activation'])(x)
-            x = Conv2D(params['unit_c2'], (3, 3))(x)
+            x = Conv2D(params['unit_c2'], (3, 3), kernel_regularizer=reg_layer)(x)
             x = Activation(params['activation'])(x)
             x = MaxPooling2D(pool_size=(2, 2))(x)
             x = Dropout(params['dr1_2'])(x)
             
             added_convs = [k for k in params if re.match(r'new_conv_\d+$', k)]
             for layer in added_convs:
-                x = Conv2D(params[layer], (3, 3), padding='same')(x)
+                x = Conv2D(params[layer], (3, 3), padding='same', kernel_regularizer=reg_layer)(x)
                 x = Activation(params['activation'])(x)
                 x = MaxPooling2D(pool_size=(2, 2))(x)
                 x = Dropout(params['dr1_2'])(x)
@@ -333,58 +329,16 @@ class neural_network:
         linked_section = ['Activation', 'BatchNormalization', 'Dropout']
         return self.dnet.remove_section(model, 'Dense', linked_section, True, True)
       
-    def training(self, params, new, new_fc, new_conv, rem_conv, rem_fc, da):
+    def training(self, params, da):
         """
         Function for compiling and running training
         :param params, new, new_fc, new_conv, rem_conv, da: parameters to indicate a possible operation on the network structure and hyperparameter search space
         :return: training history, trained model and and performance evaluation score 
         """
         # build neural network
-        model = self.build_network(params, new)
-        try:
-            # try adding or removing a layer in the neural network based on the anomalies diagnosis
-            if new or new_fc or new_conv or rem_conv:
-                print(colors.OKGREEN, "Adding or removing a layer in the neural network", colors.ENDC)
-                print(f"New: {new}, New_fc: {new_fc}, New_conv: {new_conv}, Rem_conv: {rem_conv}, Rem_fc: {rem_fc}")
-                # if the flag for the addition of a dense layer is true
-                if new_fc:
-                    if new_fc[0]:
-                        print(colors.OKGREEN, "Adding a dense layer", colors.ENDC)
-                        self.dense = True
-                        model = self.insert_fc_section(model, params, new_fc[1])
-                # if the flag for the addition of regularization is true
-                if new:
-                    self.rgl = True
-                    self.dense = False
-                    model = self.insert_batch(model, params)
-                # if the flag for the addition of a convolutional layer
-                if new_conv:
-                    if new_conv[0]:
-                        self.conv = True
-                        self.dense = False
-                        self.rgl = False
-
-                        print(colors.OKGREEN, "Adding a conv layer", colors.ENDC)
-                        model = self.insert_conv_section(model, params, new_conv[1])
-                # if the flag for the removal of a convolutional layer is true
-                if rem_conv:
-                    self.conv = False
-                    self.dense = False
-                    self.rgl = False
-                    model = self.remove_conv_section(model)
-                # if the flag for the removal of a dense layer is true
-                if rem_fc:
-                    self.conv = False
-                    self.dense = False
-                    self.rgl = False
-                    model = self.remove_fc_section(model)
-        except Exception as e:
-            print(colors.FAIL, e, colors.ENDC)
+        model = self.build_network(params)
+        model.summary()
         
-        # print the structure of the neural network and save it in a json file,
-        # using the current time as identifier of the model
-        # model.build()
-        # print(model.summary())
         model_name_id = datetime.now().strftime("%y_%m_%d_%H_%M_%S_%f") #time()
         model_json = model.to_json()
         model_name = "{}/Model/model-{}.json".format(cfg.NAME_EXP,model_name_id)
@@ -430,21 +384,12 @@ class neural_network:
         opt = LayerWiseLR(opt, multiplier, learning_rate=params['learning_rate'])
 
         # if cfg.MODE == 'depth':
-        es1 = EarlyStopping(monitor='val_loss', min_delta=0.005, patience=15, verbose=0, mode='min', restore_best_weights=True)
-        es2 = EarlyStopping(monitor='val_accuracy', min_delta=0.005, patience=15, verbose=0, mode='max', restore_best_weights=True)
-        reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=5, verbose=0, min_lr=1e-4)
+        es1 = EarlyStopping(monitor='val_loss', min_delta=0.005, patience=300, verbose=1, mode='min', restore_best_weights=True)
+        es2 = EarlyStopping(monitor='val_accuracy', min_delta=0.005, patience=300, verbose=1, mode='max', restore_best_weights=True)
+        reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=50, verbose=1, min_lr=1e-4)
 
         # if the flag of data augmentation is true
         if da:
-            # define a generator in which are present the values of the data augmentation parameters
-            # datagen = ImageDataGenerator(
-            #     width_shift_range=0.1,
-            #     height_shift_range=0.1,
-            #     fill_mode='nearest',
-            #     cval=0.,
-            #     horizontal_flip=True)
-            # datagen.fit(self.train_data)
-            
             data_augmentation = tf.keras.models.Sequential([
                     tf.keras.layers.RandomFlip("horizontal"),
                     tf.keras.layers.RandomTranslation(height_factor=0.1, width_factor=0.1, fill_mode='nearest'),
@@ -455,20 +400,43 @@ class neural_network:
             ])
         # train the network 
         model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=['accuracy'])
-        if cfg.MODE == 'fwdPass' or cfg.MODE == 'hybrid':
-            history = train_model(model, opt, self.train_data, self.train_labels, 
+        if (cfg.MODE == 'fwdPass' or cfg.MODE == 'hybrid') and cfg.DATA_NAME == 'gesture':
+            if "debug" in cfg.NAME_EXP:
+                history = {key: [] for key in ["loss", "accuracy", "val_loss", "val_accuracy"]}
+                for _ in range(cfg.EPOCHS):
+                    history["val_loss"].append(random.uniform(0.1, 0.5))
+                    history["val_accuracy"].append(random.uniform(0.1, 1.0))
+                    history["loss"].append(random.uniform(0.1, 0.5))
+                    history["accuracy"].append(random.uniform(0.1, 1.0))
+            else:
+                history = train_model(model, opt, self.train_data, self.train_labels, 
                                     self.test_data, self.test_labels, self.epochs,params, [tensorboard, reduce_lr, es1, es2])
         else:
-            history = model.fit(self.train_data, self.train_labels, epochs=self.epochs, batch_size=params['batch_size'],
-                            verbose=0,
+            if "debug" in cfg.NAME_EXP:
+                history = {key: [] for key in ["loss", "accuracy", "val_loss", "val_accuracy"]}
+                for _ in range(cfg.EPOCHS):
+                    history["val_loss"].append(random.uniform(0.1, 0.5))
+                    history["val_accuracy"].append(random.uniform(0.1, 1.0))
+                    history["loss"].append(random.uniform(0.1, 0.5))
+                    history["accuracy"].append(random.uniform(0.1, 1.0))
+            else:
+                history = model.fit(self.train_data, self.train_labels, epochs=self.epochs, batch_size=params['batch_size'],
+                            verbose=1,
                             validation_data=(self.test_data, self.test_labels),
                             callbacks=[tensorboard, reduce_lr, es1, es2]).history
 
+
         # evaluates model performance on test data
-        if cfg.MODE == 'fwdPass' or cfg.MODE == 'hybrid':
-            score = eval_model(model, self.test_data, self.test_labels)
+        if (cfg.MODE == 'fwdPass' or cfg.MODE == 'hybrid') and cfg.DATA_NAME == 'gesture':
+            if "debug" in cfg.NAME_EXP:
+                score = [random.uniform(0.1, 0.5), random.uniform(0.1, 1.0)]  # Simulated score for depth mode
+            else:
+                score = eval_model(model, self.test_data, self.test_labels)
         else:
-            score = model.evaluate(self.test_data, self.test_labels)
+            if "debug" in cfg.NAME_EXP:
+                score = [random.uniform(0.1, 0.5), random.uniform(0.1, 1.0)]  # Simulated score for depth mode
+            else:
+                score = model.evaluate(self.test_data, self.test_labels)
 
         # save the neural network weights and then reload them from the same json file you just saved
         # this avoids errors because of the changes in the network structure before training
@@ -487,9 +455,7 @@ class neural_network:
             self.best_score = score[1]  
             # print("Best model saved")
             model.save("{}/Model/best-model.keras".format(cfg.NAME_EXP))
-            # os.system("mv {}/Weights/weights-{}.weights.h5 {}/Weights/best-weights.h5".format(cfg.NAME_EXP, model_name_id, cfg.NAME_EXP))
-            # os.system("mv {}/Model/model-{}.json {}/Model/best-model.json".format(cfg.NAME_EXP, model_name_id, cfg.NAME_EXP))
-        
+
         os.system("rm {}/Weights/weights-{}.weights.h5".format(cfg.NAME_EXP, model_name_id))
         os.system("rm {}/Model/model-{}.json".format(cfg.NAME_EXP, model_name_id))
         return score, history, model, self.best_score

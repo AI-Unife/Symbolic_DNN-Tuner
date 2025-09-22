@@ -128,6 +128,29 @@ class ROIDataset(tonic.dataset.Dataset):
             label = self.target_transform(label)
 
         return events, label
+    
+
+def dataset_to_numpy(dataset):
+    x_list, y_list = [], []
+    for x, y in dataset:
+        if cfg.MODE == "fwdPass":
+            x_list.append(np.transpose(np.array(x), (0, 2, 3, 1)))
+        elif cfg.MODE == "hybrid":
+            # Step 1: Reshape per raggruppare la prima dimensione in gruppi di 4
+            X_grouped = x.reshape(cfg.FRAMES//cfg.NUM_CHANNELS, cfg.NUM_CHANNELS, 2, 64, 64)  # (4 gruppi, 4 elementi, 2, 64, 64)
+
+            # Step 2: Portare la dimensione dei 4 elementi insieme ai 2 canali
+            X_transposed = X_grouped.transpose(0, 3, 4, 1, 2)  # (4, 64, 64, 4, 2)
+
+            # Step 3: Unire le ultime due dimensioni (4*2 = 8)
+            x_final = X_transposed.reshape(cfg.FRAMES//cfg.NUM_CHANNELS, 64, 64, cfg.NUM_CHANNELS * 2)    
+            x_list.append(x_final)
+        else:
+            x_list.append(np.transpose(np.array(x), (1, 2, 0)))  # Convert to NumPy
+        y_list.append(np.array(y))  # Convert to NumPy
+
+    return np.array(x_list), np.array(y_list)
+
 
 def get_datasets_numpy():
     """
@@ -137,11 +160,9 @@ def get_datasets_numpy():
     - tuple: ((x_train, y_train), (x_test, y_test)) as NumPy arrays.
     """
     
-    dataset_path='/hpc/home/bzzlca/AIDA4Edge/data/'
-    # dataset_path = "datasets/DVS_ROI/"
+    dataset_path = "/hpc/home/bzzlca/AIDA4Edge/data/"
     polarity = cfg.POLARITY
     n_pol = 2 if polarity == "both" else 1
-    # cache_dir= f"/hpc/home/bzzlca/AIDA4Edge/tf/cache/DVS_ROI_{cfg.MODE}_{polarity}_{cfg.FRAMES}_{cfg.NUM_CHANNELS}_{n_pol}/"
     cache_dir= f"/hpc/home/bzzlca/AIDA4Edge/tf/cache/DVSGesture_{cfg.MODE}_{polarity}_{cfg.FRAMES}_{cfg.NUM_CHANNELS}_{n_pol}/"
     print("cache_dir: ", cache_dir)
     # exit()
@@ -170,48 +191,71 @@ def get_datasets_numpy():
         save_to=dataset_path, transform=transform, train=False, target_transform=target_transform
     )
     
-    # train = ROIDataset(
-    #     root=dataset_path+'/train', transform=transform, target_transform=target_transform
-    # )
-
-    # test = ROIDataset(
-    #     root=dataset_path+'/test', transform=transform, target_transform=target_transform
-    # )
-    
     cached_train = tonic.DiskCachedDataset(train, cache_path=cache_dir + 'train')
     cached_test = tonic.DiskCachedDataset(test, cache_path=cache_dir + 'test')
 
     # Convert dataset to NumPy arrays
-    def dataset_to_numpy(dataset):
-        x_list, y_list = [], []
-        for x, y in dataset:
-            if cfg.MODE == "fwdPass":
-                x_list.append(np.transpose(np.array(x), (0, 2, 3, 1)))
-            elif cfg.MODE == "hybrid":
-                # Step 1: Reshape per raggruppare la prima dimensione in gruppi di 4
-                X_grouped = x.reshape(cfg.FRAMES//cfg.NUM_CHANNELS, cfg.NUM_CHANNELS, 2, 64, 64)  # (4 gruppi, 4 elementi, 2, 64, 64)
-
-                # Step 2: Portare la dimensione dei 4 elementi insieme ai 2 canali
-                X_transposed = X_grouped.transpose(0, 3, 4, 1, 2)  # (4, 64, 64, 4, 2)
-
-                # Step 3: Unire le ultime due dimensioni (4*2 = 8)
-                x_final = X_transposed.reshape(cfg.FRAMES//cfg.NUM_CHANNELS, 64, 64, cfg.NUM_CHANNELS * 2)    
-                x_list.append(x_final)
-            else:
-                x_list.append(np.transpose(np.array(x), (1, 2, 0)))  # Convert to NumPy
-            y_list.append(np.array(y))  # Convert to NumPy
-
-        return np.array(x_list), np.array(y_list)
-
     x_train, y_train = dataset_to_numpy(cached_train)
     x_test, y_test = dataset_to_numpy(cached_test)
 
     return (x_train, y_train), (x_test, y_test)
 
-def gesture_data():
+def get_ROI_numpy():
+    """
+    Loads and processes the specified dataset using Tonic and returns NumPy arrays.
+
+    Returns:
+    - tuple: ((x_train, y_train), (x_test, y_test)) as NumPy arrays.
+    """
+    
+    dataset_path = "datasets/DVS_ROI/"
+    polarity = cfg.POLARITY
+    n_pol = 2 if polarity == "both" else 1
+    cache_dir= f"/hpc/home/bzzlca/AIDA4Edge/tf/cache/DVS_ROI_{cfg.MODE}_{polarity}_{cfg.FRAMES}_{cfg.NUM_CHANNELS}_{n_pol}/"
+    print("cache_dir: ", cache_dir)
+    transform = [
+        transforms.Denoise(filter_time=10000),
+        transforms.Downsample(sensor_size=tonic.datasets.DVSGesture.sensor_size, target_size=(64, 64)),
+        transforms.ToFrame(sensor_size=(64, 64, 2), n_time_bins=cfg.FRAMES)
+    ]
+    
+    if cfg.MODE == "fwdPass":
+        target_transform = ToOneHotTimeCoding(n_classes=11, n_frames=cfg.FRAMES)
+    elif cfg.MODE == "hybrid":
+        target_transform = ToOneHotTimeCoding(n_classes=11, n_frames=cfg.FRAMES//cfg.NUM_CHANNELS)
+    else:
+        transform.append(select_polarity_transform(polarity))
+        target_transform = None
+    
+    transform = transforms.Compose(transform)
+    # Load dataset
+    train = ROIDataset(
+        root=dataset_path+'/train', transform=transform, target_transform=target_transform
+    )
+
+    test = ROIDataset(
+        root=dataset_path+'/test', transform=transform, target_transform=target_transform
+    )
+    
+    cached_train = tonic.DiskCachedDataset(train, cache_path=cache_dir + 'train')
+    cached_test = tonic.DiskCachedDataset(test, cache_path=cache_dir + 'test')
+
+    # Convert dataset to NumPy arrays
+    x_train, y_train = dataset_to_numpy(cached_train)
+    x_test, y_test = dataset_to_numpy(cached_test)
+
+    return (x_train, y_train), (x_test, y_test)
+
+def ROI_data():
+    return gesture_data(ROI=True)
+
+def gesture_data(ROI=False):
     num_classes = 11
     # The data, split between train and test sets:
-    (x_train, y_train), (x_test, y_test) = get_datasets_numpy()
+    if ROI:
+        (x_train, y_train), (x_test, y_test) = get_ROI_numpy()
+    else:
+        (x_train, y_train), (x_test, y_test) = get_datasets_numpy()
     # print(x_train.shape[0], 'train samples')
     # print(x_test.shape[0], 'test samples')
 

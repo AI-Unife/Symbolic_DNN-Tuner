@@ -71,15 +71,15 @@ class search_space:
         for p in params.keys():
             # define the hyperparameter type and range, using the initial attributes for upper and lower range
             if type(params[p]) == float:
-                np = Real(abs(params[p] / self.epsilon_r2), (params[p] / self.epsilon_r1), name=p)
+                np = Real(0, 0.1, name=p)
                 new_Hp.append(np)
             elif type(params[p]) == int:
                 if 'new_fc' in p:
-                    np = Integer(abs(int(params[p] / self.epsilon_d)), params[p] * self.epsilon_i, name=p)
+                    np = Integer(0, 2048, name=p)
                 elif 'new_conv' in p:
-                    np = Integer(abs(int(params[p] / self.epsilon_d)), params[p] * self.epsilon_i, name=p)
+                    np = Integer(0, 512, name=p)
                 else:
-                    np = Integer(abs(params[p] - self.epsilon_i), params[p] + self.epsilon_i, name=p)
+                    np = Integer(0, params[p] + self.epsilon_i, name=p)
                 new_Hp.append(np)
 
         # add hyperparameters to the search space
@@ -126,6 +126,20 @@ class search_space:
         self.search_space = copy.deepcopy(space.dimensions)
         return self.search_space
 
+    def reset_space(self, space):
+        """
+        method used to reset the search space to the initial state
+        :param space: search space to be reset
+        :return: reset search space
+        """
+        new_space = copy.deepcopy(space)
+        names = []
+        for dim in self.search_space.dimensions:
+            names.append(dim.name)
+        for new_dim in new_space.dimensions:
+            if new_dim.name not in names:
+                self.search_space.dimensions.append(new_dim)
+        return self.search_space
 
 if __name__ == '__main__':
     ss = search_space()

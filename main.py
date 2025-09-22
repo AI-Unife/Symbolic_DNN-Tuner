@@ -4,279 +4,220 @@ import sys
 import os
 import copy
 
-os.system("")
-os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
-
-from skopt import gp_minimize
+from skopt import gp_minimize, load
+from skopt.callbacks import CheckpointSaver
 from tensorflow.keras import backend as K
 
 from components.colors import colors
 from components.controller import controller
 from components.dataset import cifar_data, mnist, cifar_data_100
-from components.gesture_dataset import gesture_data
+from components.gesture_dataset import gesture_data, ROI_data
 from components.search_space import search_space
-from components.params_checker import paramsChecker
 from skopt.space import Real, Integer, Categorical
 
 import config as cfg
+from components.random_search import RandomSearch
+import numpy as np
 
-# ---------------------------------------------------------------------------------------------------
-# SETTING UP EXPERIMENT PARAMETERS
-# ---------------------------------------------------------------------------------------------------
-
-print(colors.MAGENTA, "|  ----------- USER PARAMS CONFIGURATION ----------  |\n", colors.ENDC)
-print("EXPERIMENT NAME: ", cfg.NAME_EXP)
-print("DATASET NAME: ", cfg.DATA_NAME)
-print("MAX NET EVAL: ", cfg.MAX_EVAL)
-print("EPOCHS FOR TRAINING: ", cfg.EPOCHS)
-print("MODULE LIST: ", cfg.MOD_LIST, flush=True)
-print("MODE: ", cfg.MODE, flush=True)
-print("POLARITY: ", cfg.POLARITY, flush=True)
-print("CHANNELS: ", cfg.NUM_CHANNELS, flush=True)
-
-# List of directories required for the experiment
-required_dirs = ['Model', 'Weights', 'database', 'checkpoints', 'log_folder', 'algorithm_logs', 'dashboard/model', 'symbolic']
-
-# Create missing directories if they do not exist
-try:
-    os.makedirs(cfg.NAME_EXP, exist_ok=True)
-    for folder in required_dirs:
-        os.makedirs(f"{cfg.NAME_EXP}/{folder}", exist_ok=True)
-except OSError as e:
-    print(colors.FAIL, f"|  ----------- FAILED TO CREATE FOLDER: {e} ----------  |\n", colors.ENDC)
-    exit()
-
-# Copy symbolic base files
-try:
-    os.system(f"cp /hpc/home/bzzlca/Symbolic_DNN-Tuner/symbolic_base/* {cfg.NAME_EXP}/symbolic/")
-except OSError:
-    print(colors.FAIL, "|  ----------- FAILED TO COPY SYMBOLIC DIR ----------  |\n", colors.ENDC)
-    exit()
-
-# ---------------------------------------------------------------------------------------------------
-# LOADING DATASET
-# ---------------------------------------------------------------------------------------------------
-
-if cfg.DATA_NAME == "MNIST":
-    X_train, X_test, Y_train, Y_test, n_classes = mnist()
-elif cfg.DATA_NAME == "CIFAR-10":
-    X_train, X_test, Y_train, Y_test, n_classes = cifar_data()
-elif cfg.DATA_NAME == "CIFAR-100":
-    X_train, X_test, Y_train, Y_test, n_classes = cifar_data_100()
-elif cfg.DATA_NAME == "gesture":
-    X_train, X_test, Y_train, Y_test, n_classes = gesture_data()
-else:
-    print(colors.FAIL, "|  ----------- DATASET NOT FOUND ----------  |\n", colors.ENDC)
-    sys.exit()
-
-# ---------------------------------------------------------------------------------------------------
-# INITIALIZING SEARCH SPACE AND CONTROLLER
-# ---------------------------------------------------------------------------------------------------
-
-dt = datetime.datetime.now()
-max_evals = cfg.MAX_EVAL
-
-sp = search_space()
-spa = sp.search_sp()
-controller = controller(X_train, Y_train, X_test, Y_test, n_classes)
-
-# Define the hyperparameter search space
-first_space = copy.deepcopy(spa)
-print(colors.MAGENTA, "|  ----------- SEARCH SPACE ----------  |\n", colors.ENDC)
-print(first_space)
-
-# Record the start time
-start_time = time.time()
-
-# ---------------------------------------------------------------------------------------------------
-# OBJECTIVE FUNCTION FOR OPTIMIZATION
-# ---------------------------------------------------------------------------------------------------
+def print_experiment_config():
+    print(colors.MAGENTA, "|  ----------- USER PARAMS CONFIGURATION ----------  |\n", colors.ENDC)
+    print("EXPERIMENT NAME: ", cfg.NAME_EXP)
+    print("OPTIMIZATION METHOD: ", cfg.OPT, flush=True)
+    print("DATASET NAME: ", cfg.DATA_NAME)
+    print("MAX NET EVAL: ", cfg.MAX_EVAL)
+    print("EPOCHS FOR TRAINING: ", cfg.EPOCHS)
+    print("MODULE LIST: ", cfg.MOD_LIST, flush=True)
+    if cfg.DATA_NAME == "gesture":
+        print("MODE: ", cfg.MODE, flush=True)
+        print("POLARITY: ", cfg.POLARITY, flush=True)
+        print("CHANNELS: ", cfg.NUM_CHANNELS, flush=True)
+    print("SEED: ", cfg.SEED, flush=True)
 
 
-class obj_wrap():
-    """
-    Wrapper function for the objective function to be optimized.
-    """
-    def __init__(self, space):
+def create_experiment_folders():
+    required_dirs = ['Model', 'Weights', 'database', 'checkpoints', 'log_folder', 
+                     'algorithm_logs', 'dashboard/model', 'symbolic']
+    try:
+        os.makedirs(cfg.NAME_EXP, exist_ok=True)
+        for folder in required_dirs:
+            os.makedirs(f"{cfg.NAME_EXP}/{folder}", exist_ok=True)
+    except OSError as e:
+        print(colors.FAIL, f"Failed to create folder: {e}", colors.ENDC)
+        exit()
+
+
+def copy_symbolic_files():
+    try:
+        os.system(f"cp /hpc/home/bzzlca/Symbolic_DNN-Tuner/symbolic_base/* {cfg.NAME_EXP}/symbolic/")
+    except OSError:
+        print(colors.FAIL, "Failed to copy symbolic directory", colors.ENDC)
+        exit()
+        
+def load_dataset():
+    datasets = {
+        "MNIST": mnist,
+        "CIFAR-10": cifar_data,
+        "CIFAR-100": cifar_data_100,
+        "gesture": gesture_data,
+        "ROI": ROI_data
+    }
+    if cfg.DATA_NAME in datasets:
+        return (*datasets[cfg.DATA_NAME](),)
+    else:
+        print(colors.FAIL, "Dataset not found", colors.ENDC)
+        sys.exit()
+
+class ObjectiveWrapper:
+    def __init__(self, space, controller):
         self.search_space = space
+        self.controller = controller
         
     def objective(self, params):
-        """
-        this function shows the search space, which is saved in a dedicated log file,
-        and calls the function for training the neural network, obtaining the value of the function to be optimised.
-        :param params: values of the search space hyperparameters
-        :return: value of the objective function to be optimised
-        """
-        space = {}
-        for i, j in zip(self.search_space, params):
-            space[i.name] = j
-        print("Punto scelto: ", space)
-        print("spazio attuale: ")
+        space_dict = {dim.name: val for dim, val in zip(self.search_space, params)}
+        print("Chosen point:", space_dict)
+        print("Actual search space:")
         print_space(self.search_space)
-        f = open("{}/algorithm_logs/hyper-neural.txt".format(cfg.NAME_EXP), "a")
-        f.write(str(space) + "\n")
-        to_optimize = controller.training(space)
-        f.close()
+
+        with open(f"{cfg.NAME_EXP}/algorithm_logs/hyper-neural.txt", "a") as f:
+            f.write(str(space_dict) + "\n")
+
+        score = self.controller.training(space_dict)
         K.clear_session()
-        return to_optimize
-
-# ---------------------------------------------------------------------------------------------------
-# CALLBACK FOR STORING BAYESIAN OPTIMIZATION RESULTS
-# ---------------------------------------------------------------------------------------------------
-
-class CustomCallback:
-    """
-    Stores and manages past Bayesian Optimization results.
-    """
-    def __init__(self):
-        self.x_iters = []  
-        self.func_vals = []  
-        self.last_chenged = -1
-
-    def __call__(self, res):
-        """ 
-        Saves the last iteration results while handling a rollback mechanism 
-        if the function value reaches a predefined threshold (1000).
-        """
-
-        # Check if we encounter 1000 for the first time and mark the rollback point
-        if self.last_chenged == -1 and res.func_vals[-1] == 1000:
-            self.last_chenged = len(self.x_iters)  # Store the rollback index
-
-        # If previously marked rollback point exists and the new function value is not 1000
-        if self.last_chenged != -1 and res.func_vals[-1] != 1000:
-            # Rollback to the last valid state before the 1000 value was encountered
-            self.x_iters = self.x_iters[:self.last_chenged]
-            self.func_vals = self.func_vals[:self.last_chenged]
-            
-            # Reset the rollback marker
-            self.last_chenged = -1
-            
-            # Append the current valid iteration values
-            self.x_iters.append(res.x_iters[-1])
-            self.func_vals.append(res.func_vals[-1])
-
-        # Ensure we store only new iteration values
-        if len(self.x_iters) == 0 or res.x_iters[-1] != self.x_iters[-1]:  
-            self.x_iters.append(res.x_iters[-1])
-            self.func_vals.append(res.func_vals[-1])
-        
-
-# ---------------------------------------------------------------------------------------------------
-# ANALYSIS & BAYESIAN OPTIMIZATION PROCESS
-# ---------------------------------------------------------------------------------------------------
+        return score
 
 def print_space(space):
     for i, dim in enumerate(space.dimensions):
         print(f"Dimension {i}: {dim.name} - {dim}")
 
-def start_analysis():
-    """
-    Runs model analysis and identifies necessary changes in the search space.
 
-    :return: Updated search space and optimization metric
-    """
-    return controller.diagnosis()
-
-class wrap_constraints(): 
-    def __init__(self, space):
-        self.space = space
-        
-    def apply_constraints(self, params):
-        """
-        Applies constraints to the search space.
-        """
-        result = True
-        # print(search_space)
-        for i, dim in enumerate(self.space.dimensions):
-            if type(dim) == Categorical:
-                if params[i] not in dim.categories:
-                    # print("Constraint violated: ", dim.name, params[i])
-                    result = False
-                    break
-            elif type(dim) == Integer or type(dim) == Real:
-                if params[i] < dim.low or params[i] > dim.high:
-                    # print("Constraint violated: ", dim.name, params[i])
-                    result = False
-                    break
-            else:
-                print(f"Type space dimension {dim} - {type(dim)} not valid")
-                exit()
-        # print("Valid point: ", params)
-        return result
-
-def start(new_space, max_iter):
-    """
-    Performs Bayesian Optimization with search space adaptation.
-
-    :param new_space: Initial hyperparameter search space
-    :param max_iter: Number of iterations
-    :return: Optimization results
-    """
-    start_space = copy.deepcopy(new_space)
-    print(colors.MAGENTA, "|  ----------- START BAYESIAN OPTIMIZATION ----------  |\n", colors.ENDC)
-
-    custom_callback = CustomCallback()
-    controller.set_case(False)
-    
-    obj_fn = obj_wrap(start_space)
-    const_fn = wrap_constraints(start_space)
-    apply_constraints = const_fn.apply_constraints
-    # First iteration of Bayesian Optimization
-    search_res = gp_minimize(obj_fn.objective, start_space, acq_func='EI', n_calls=1, n_random_starts=1,
-                             callback=[custom_callback], space_constraint=apply_constraints)
-
-    new_space, to_optimize = start_analysis()
-    # new_space = search_space
-    print(colors.MAGENTA, "|  ----------- END ITERATION 0 OF BAYESIAN OPTIMIZATION ----------  |\n", colors.ENDC)
-
-    # Iterative Bayesian Optimization
-    for opt in range(max_iter):
-        print(colors.MAGENTA, f"|  ----------- START ITERATION {opt+1} ----------  |\n", colors.ENDC)
-
-        res = custom_callback
-        if len(new_space.dimensions) == len(start_space.dimensions):
-            print(colors.WARNING, "-----------------------------------------------------", colors.ENDC)
-            print(colors.FAIL, "Continuing Bayesian Optimization", colors.ENDC)
-            print(colors.WARNING, "-----------------------------------------------------", colors.ENDC)
-            obj_fn = obj_wrap(start_space)
-            search_res = gp_minimize(obj_fn.objective, start_space, x0=res.x_iters, y0=res.func_vals, acq_func='EI',
-                                     n_calls=1, n_random_starts=0, callback=[custom_callback], space_constraint=apply_constraints)
+def print_diff(old_space, new_space):
+    print(colors.WARNING, "Differences in search space:", colors.ENDC)
+    for i, (old_dim, new_dim) in enumerate(zip(old_space.dimensions, new_space.dimensions)):
+        if old_dim != new_dim:
+            print(colors.CYAN, f"Dimension {i}: {old_dim.name} changed from {old_dim} to {new_dim}", colors.ENDC)
         else:
-            # Update the search space and restart BO
-            # search_space = copy.deepcopy(new_space)
-            start_space = copy.deepcopy(new_space)
-            print(colors.FAIL, "-----------------------------------------------------", colors.ENDC)
-            print(colors.WARNING, "Updated search space - Restarting BO", colors.ENDC)
-            print(colors.FAIL, "-----------------------------------------------------", colors.ENDC)
-
-            custom_callback = CustomCallback()
-            obj_fn = obj_wrap(start_space)
-            const_fn = wrap_constraints(start_space)
-            apply_constraints = const_fn.apply_constraints
-            search_res = gp_minimize(obj_fn.objective, start_space, acq_func='EI',
-                                     n_calls=1, n_random_starts=1, callback=[custom_callback], space_constraint=apply_constraints)
-        
-        # print(len(res.x_iters), len(res.func_vals))
-        new_space, to_optimize = start_analysis()
-        print_space(new_space)
-        print(colors.MAGENTA, f"|  ----------- END ITERATION {opt+1} ----------  |\n", colors.ENDC)
+            print(colors.FAIL, f"Dimension {i}: {old_dim.name} unchanged", colors.ENDC)
 
 
-    return search_res
 
-# ---------------------------------------------------------------------------------------------------
-# EXECUTE OPTIMIZATION
-# ---------------------------------------------------------------------------------------------------
+def apply_constraints(space, params):
+    """
+    Applies constraints to the search space.
+    """
+    result = True
+    if 'RS' in cfg.OPT:
+        return True 
+    for i, dim in enumerate(space.dimensions):
+        if type(dim) == Categorical:
+            if params[i] not in dim.categories:
+                result = False
+                break
+        elif type(dim) == Integer or type(dim) == Real:
+            if params[i] < dim.low or params[i] > dim.high:
+                result = False
+                break
+        else:
+            print(f"Type space dimension {dim} - {type(dim)} not valid")
+            exit()
+    return result
 
-print(colors.OKGREEN, "\nSTARTING ALGORITHM \n", colors.ENDC)
-search_res = start(first_space, max_evals)
-print(colors.OKGREEN, "\nALGORITHM FINISHED \n", colors.ENDC)
 
-# Logging execution time
-print(colors.CYAN, "\nTOTAL TIME --------> \n", time.time() - start_time, colors.ENDC)
+def run_optimization(search_space, controller, max_iter):
+    all_x, all_y = [], []
+    callback = CheckpointSaver("{}/checkpoints/checkpoint.pkl".format(cfg.NAME_EXP), compress=9)
+    obj_fn = ObjectiveWrapper(search_space, controller)
+    no_rules = ['RS', 'standard']
+    with_rules = ['filtered', 'RS_ruled']
+    if 'RS' in cfg.OPT:
+        random_search = RandomSearch(random_state=cfg.SEED, total_iter=max_iter)
+        res = random_search(obj_fn.objective, search_space,  callback=[callback])
+    else:
+        res = gp_minimize(obj_fn.objective, search_space, acq_func='EI',
+                      random_state=cfg.SEED, n_calls=1, n_random_starts=1, callback=[callback])
+    
+    all_x.extend(res.x_iters)
+    all_y.extend(res.func_vals)
 
-# Save results
-controller.plotting_obj_function()
-controller.save_experience()
+    new_space = copy.deepcopy(search_space) if cfg.OPT in no_rules else controller.diagnosis()[0]
+    it = 0
+    while it < max_iter and not controller.convergence:
+        print(colors.MAGENTA, f"--- ITERATION {it+1} ---", colors.ENDC)
+        it += 1
+        res = load('{}/checkpoints/checkpoint.pkl'.format(cfg.NAME_EXP))
+        print_diff(search_space, new_space)
+
+        if len(new_space.dimensions) == len(search_space.dimensions):
+            if cfg.OPT in with_rules:
+                for x, y in zip(all_x, all_y):
+                    if apply_constraints(new_space, x):
+                        if x not in res.x_iters:
+                            res.x_iters.append(list(x))          
+                            res.func_vals = np.append(res.func_vals, y) 
+            x0, y0 = res.x_iters, res.func_vals
+                
+            obj_fn = ObjectiveWrapper(new_space, controller)
+            try:
+                if 'RS' in cfg.OPT:
+                    res = random_search(obj_fn.objective, search_space, callback=[callback])
+                else:
+                    res = gp_minimize(obj_fn.objective, new_space, x0=list(x0), y0=list(y0),
+                                  acq_func='EI', n_calls=1, n_random_starts=0,
+                                  random_state=cfg.SEED, callback=[callback])
+            except Exception as e:
+                print(colors.FAIL, f"Optimization error: {e}", colors.ENDC)
+                if 'RS' in cfg.OPT:
+                    res = random_search(obj_fn.objective, search_space, callback=[callback])
+                else:
+                    res = gp_minimize(obj_fn.objective, new_space, acq_func='EI',
+                                  n_calls=1, n_random_starts=1,
+                                  random_state=cfg.SEED, callback=[callback])
+
+            if cfg.OPT in with_rules:
+                all_x.extend(x for x in res.x_iters if x not in all_x)
+                all_y.extend(res.func_vals)
+        else:
+            search_space = copy.deepcopy(new_space)
+            print(colors.WARNING, "Search space changed. Restarting BO...", colors.ENDC)
+            obj_fn = ObjectiveWrapper(search_space, controller)
+            if 'RS' in cfg.OPT:
+                random_search.Xi, random_search.Yi = [], [] # Resetting random search history
+                res = random_search(obj_fn.objective, search_space, callback=[callback])
+            else:
+                res = gp_minimize(obj_fn.objective, new_space, acq_func='EI',
+                              n_calls=1, n_random_starts=1,
+                              random_state=cfg.SEED,
+                              callback=[CheckpointSaver(f"{cfg.NAME_EXP}/checkpoints/checkpoint.pkl", compress=9)])
+
+            if cfg.OPT in with_rules:
+                all_x, all_y = list(res.x_iters), list(res.func_vals)
+
+        new_space = copy.deepcopy(search_space) if cfg.OPT in no_rules else controller.diagnosis()[0]
+
+    return res
+
+if __name__ == "__main__":
+    os.system("")
+    os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+
+    print_experiment_config()
+    create_experiment_folders()
+    copy_symbolic_files()
+
+    X_train, X_test, Y_train, Y_test, n_classes = load_dataset()
+
+    sp = search_space()
+    first_space = sp.search_sp()
+    print(colors.MAGENTA, "|  ----------- SEARCH SPACE ----------  |\n", colors.ENDC)
+    print(first_space)
+
+    ctrl = controller(X_train, Y_train, X_test, Y_test, n_classes)
+
+    start_time = time.time()
+    print(colors.OKGREEN, "\nSTARTING ALGORITHM \n", colors.ENDC)
+    res = run_optimization(first_space, ctrl, cfg.MAX_EVAL)
+    print(colors.OKGREEN, "\nALGORITHM FINISHED \n", colors.ENDC)
+    print(colors.CYAN, "\nTOTAL TIME --------> \n", time.time() - start_time, colors.ENDC)
+
+    ctrl.plotting_obj_function()
+    ctrl.save_experience()

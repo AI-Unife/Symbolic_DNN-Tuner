@@ -20,9 +20,10 @@ class tuning_rules_symbolic:
         self.count_br = 0
         self.count_new_fc = 0
         self.count_new_cv = 0
-        self.max_fc = 10
+        self.max_fc = 5
         self.max_conv = self.count_max_conv()
         self.start_conv, self.start_fc = self.ss.count_initial_layers(self.space)
+        self.count_no_probs = 0
     
     def count_max_conv(self):
         h, w = self.controller.X_train.shape[0], self.controller.X_train.shape[1]
@@ -71,7 +72,7 @@ class tuning_rules_symbolic:
             self.count_new_fc -= 1
         else:
             self.controller.add_fc_layer(True, self.count_new_fc)
-            new_p = {f"new_fc_{self.count_new_fc}": 512}
+            new_p = {f"new_unit_d{self.count_new_fc}": 512}
             self.space = self.ss.add_params(new_p)
 
     def new_conv_layer(self):
@@ -137,15 +138,15 @@ class tuning_rules_symbolic:
         # or dense layer decrease the lower value of the range
         for hp in self.space:
             if 'unit_c1' in hp.name:
-                hp.low = params['unit_c1'] - 16
+                hp.low = max(params['unit_c1'] - 16, 16)
             if 'unit_c2' in hp.name:
-                hp.low = params['unit_c2'] - 16
+                hp.low = max(params['unit_c2'] - 16, 64)
             if 'unit_d' in hp.name:
-                hp.low = params['unit_d'] - 16
+                hp.low = max(params['unit_d'] - 16, 0)
             if 'new_conv' in hp.name:
-                hp.low = params[hp.name] - 16
+                hp.low = max(params[hp.name] - 16, abs(int(512 / self.space.epsilon_d)))
             if 'new_fc' in hp.name:
-                hp.low = params[hp.name] - 16
+                hp.low = max(params[hp.name] - 16, 0)
     
     def inc_batch_size(self, params):
         for hp in self.space:
@@ -161,19 +162,19 @@ class tuning_rules_symbolic:
         # or dense layer increase the upper value of the range
         for hp in self.space:
             if 'unit_c1' in hp.name:
-                hp.high = params['unit_c1'] + 16
+                hp.high = min(params['unit_c1'] + 16, 64)
             if 'unit_c2' in hp.name:
-                hp.high = params['unit_c2'] + 16
+                hp.high = min(params['unit_c2'] + 16, 128)
             if 'unit_d' in hp.name:
-                hp.high = params['unit_d'] + 16
+                hp.high = min(params['unit_d'] + 16, 2048)
             if 'new_conv' in hp.name:
                 try:
-                    hp.high = params[hp.name] + 16
+                    hp.high = min(params[hp.name] + 16, 512)
                 except KeyError:
                     continue
             if 'new_fc' in hp.name:
                 try:
-                    hp.high = params[hp.name] + 16
+                    hp.high = min(params[hp.name] + 16, 2048)
                 except KeyError:
                     continue
 
@@ -219,13 +220,18 @@ class tuning_rules_symbolic:
         """
         # delete old model saved in controller class
         del self.controller.model
-
+        
         # iterate over each tuning rules and eveluate them, passing parameters if necessary
         for i, d in enumerate(sym_tuning):
             if d != 'reg_l2' and d != 'data_augmentation' and d != 'new_fc_layer' and d != 'new_conv_layer' and d != 'dec_layers' and d != 'dec_fc' and d != 'new_config':
                 d = "self." + d + "(params)"
+            elif 'X' in d:
+                print(f"I have not found problem, but I'll try some new configurations anyway.")
+                self.count_no_probs += 1
+                break
             else:
                 d = "self." + d + "()"
+            self.count_no_probs = 0
             print(f"I've find {diagnosis[i]} and I'm trying to fix it with {d}.")
             eval(d)
 

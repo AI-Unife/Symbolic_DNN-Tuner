@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 import flops.flops_calculator as fc
+import config as cfg
 
 class flops_module(common_interface):
 
@@ -18,8 +19,8 @@ class flops_module(common_interface):
 
     def __init__(self):
         self.epsilon = 0.33
-        self.flops_th = 120000000
-        self.nparams_th = 23851784 # inceptionV3 total params
+        self.flops_th = 10000000 # 0.1 GFLOPs
+        self.nparams_th = 2500000 # 2.5M params 
         self.tuner_opt_function = []
         self.flops_gap = []
         self.tuner_steps = 0
@@ -45,8 +46,8 @@ class flops_module(common_interface):
         # norm flops between 0 - 1
         flops_th = 1
         nflops = self.flops / self.flops_th
-        fit_up_flops = abs(flops_th - nflops)
-        res = -(abs(self.accuracy - fit_up_flops*self.epsilon))
+        fit_up_flops = flops_th - nflops
+        res = -(self.accuracy + fit_up_flops*self.epsilon)
         self.flops_gap.append(fit_up_flops)
         self.tuner_steps += 1
         self.tuner_opt_function.append(res)
@@ -59,11 +60,11 @@ class flops_module(common_interface):
         y2 = self.flops_gap
         plt.plot(x, y1, color='black', label="Total Object Function")
         plt.plot(x, y2, color='blue', label="FLOPS gap")
-        plt.savefig("objective_funct.png")
+        plt.savefig("{}/objective_funct.png".format(cfg.NAME_EXP))
 
     def log_function(self):
-        if os.path.exists("graph_report.txt"):
-            os.remove("graph_report.txt")
-        f = open("graph_report.txt", "a")
+        # if os.path.exists("{}/graph_report.txt".format(cfg.NAME_EXP)):
+        #     os.remove("{}/graph_report.txt".format(cfg.NAME_EXP))
+        f = open("{}/graph_report.txt".format(cfg.NAME_EXP), "a")
         f.write(str(self.flops_th) + " " + str(self.flops) + " " + str(self.accuracy) + "\n")
         f.close()

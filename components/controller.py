@@ -64,6 +64,7 @@ class controller:
         self.imp_checker = ImprovementChecker(self.db, self.lfi)
         self.modules = module(cfg.MOD_LIST)
         self.best_score = 0
+        self.convergence = False
 
     # The following methods are used to determine actions to be applied to the network structure,
     # for example addition or removal of convolutions and dense layers
@@ -151,8 +152,7 @@ class controller:
         
         K.clear_session()
         self.nn = neural_network(self.X_train, self.Y_train, self.X_test, self.Y_test, self.n_classes, self.best_score)
-        self.score, self.history, self.model, self.best_score = self.nn.training(params, self.new, self.new_fc, self.new_conv, 
-                                                                                self.rem_conv, self.rem_fc, self.da)
+        self.score, self.history, self.model, self.best_score = self.nn.training(params, self.da)
         # update state of modules
         # each module will take the necessary args internally
         self.modules.state(self.score[0], self.score[1], self.model)
@@ -199,6 +199,7 @@ class controller:
         self.db.insert_ranking(self.score[1], self.score[0])
 
         # integral of loss history, useful in the symbolic part
+        # print(self.history['val_loss'])
         int_loss, int_slope = integrals(self.history['val_loss'])
 
         # at specific epochs, change  the threshold values for low accuracy and high loss detection
@@ -275,6 +276,8 @@ class controller:
         # tuning_logs = open("algorithm_logs/tuning_logs.txt", "a")
         # new_space, self.model = self.tr.repair(self, self.symbolic_tuning, tuning_logs, self.model, self.params)
         new_space, self.model = self.tr.repair(self.symbolic_tuning, self.symbolic_diagnosis, self.model, self.params)
+        if self.tr.count_no_probs > 5:
+            self.convergence = True
         # tuning_logs.close()
         self.issues = []
         print(colors.FAIL, "| END SYMBOLIC TUNING      ----------------------------------  |\n", colors.ENDC)

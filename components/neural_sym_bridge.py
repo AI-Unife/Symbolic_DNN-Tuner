@@ -229,7 +229,6 @@ class NeuralSymbolicBridge:
         # collect all the problem, specifically the second argument of each action, in the problem list
         for i in symbolic_evaluation.keys():
             problems.append(str(i)[str(i).find(",") + 1:str(i).find(")")])
-
         # turn problems into keys of a dictionary, allowing to remove duplicate problems,
         # and then turn it into a list
         problems = list(dict.fromkeys(problems))

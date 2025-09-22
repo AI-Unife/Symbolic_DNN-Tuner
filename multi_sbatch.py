@@ -1,176 +1,82 @@
-import os
-import time
-# Definizione delle configurazioni
-configurations = [
-    # {"dataset": "CIFAR-10", "MODULE": "accuracy_module"},
-    # {"dataset": "CIFAR-10", "MODULE": "accuracy_module flops_module"},
-    # {"dataset": "CIFAR-10", "MODULE": "accuracy_module flops_module hardware_module"},
-    # {"dataset": "CIFAR-10", "MODULE": "accuracy_module hardware_module"},
-    # {"dataset": "CIFAR-100", "MODULE": "accuracy_module"},
-    # {"dataset": "CIFAR-100", "MODULE": "accuracy_module flops_module"},
-    # {"dataset": "CIFAR-100", "MODULE": "accuracy_module flops_module hardware_module"},
-    # {"dataset": "CIFAR-100", "MODULE": "accuracy_module hardware_module"},
-    
-    {"MODULE": "accuracy_module flops_module hardware_module", "MODE": "depth", "FRAMES": 4, "CHANNEL": 4},
-    {"MODULE": "accuracy_module flops_module hardware_module", "MODE": "depth", "FRAMES": 8, "CHANNEL": 8}, 
-    {"MODULE": "accuracy_module flops_module hardware_module", "MODE": "depth", "FRAMES": 16, "CHANNEL": 16},
-    {"MODULE": "accuracy_module flops_module hardware_module", "MODE": "depth", "FRAMES": 32, "CHANNEL": 32},
-    {"MODULE": "accuracy_module flops_module hardware_module", "MODE": "depth", "FRAMES": 64, "CHANNEL": 64},
-    {"MODULE": "accuracy_module flops_module hardware_module", "MODE": "fwdPass", "FRAMES": 16, "CHANNEL": 2},
-    {"MODULE": "accuracy_module flops_module hardware_module", "MODE": "fwdPass", "FRAMES": 32, "CHANNEL": 2}, 
-    {"MODULE": "accuracy_module flops_module hardware_module", "MODE": "fwdPass", "FRAMES": 64, "CHANNEL": 2}, 
-    {"MODULE": "accuracy_module flops_module hardware_module", "MODE": "hybrid", "FRAMES": 16, "CHANNEL": 4},
-    {"MODULE": "accuracy_module flops_module hardware_module", "MODE": "hybrid", "FRAMES": 16, "CHANNEL": 8},
-    {"MODULE": "accuracy_module flops_module hardware_module", "MODE": "hybrid", "FRAMES": 32, "CHANNEL": 4},
-    {"MODULE": "accuracy_module flops_module hardware_module", "MODE": "hybrid", "FRAMES": 32, "CHANNEL": 8},
-    # {"MODULE": "accuracy_module flops_module hardware_module", "MODE": "hybrid", "FRAMES": 64, "CHANNEL": 4},
-    # {"MODULE": "accuracy_module flops_module hardware_module", "MODE": "hybrid", "FRAMES": 64, "CHANNEL": 8},
-    # {"MODULE": "accuracy_module flops_module hardware_module", "MODE": "hybrid", "FRAMES": 64, "CHANNEL": 16},
-    
-    {"MODULE": "accuracy_module hardware_module", "MODE": "depth", "FRAMES": 4, "CHANNEL": 4},
-    {"MODULE": "accuracy_module hardware_module", "MODE": "depth", "FRAMES": 8, "CHANNEL": 8}, 
-    {"MODULE": "accuracy_module hardware_module", "MODE": "depth", "FRAMES": 16, "CHANNEL": 16},
-    {"MODULE": "accuracy_module hardware_module", "MODE": "depth", "FRAMES": 32, "CHANNEL": 32},
-    {"MODULE": "accuracy_module hardware_module", "MODE": "depth", "FRAMES": 64, "CHANNEL": 64},
-    {"MODULE": "accuracy_module hardware_module", "MODE": "fwdPass", "FRAMES": 16, "CHANNEL": 2},
-    {"MODULE": "accuracy_module hardware_module", "MODE": "fwdPass", "FRAMES": 32, "CHANNEL": 2}, 
-    {"MODULE": "accuracy_module hardware_module", "MODE": "fwdPass", "FRAMES": 64, "CHANNEL": 2}, 
-    {"MODULE": "accuracy_module hardware_module", "MODE": "hybrid", "FRAMES": 16, "CHANNEL": 4},
-    {"MODULE": "accuracy_module hardware_module", "MODE": "hybrid", "FRAMES": 16, "CHANNEL": 8},
-    {"MODULE": "accuracy_module hardware_module", "MODE": "hybrid", "FRAMES": 32, "CHANNEL": 4},
-    {"MODULE": "accuracy_module hardware_module", "MODE": "hybrid", "FRAMES": 32, "CHANNEL": 8},
-    # {"MODULE": "accuracy_module hardware_module", "MODE": "hybrid", "FRAMES": 64, "CHANNEL": 4},
-    # {"MODULE": "accuracy_module hardware_module", "MODE": "hybrid", "FRAMES": 64, "CHANNEL": 8},
-    # {"MODULE": "accuracy_module hardware_module", "MODE": "hybrid", "FRAMES": 64, "CHANNEL": 16},
-    
-    {"MODULE": "accuracy_module flops_module", "MODE": "depth", "FRAMES": 4, "CHANNEL": 4},
-    {"MODULE": "accuracy_module flops_module", "MODE": "depth", "FRAMES": 8, "CHANNEL": 8}, 
-    {"MODULE": "accuracy_module flops_module", "MODE": "depth", "FRAMES": 16, "CHANNEL": 16},
-    {"MODULE": "accuracy_module flops_module", "MODE": "depth", "FRAMES": 32, "CHANNEL": 32},
-    {"MODULE": "accuracy_module flops_module", "MODE": "depth", "FRAMES": 64, "CHANNEL": 64},
-    {"MODULE": "accuracy_module flops_module", "MODE": "fwdPass", "FRAMES": 16, "CHANNEL": 2},
-    {"MODULE": "accuracy_module flops_module", "MODE": "fwdPass", "FRAMES": 32, "CHANNEL": 2}, 
-    {"MODULE": "accuracy_module flops_module", "MODE": "fwdPass", "FRAMES": 64, "CHANNEL": 2}, 
-    {"MODULE": "accuracy_module flops_module", "MODE": "hybrid", "FRAMES": 16, "CHANNEL": 4},
-    {"MODULE": "accuracy_module flops_module", "MODE": "hybrid", "FRAMES": 16, "CHANNEL": 8},
-    {"MODULE": "accuracy_module flops_module", "MODE": "hybrid", "FRAMES": 32, "CHANNEL": 4},
-    {"MODULE": "accuracy_module flops_module", "MODE": "hybrid", "FRAMES": 32, "CHANNEL": 8},
-    # {"MODULE": "accuracy_module flops_module", "MODE": "hybrid", "FRAMES": 64, "CHANNEL": 4},
-    # {"MODULE": "accuracy_module flops_module", "MODE": "hybrid", "FRAMES": 64, "CHANNEL": 8},
-    # {"MODULE": "accuracy_module flops_module", "MODE": "hybrid", "FRAMES": 64, "CHANNEL": 16},
-    
-    # {"MODULE": "accuracy_module", "MODE": "depth", "FRAMES": 4, "CHANNEL": 4},
-    # {"MODULE": "accuracy_module", "MODE": "depth", "FRAMES": 8, "CHANNEL": 8}, 
-    # {"MODULE": "accuracy_module", "MODE": "depth", "FRAMES": 16, "CHANNEL": 16},
-    # {"MODULE": "accuracy_module", "MODE": "depth", "FRAMES": 32, "CHANNEL": 32},
-    # {"MODULE": "accuracy_module", "MODE": "depth", "FRAMES": 64, "CHANNEL": 64},
-    # {"MODULE": "accuracy_module", "MODE": "fwdPass", "FRAMES": 16, "CHANNEL": 2},
-    # {"MODULE": "accuracy_module", "MODE": "fwdPass", "FRAMES": 32, "CHANNEL": 2}, 
-    # {"MODULE": "accuracy_module", "MODE": "fwdPass", "FRAMES": 64, "CHANNEL": 2}, 
-    # {"MODULE": "accuracy_module", "MODE": "hybrid", "FRAMES": 16, "CHANNEL": 4},
-    # {"MODULE": "accuracy_module", "MODE": "hybrid", "FRAMES": 16, "CHANNEL": 8},
-    # {"MODULE": "accuracy_module", "MODE": "hybrid", "FRAMES": 32, "CHANNEL": 4},
-    # {"MODULE": "accuracy_module", "MODE": "hybrid", "FRAMES": 32, "CHANNEL": 8},
-    # {"MODULE": "accuracy_module", "MODE": "hybrid", "FRAMES": 64, "CHANNEL": 4},
-    # {"MODULE": "accuracy_module", "MODE": "hybrid", "FRAMES": 64, "CHANNEL": 8},
-    # {"MODULE": "accuracy_module", "MODE": "hybrid", "FRAMES": 64, "CHANNEL": 16},
+import subprocess
+from itertools import product
+
+datasets_cifar = ['CIFAR-10', 'CIFAR-100']
+optimizers = ['filtered', 'standard', 'basic', 'RS', 'RS_ruled']
+modules_list = [
+    ['accuracy_module'],
+    # ['accuracy_module', 'flops_module'],
+    # ['accuracy_module', 'hardware_module'],
+    ['accuracy_module', 'flops_module', 'hardware_module']
 ]
+gesture_modes = ['fwd']#, 'hybrid', 'depth']
+frames_list = [32, 64]
+channels_list =[2]# [4, 8, 16, 32, 64]
+seeds = [42, 84, 123, 256]
 
-# Crea una directory per gli script
-os.makedirs("sbatch_scripts", exist_ok=True)
 
-# # Testo comune del file sbatch
-# header_TEST = """#!/bin/bash
+def generate_jobs():
+    job_configs = []
 
-# #SBATCH --job-name={job_name}
-# #SBATCH --partition=gpuResB
-# #SBATCH --gres=gpu:1
-# #SBATCH --qos=gpuResB_qos
+    # CIFAR - accuracy only
+    for dataset, optimizer, seed in product(datasets_cifar, optimizers, seeds):
+        job_configs.append({
+            "data_name": dataset,
+            "opt": optimizer,
+            "mod_list": "accuracy_module flops_module",
+            "seed": seed,
+            "frames": 1,
+            "channels": 1
+        })
 
-# TIMESTAMP=$(date +%y_%m_%d_%H_%M_%S_%N)
+    # # Gesture - accuracy only
+    # for optimizer, mode, frames, channel, seed in product(optimizers, gesture_modes, frames_list, channels_list, seeds):
+    #     job_configs.append({
+    #         "data_name": "gesture",
+    #         "opt": optimizer,
+    #         "mod_list": "accuracy_module",
+    #         "gesture_mode": mode,
+    #         "frames": frames,
+    #         "channels": channel,
+    #         "seed": seed
+    #     })
 
-# MODULE="{module}"
-# DATASET="{dataset}"
-# EPOCH=100
-# MAX_EVAL=150
+    # # # CIFAR - all module combinations
+    # for dataset, optimizer, modules, seed in product(datasets_cifar, optimizers, modules_list, seeds):
+    #     job_configs.append({
+    #         "data_name": dataset,
+    #         "opt": optimizer,
+    #         "mod_list": " ".join(modules),
+    #         "seed": seed,
+    #         "frames": 1,
+    #         "channels": 1
+    #     })
+    # for optimizer, mode, frames, channel, modules, seed in product(optimizers, gesture_modes, frames_list, channels_list, modules_list, seeds):
+    #     job_configs.append({
+    #         "data_name": dataset,
+    #         "opt": optimizer,
+    #         "mod_list": " ".join(modules),
+    #         "seed": seed,
+    #         "frames": 1,
+    #         "channels": 1
+    #     })
 
-# # Genera il nome dell'esperimento
-# NAME_EXP="$(date +%y_%m_%d_%H)_${{SLURM_JOB_ID}}_OPTIMIZED_{mod_name}_${{MAX_EVAL}}_${{EPOCH}}"
+    return job_configs
 
-# mkdir -p ${{NAME_EXP}}
 
-# # Reindirizza manualmente stdout e stderr
-# exec > ${{NAME_EXP}}/${{TIMESTAMP}}.out 2> ${{NAME_EXP}}/${{TIMESTAMP}}.err
 
-# module load cuda/12.2
-# module load miniconda3/24.4.0
-# conda activate tf
+def save_job_configs_to_file(job_configs, filename="params.txt"):
+    # Ordina per seed
+    job_configs = sorted(job_configs, key=lambda x: x["seed"])
 
-# cd ${{HOME}}/Symbolic_DNN-Tuner
-# python main.py --mod_list ${{MODULE}} --name ${{NAME_EXP}} --max_eval ${{MAX_EVAL}} --epochs ${{EPOCH}} --data_name ${{DATASET}} 
-
-# if [[ -n "$SLURM_JOB_ID" ]]; then
-#     mv slurm-${{SLURM_JOB_ID}}.out ${{NAME_EXP}}/
-# fi
-# """
-
-header = """#!/bin/bash
-
-#SBATCH --job-name={job_name}
-#SBATCH --partition=gpuResB
-#SBATCH --gres=gpu:1
-#SBATCH --qos=gpuResB_qos
-
-TIMESTAMP=$(date +%y_%m_%d_%H_%M_%S_%N)
-
-DATASET="gesture"
-EPOCH=30
-MAX_EVAL=100
-MODULE="{module}"
-
-# Genera il nome dell'esperimento
-NAME_EXP="$(date +%y_%m_%d_%H)_${{SLURM_JOB_ID}}_gesture_${{MAX_EVAL}}_${{EPOCH}}_{mode}_{frames}_{channel}"
-
-mkdir -p ${{NAME_EXP}}
-
-# Reindirizza manualmente stdout e stderr
-exec > ${{NAME_EXP}}/output.log.out 2> ${{NAME_EXP}}/${{TIMESTAMP}}.err
-
-module load cuda/12.2
-module load miniconda3/24.4.0
-conda activate tf
-
-cd ${{HOME}}/Symbolic_DNN-Tuner
-python main.py --mod_list ${{MODULE}} --name ${{NAME_EXP}} --max_eval ${{MAX_EVAL}} --epochs ${{EPOCH}} --data_name ${{DATASET}} --frames {frames} --mode {mode} --channels {channel} 
-
-if [[ -n "$SLURM_JOB_ID" ]]; then
-    mv slurm-${{SLURM_JOB_ID}}.out ${{NAME_EXP}}/
-fi
-"""
-
-# Genera un file per ogni configurazione
-for config in configurations:
-    filename = f"sbatch_scripts/sbatch_{config['MODE']}_frames{config['FRAMES']}_channels{config['CHANNEL']}.slurm"
-    job_name = f"{config['MODE']}_{config['FRAMES']}_{config['CHANNEL']}"
-
-    # filename = "sbatch_scripts/sbatch_{}_{}.slurm".format(config['dataset'], "_".join(config['MODULE'].split(" ")))
-    # job_name = "O{}-c{}".format("".join([mod[0] for mod in config['MODULE'].split(" ")]), config['dataset'][-2:])
-    
     with open(filename, "w") as f:
-        f.write(header.format(
-            job_name=job_name,
-            frames=config["FRAMES"],
-            mode=config["MODE"],
-            channel=config["CHANNEL"],
-            module=config["MODULE"],
-        ))
-        # f.write(header.format(
-        #     job_name=job_name,
-        #     mod_name=config["dataset"].replace("-", "")+ "_" + config["MODULE"].replace(" ", "_"),
-        #     module=config["MODULE"],
-        #     dataset=config["dataset"],
-        # ))
-    # for i in range(3):
-    os.system(f"sbatch {filename}")
+        for config in job_configs:
+            line = ",".join(str(config[k]) for k in ["data_name", "opt", "mod_list", "seed", "frames", "channels"])
+            f.write(line + "\n")
 
-print("Script sbatch generati nella cartella 'sbatch_scripts' e run avviata.")
+def main():
+    job_configs = generate_jobs()
+    save_job_configs_to_file(job_configs)
+
+if __name__ == "__main__":
+    main()
