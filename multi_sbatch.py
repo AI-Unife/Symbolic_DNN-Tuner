@@ -23,7 +23,7 @@ def generate_jobs():
         job_configs.append({
             "data_name": dataset,
             "opt": optimizer,
-            "mod_list": "accuracy_module flops_module",
+            "mod_list": "flops_module",
             "seed": seed,
             "frames": 1,
             "channels": 1

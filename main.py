@@ -83,6 +83,7 @@ class ObjectiveWrapper:
 
         score = self.controller.training(space_dict)
         K.clear_session()
+        print("Score:", score, flush=True)
         return score
 
 def print_space(space):

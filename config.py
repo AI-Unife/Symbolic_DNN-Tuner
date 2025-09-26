@@ -3,8 +3,8 @@ import argparse
 # def get_experiment_name():
 parser = argparse.ArgumentParser()
 print("Symbolic DNN Tuner Configuration")
-parser.add_argument("--eval", type=int, default=30, help="Max number of evaluations")
-parser.add_argument("--epochs", type=int, default=20, help="Epochs for training")
+parser.add_argument("--eval", type=int, default=3, help="Max number of evaluations")
+parser.add_argument("--epochs", type=int, default=2, help="Epochs for training")
 parser.add_argument("--mod_list", nargs="+", default=["accuracy_module"],
                     help="Lista dei moduli separati da spazio (es: hardware_module accuracy_module)")
 parser.add_argument("--dataset", type=str, default="CIFAR-10", help="Dataset name")

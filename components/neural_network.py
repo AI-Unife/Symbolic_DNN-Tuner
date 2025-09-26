@@ -83,7 +83,7 @@ class neural_network:
     class used for the management of the neural network architecture,
     offering methods for training the dnn and adding and removing convolutional layers
     """
-    def __init__(self, X_train, Y_train, X_test, Y_test, n_classes, best_score=0):
+    def __init__(self, X_train, Y_train, X_test, Y_test, n_classes):
         """
         initialized the attributes of the class.
         first part is used for storing the examples of the dataset,
@@ -105,7 +105,6 @@ class neural_network:
         self.dense = False
         self.conv = False
         self.dnet = dynamic_net()
-        self.best_score = best_score
 
     def build_network(self, params):
         """
@@ -440,25 +439,21 @@ class neural_network:
 
         # save the neural network weights and then reload them from the same json file you just saved
         # this avoids errors because of the changes in the network structure before training
-        weights_name = "{}/Weights/weights-{}.weights.h5".format(cfg.NAME_EXP,model_name_id)
-        model.save_weights(weights_name)
+        # weights_name = "{}/Weights/weights-{}.weights.h5".format(cfg.NAME_EXP,model_name_id)
+        # model.save_weights(weights_name)
 
-        model.save("{}/dashboard/model/model.keras".format(cfg.NAME_EXP))
+        # model.save("{}/dashboard/model/model.keras".format(cfg.NAME_EXP))
         
-        f = open("{}/Model/model-{}.json".format(cfg.NAME_EXP,model_name_id))
-        mj = json.load(f)
-        model_json = json.dumps(mj)
-        model = tf.keras.models.model_from_json(model_json)
-        model.load_weights("{}/Weights/weights-{}.weights.h5".format(cfg.NAME_EXP, model_name_id))
-        # print(score[1], self.best_score)
-        if score[1] > self.best_score:
-            self.best_score = score[1]  
-            # print("Best model saved")
-            model.save("{}/Model/best-model.keras".format(cfg.NAME_EXP))
-
-        os.system("rm {}/Weights/weights-{}.weights.h5".format(cfg.NAME_EXP, model_name_id))
-        os.system("rm {}/Model/model-{}.json".format(cfg.NAME_EXP, model_name_id))
-        return score, history, model, self.best_score
+        # f = open("{}/Model/model-{}.json".format(cfg.NAME_EXP,model_name_id))
+        # mj = json.load(f)
+        # model_json = json.dumps(mj)
+        # model = tf.keras.models.model_from_json(model_json)
+        # model.load_weights("{}/Weights/weights-{}.weights.h5".format(cfg.NAME_EXP, model_name_id))
+        
+        # os.system("rm {}/Weights/weights-{}.weights.h5".format(cfg.NAME_EXP, model_name_id))
+        # os.system("rm {}/Model/model-{}.json".format(cfg.NAME_EXP, model_name_id))
+        
+        return score, history, model
 
     
 

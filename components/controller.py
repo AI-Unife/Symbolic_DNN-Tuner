@@ -151,8 +151,8 @@ class controller:
         print(colors.OKBLUE, "|  --> START TRAINING\n", colors.ENDC)
         
         K.clear_session()
-        self.nn = neural_network(self.X_train, self.Y_train, self.X_test, self.Y_test, self.n_classes, self.best_score)
-        self.score, self.history, self.model, self.best_score = self.nn.training(params, self.da)
+        self.nn = neural_network(self.X_train, self.Y_train, self.X_test, self.Y_test, self.n_classes)
+        self.score, self.history, self.model = self.nn.training(params, self.da)
         # update state of modules
         # each module will take the necessary args internally
         self.modules.state(self.score[0], self.score[1], self.model)
@@ -178,10 +178,16 @@ class controller:
         # accuracy will be the value to be optimized
         # otherwise return the finale function value to be optimized
         if (len(self.modules.modules_obj) == 0) or not self.modules.all_zeros_weights() or not self.modules.ready():
-            return -self.score[1]
+            score = -self.score[1]
         else:
             _, _, opt_value = self.modules.optimiziation()
-            return opt_value
+            score = opt_value
+        
+        if score > self.best_score:
+            self.best_score = score
+            # print("Best model saved")
+            self.model.save("{}/Model/best-model.keras".format(cfg.NAME_EXP))
+        return score
 
     def diagnosis(self):
         """
