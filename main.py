@@ -10,8 +10,7 @@ from tensorflow.keras import backend as K
 
 from components.colors import colors
 from components.controller import controller
-from components.dataset import cifar_data, mnist, cifar_data_100
-from components.gesture_dataset import gesture_data, ROI_data
+from components.dataset import get_datasets
 from components.search_space import search_space
 from skopt.space import Real, Integer, Categorical
 
@@ -52,20 +51,6 @@ def copy_symbolic_files():
     except OSError:
         print(colors.FAIL, "Failed to copy symbolic directory", colors.ENDC)
         exit()
-        
-def load_dataset():
-    datasets = {
-        "MNIST": mnist,
-        "CIFAR-10": cifar_data,
-        "CIFAR-100": cifar_data_100,
-        "gesture": gesture_data,
-        "ROI": ROI_data
-    }
-    if cfg.DATA_NAME in datasets:
-        return (*datasets[cfg.DATA_NAME](),)
-    else:
-        print(colors.FAIL, "Dataset not found", colors.ENDC)
-        sys.exit()
 
 class ObjectiveWrapper:
     def __init__(self, space, controller):
@@ -98,7 +83,6 @@ def print_diff(old_space, new_space):
             print(colors.CYAN, f"Dimension {i}: {old_dim.name} changed from {old_dim} to {new_dim}", colors.ENDC)
         else:
             print(colors.FAIL, f"Dimension {i}: {old_dim.name} unchanged", colors.ENDC)
-
 
 
 def apply_constraints(space, params):
@@ -205,7 +189,7 @@ if __name__ == "__main__":
     create_experiment_folders()
     copy_symbolic_files()
 
-    X_train, X_test, Y_train, Y_test, n_classes = load_dataset()
+    X_train, X_test, Y_train, Y_test, n_classes = get_datasets(cfg.DATA_NAME.strip().lower())
 
     sp = search_space()
     first_space = sp.search_sp()

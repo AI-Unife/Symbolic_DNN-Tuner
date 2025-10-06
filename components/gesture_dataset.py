@@ -249,8 +249,7 @@ def get_ROI_numpy():
 def ROI_data():
     return gesture_data(ROI=True)
 
-def gesture_data(ROI=False):
-    num_classes = 11
+def gesture_data(num_classes = 11, ROI=False):
     # The data, split between train and test sets:
     if ROI:
         (x_train, y_train), (x_test, y_test) = get_ROI_numpy()
@@ -267,5 +266,5 @@ def gesture_data(ROI=False):
     print("shape of y_train: ", y_train.shape)
     print("shape of x_test: ", x_test.shape)
     print("shape of y_test: ", y_test.shape)
-    return x_train, x_test, y_train, y_test, num_classes
+    return x_train, x_test, y_train, y_test
 

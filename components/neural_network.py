@@ -18,7 +18,6 @@ from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.models import Sequential
 
 from components.gesture_dataset import gesture_data
-from components.dataset import cifar_data
 from components.search_space import search_space
 from components.colors import colors
 from components.custom_train import train_model, eval_model

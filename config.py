@@ -7,7 +7,7 @@ parser.add_argument("--eval", type=int, default=3, help="Max number of evaluatio
 parser.add_argument("--epochs", type=int, default=2, help="Epochs for training")
 parser.add_argument("--mod_list", nargs="+", default=["accuracy_module"],
                     help="Lista dei moduli separati da spazio (es: hardware_module accuracy_module)")
-parser.add_argument("--dataset", type=str, default="CIFAR-10", help="Dataset name")
+parser.add_argument("--dataset", type=str, default="ImageNet16-120", help="Dataset name")
 parser.add_argument("--name", type=str, default="debug", help="Experiment name")
 parser.add_argument("--frames", type=int, default=16, help="Number of frames for gesture dataset")
 parser.add_argument("--mode", type=str, default="fwdPass", help="Mode for the experiment (fwdPass, depth or hybrid)")
