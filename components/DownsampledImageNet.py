@@ -1,6 +1,7 @@
 # imagenet16_tf.py
 import os, sys, hashlib, pickle
 import numpy as np
+import matplotlib.pyplot as plt
 
 try:
     import tensorflow as tf  # opzionale: solo per type/dtypes convenienti
@@ -125,3 +126,48 @@ def load_imagenet16(
     y_test  = y_test.astype(np.int64)
 
     return x_train, y_train, x_test, y_test
+
+
+def show_samples(x, y=None, n=9, class_names=None, cmap=None):
+    """
+    Mostra n immagini di esempio dal dataset.
+
+    Args:
+        x (ndarray): immagini in formato (N, H, W, C)
+        y (ndarray): etichette corrispondenti (opzionale)
+        n (int): numero di immagini da mostrare (default: 9)
+        class_names (list[str]): nomi delle classi (opzionale)
+        cmap: colormap matplotlib (opzionale)
+    """
+    n = min(n, len(x))
+    idxs = np.random.choice(len(x), n, replace=False)
+
+    cols = int(np.ceil(np.sqrt(n)))
+    rows = int(np.ceil(n / cols))
+    plt.figure(figsize=(cols * 2, rows * 2))
+
+    for i, idx in enumerate(idxs):
+        plt.subplot(rows, cols, i + 1)
+        img = x[idx]
+        # se normalizzate, riportiamo a [0,1]
+        if img.dtype != np.uint8:
+            img = (img - img.min()) / (img.max() - img.min() + 1e-8)
+        plt.imshow(img, cmap=cmap)
+        if y is not None:
+            label = y[idx]
+            if class_names and label < len(class_names):
+                plt.title(class_names[label], fontsize=8)
+            else:
+                plt.title(f"class {label}", fontsize=8)
+        plt.axis("off")
+
+    plt.tight_layout()
+    plt.show()
+
+
+# --- esempio d’uso ---
+if __name__ == "__main__":
+    root = "./ImageNet16"
+    x_train, y_train, x_test, y_test = load_imagenet16(root, use_num_of_class_only=120, normalize=False)
+    print(f"Train: {x_train.shape}, Test: {x_test.shape}")
+    show_samples(x_train, y_train, n=12)
