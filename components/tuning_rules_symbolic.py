@@ -65,28 +65,28 @@ class tuning_rules_symbolic:
         """
         method used to add a dense layer
         """
-        self.count_new_fc += 1
         if self.count_new_fc + self.start_fc > self.max_fc:
             print(colors.FAIL, "Max number of dense layers reached", colors.ENDC)
             print(colors.FAIL, "start dense layers: ", self.start_fc, " Dense layers: ", self.count_new_fc + self.start_fc, " Max dense layers: ", self.max_fc, colors.ENDC)
-            self.count_new_fc -= 1
+            # self.count_new_fc -= 1
         else:
+            self.count_new_fc += 1
             self.controller.add_fc_layer(True, self.count_new_fc)
-            new_p = {f"new_unit_d{self.count_new_fc}": 512}
+            new_p = {f"new_fc_{self.count_new_fc}": 512}
             self.space = self.ss.add_params(new_p)
 
     def new_conv_layer(self):
         """
         method used to add a convolutional layer
         """
-        self.count_new_cv += 1
         if self.max_conv:
             tot_conv = self.start_conv + self.count_new_cv * 2
             if tot_conv > self.max_conv:
                 print(colors.FAIL, "Max number of convolutional layers reached", colors.ENDC)
                 print(colors.FAIL, "Convolutional layers: ", tot_conv - 2, " Max convolutional layers: ", self.max_conv, colors.ENDC)
-                self.count_new_cv -= 1
-            else:  
+                # self.count_new_cv -= 1
+            else:
+                self.count_new_cv += 1
                 new_p = {f"new_conv_{self.count_new_cv}": 512}
                 self.space = self.ss.add_params(new_p)
                 self.controller.add_conv_section(True, self.count_new_cv)
@@ -182,11 +182,13 @@ class tuning_rules_symbolic:
         """
         method used to remove a convolutional layer from the neural network
         """
-        self.count_new_cv -= 1
+        print('Removing convolutional layer')
+        print(self.count_new_cv)
         if self.count_new_cv < 1:
             print(colors.FAIL, "No more convolutional layers to remove", colors.ENDC)
             self.count_new_cv = 0
             return
+        self.count_new_cv -= 1
         new_p = {f"new_conv_{self.count_new_cv}": 512}
         self.space = self.ss.remove_params(new_p)
         self.controller.remove_conv_section(True)
@@ -195,11 +197,13 @@ class tuning_rules_symbolic:
         """
         method used to remove a dense layer from the neural network
         """
-        self.count_new_fc -= 1
+        print('Removing dense layer')
+        print(self.count_new_fc)
         if self.count_new_fc < 1:
             print(colors.FAIL, "No more dense layers to remove", colors.ENDC)
             self.count_new_fc = 0
             return
+        self.count_new_fc -= 1
         new_p = {f"new_fc_{self.count_new_fc}": 512}
         self.space = self.ss.remove_params(new_p)
         self.controller.remove_fully_connected(True)

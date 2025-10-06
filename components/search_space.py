@@ -95,7 +95,7 @@ class search_space:
         """
         # initialize the accumulator of new hyperparameters as an empty list
         new_Hp = []
-
+        print(params.keys())
         # iter on all parameters to be added
         for i, dim in enumerate(self.search_space.dimensions):
             if dim.name not in params.keys(): 

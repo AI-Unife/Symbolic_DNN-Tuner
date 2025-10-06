@@ -1,11 +1,13 @@
 0.99::action(reg_l2,overfitting):- problem(overfitting).
-0.99::action(decr_lr,inc_loss):- problem(inc_loss).
-0.99::action(decr_lr,high_lr):- problem(high_lr).
+0.99::action(dec_layers,overfitting):- problem(overfitting).
+0.5::action(dec_fc,overfitting):- problem(overfitting).
 0.4::action(inc_dropout,overfitting):- problem(overfitting).
 0.6::action(data_augmentation,overfitting):- problem(overfitting).
 0.3::action(decr_lr,underfitting):- problem(underfitting).
 0.5::action(inc_neurons,underfitting):- problem(underfitting).
 0.35::action(new_fc_layer,underfitting):- problem(underfitting).
 0.35::action(new_conv_layer,underfitting):- problem(underfitting).
+0.99::action(decr_lr,inc_loss):- problem(inc_loss).
+0.99::action(decr_lr,high_lr):- problem(high_lr).
 0.85::action(inc_batch_size,floating_loss):- problem(floating_loss).
 0.15::action(decr_lr,floating_loss):- problem(floating_loss).

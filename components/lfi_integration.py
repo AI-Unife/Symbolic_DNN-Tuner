@@ -16,32 +16,7 @@ class LfiIntegration:
         """
         self.db = db
         self.experience = []
-        self.ove = Term('ove')
-        self.und = Term('und')
-        self.flo = Term('flo')
-        self.reg_l2 = Term('reg_l2')
-        self.inc_dropout = Term('inc_dropout')
-        self.decr_lr = Term('decr_lr')
-        self.inc_neurons = Term('inc_neurons')
-        self.inc_batch_size = Term('inc_batch_size')
-        self.data_augmentation = Term('data_augmentation')
-        self.overfitting = Term('overfitting')
-        self.underfitting = Term('underfitting')
-        self.inc_loss = Term('inc_loss')
-        self.floating_loss = Term('floating_loss')
-        self.high_lr = Term('high_lr')
-        self.low_lr = Term('low_lr')
-        self.inc_lr = Term('inc_lr')
-        self.action1 = Term('action', self.reg_l2, self.overfitting)
-        self.action2 = Term('action', self.inc_dropout, self.overfitting)
-        self.action3 = Term('action', self.decr_lr, self.underfitting)
-        self.action4 = Term('action', self.inc_neurons, self.underfitting)
-        self.action5 = Term('action', self.decr_lr, self.inc_loss, self.inc_loss)
-        self.action6 = Term('action', self.inc_batch_size, self.floating_loss)
-        self.action7 = Term('action', self.decr_lr, self.floating_loss)
-        self.action8 = Term('action', self.data_augmentation, self.overfitting)
-        self.action9 = Term('action', self.inc_lr, self.low_lr)
-        self.action10 = Term('action', self.decr_lr, self.high_lr)
+
 
     def get_str(self, s, before, after):
         return (i.split(after)[0] for i in s.split(before)[1:] if after in i)
@@ -107,6 +82,20 @@ class LfiIntegration:
         to_learn += actions
 
         # get probabilities of each action and the model on which the learning was performed
+        # print("experience: ", self.experience)
         _, weights, _, _, lfi_problem = lfi.run_lfi(PrologString(to_learn), self.experience)
 
         return weights, lfi_problem
+
+
+
+# 1 [[(action(new_fc_layer,underfitting), False), (action(dec_layers,latency), False), (action(dec_layers,model_size), False)],
+# 2 [(action(inc_neurons,underfitting), True), (action(dec_layers,latency), True), (action(dec_layers,model_size), True)],
+# 3 [(action(reg_l2,overfitting), False), (action(dec_layers,overfitting), False), (action(inc_neurons,underfitting), False), (action(dec_layers,latency), False), (action(dec_layers,model_size), False)],
+# 4 [(action(inc_neurons,underfitting), False), (action(dec_layers,latency), False), (action(dec_layers,model_size), False)],
+# 5 [(action(reg_l2,overfitting), True), (action(dec_layers,overfitting), True), (action(new_conv_layer,underfitting), True), (action(dec_layers,latency), True), (action(dec_layers,model_size), True)],
+# 6 [(action(reg_l2,overfitting), True), (action(dec_layers,overfitting), True), (action(dec_layers,latency), True), (action(dec_layers,model_size), True)],
+# 7 [(action(reg_l2,overfitting), False), (action(dec_layers,overfitting), False), (action(new_conv_layer,underfitting), False), (action(dec_layers,latency), False), (action(dec_layers,model_size), False)],
+# 8 [(action(reg_l2,overfitting), True), (action(dec_layers,overfitting), True), (action(inc_neurons,underfitting), True), (action(dec_layers,latency), True), (action(dec_layers,model_size), True)],
+# 9 [(action(inc_neurons,underfitting), False), (action(dec_layers,latency), False),
+#                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  (action(dec_layers,model_size), False)]]

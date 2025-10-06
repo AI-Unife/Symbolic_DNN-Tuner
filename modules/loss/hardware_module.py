@@ -7,7 +7,7 @@ from pathlib import Path
 from tensorflow.keras import layers, models
 
 import nvdla.profiler as profiler
-from math import sqrt
+import config as cfg
 
 class hardware_module(common_interface):
 
@@ -102,7 +102,10 @@ class hardware_module(common_interface):
         pass
 
     def log_function(self):
-        pass
+        f = open("{}/algorithm_logs/hw_report.txt".format(cfg.NAME_EXP), "a")
+        f.write(str(self.latency) + "," + str(self.cost) + "," + str(self.total_cost) + "," + str(
+            self.current_config) + "\n")
+        f.close()
 
     def LENET(self):
         """

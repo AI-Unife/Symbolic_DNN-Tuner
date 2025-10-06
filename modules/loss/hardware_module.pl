@@ -15,5 +15,6 @@ t(0.5)::action(dec_neurons, out_range).
 0.5::action(dec_neurons, out_range):- problem(out_range).
 
 %expanding old rules
-0.5::action(new_fc_layer):- \+problem(out_range).
-0.45::action(new_conv_layer):- \+problem(out_range).
+0.5::action(new_fc_layer, underfitting):- problem(underfitting), \+problem(out_range).
+0.45::action(new_conv_layer, underfitting):- problem(underfitting), \+problem(out_range).
+0.45::action(inc_neurons, underfitting):- problem(underfitting), \+problem(out_range).

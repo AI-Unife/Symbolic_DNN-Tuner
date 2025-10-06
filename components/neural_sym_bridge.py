@@ -5,6 +5,8 @@ from problog import get_evaluatable
 from problog.tasks import sample
 
 import config as cfg
+from tensorflow.python.keras.utils.np_utils import normalize
+
 
 class NeuralSymbolicBridge:
     """
@@ -52,57 +54,29 @@ class NeuralSymbolicBridge:
         :param sym_model prev_model: old and new set of actions used to update various rules
         :return: complete model with the new probabilities
         """
-        new_str = ""
+        fact_re = re.compile(r'^\s*([0-9.]+)\s*::\s*([a-z][A-Za-z0-9_]*(?:\([^)]*\))?)\s*\.\s*$')
+        rule_re = re.compile(r'^\s*([0-9.]+)\s*::\s*([a-z][A-Za-z0-9_]*(?:\([^)]*\))?)\s*:-\s*(.+?)\s*\.\s*$')
 
-        # divide the new set of actions into list of lines
-        temp = sym_model.split("\n")
+        # mappa head -> nuova probabilità da progA
+        prob_map = {}
+        for line in sym_model.splitlines():
+            m = fact_re.match(line)
+            if m:
+                p, head = m.group(1), m.group(2)
+                prob_map[head] = p
 
-        # save the "eve" atom as the first element of the new model
-        res = [] #[temp[0]]
-        # iter on each pair of new and old actions
-        if len(temp) != len(prev_model):
-            if "" in prev_model:
-                prev_model.remove("")
-            if "" in temp:
-                temp.remove("")
-        for a, p in zip(temp, prev_model):
-            # if the eve atom is in the body of the rule,
-            # remove it and end the body of the rule with a dot
-            # if "eve" in a:
-            #     a = a[:-8] + "."
+        out_lines = []
+        for line in prev_model.splitlines():
+            m = rule_re.match(line)
+            if m:
+                _, head, body = m.groups()
+                p = prob_map.get(head)
+                if p is not None:
+                    out_lines.append(f"{p}::{head} :- {body}.")
+                    continue
+            out_lines.append(line)  # se non c'è match o non c'è prob sostitutiva
 
-            # find the index to subdivide the head and body of the rule
-            # and use it to get the problems of the current action
-            # prob_st = p.find(":-")
-            # problem = p[prob_st:]
-            # print("p: ", p)
-            problem = p.split(":-")[-1].strip()
-            # print("Problem:\n", problem)
-            # add them to the head with the new probability
-            new = a[:-1] + ":-" +problem
-            # print(new)
-            res.append(new)
-        
-        # for t in temp[1:]:
-        #     cprob = 0
-        #     for p in self.problems:
-        #         if p in t:
-        #             where = t.find(p)
-        #             cprob += 1
-        #             if "eve" in t:
-        #                 new_str = t[:len(t) - 1] + ", problem(" + p + "), "
-        #                 # res.append(t[:len(t) - 1] + ", problem(" + p + ").")
-        #                 continue
-        #             else:
-        #                 if cprob == 1:
-        #                     new_str = t[:len(t) - 1] + "problem(" + p + "), "
-        #                 else:
-        #                     if t[where-2:where] == 'n_':
-        #                         new_str = new_str + ":- \+problem(" + p + "), "
-        #                     else:
-        #                         new_str = new_str + ":- problem(" + p + "), "
-        #     res.append(new_str[:len(new_str)-2] + ".")
-        return "\n".join(res)
+        return "\n".join(out_lines)
 
     def clean_problems(self, problems):
         """
@@ -113,65 +87,83 @@ class NeuralSymbolicBridge:
         clean_p = r'[.\s]'
         return [re.sub(clean_p, '', p) for p in problems]
 
+    import re
+
     def build_sym_prob(self, problems):
         """
-        method used to dynamically add actions from the various modules
-        :param problems: rules in which are defined new problems and the actions to use to solve them
+        Unisce TUTTE le regole probabilistiche che hanno la stessa testa in UNA SOLA regola:
+        - congiunge i corpi con AND (',')
+        - imposta SEMPRE la probabilità a 0.5 (ignora le probabilità originali)
+        - preserva deterministic rules/atomi così come sono
         """
-        # read the file containing the set of actions
-        base_model = open("{}/symbolic/sym_prob_base.pl".format(cfg.NAME_EXP), "r").read()
-        
-        # add the new problems from modules
-        base_model += problems
- 
-        # init dict containing the actions as an empty dict and the final rules string as empty string
-        rules_dict = {}
-        rules = ""
+        # Carica base + aggiunte
+        with open(f"{cfg.NAME_EXP}/symbolic/sym_prob_base.pl", "r") as f:
+            base_model = f.read()
+        full_model = base_model + ("\n" if not base_model.endswith("\n") else "") + problems
 
-        # iterate over each action
-        for problem in base_model.splitlines():
-            # filter model based on different types of rules using regular expressions
-            # atoms, probilistic and deterministic rules
-            # probabilistic rules splitted in prob, action and problems
-            prob_rules = re.search(r'(.*)(?<=::)(.*)(?<=:-)(.*)', problem)
-            det_rules = re.search(r'^([\D].*)', problem)
-            atoms = re.search(r'^((?!:-).)*$', problem)
+        # Accumulatori
+        # Chiave: head (inclusi argomenti e arità) -> insieme di corpi (stringhe normalizzate)
+        heads_to_bodies = {}
+        other_lines = []
+        seen_other = set()
 
-            # adding atoms and deterministic rules to the final string
-            if atoms is not None:
-                rules += "".join(atoms.group()) + "\n"
+        # Regex
+        prob_with_body_re = re.compile(
+            r'^\s*([0-9]*\.?[0-9]+)\s*::\s*([a-z][A-Za-z0-9_]*(?:\([^()]*\))?)\s*:-\s*(.+?)\s*\.\s*$'
+        )
+        comment_or_empty_re = re.compile(r'^\s*(%.*)?$')
 
-            if det_rules is not None:
-                rules += "".join(det_rules.group()) + "\n"
+        def normalize_text(s: str) -> str:
+            s = re.sub(r'\s+', ' ', s.strip())
+            s = re.sub(r'\s*,\s*', ', ', s)
+            s = re.sub(r'\s*;\s*', ' ; ', s)  # nel caso ci siano OR espliciti
+            return s
 
-            if prob_rules is not None:
-                #get probabilty and action
-                base_prob, action = prob_rules.group(1), prob_rules.group(2)
-                # use the name of the action as a key
-                # each element of the dict has a list of two elements
-                # first is the rule's probability, the second a list of possible problems
-                if not action in rules_dict:
-                    rules_dict[action] = [base_prob, []]
-  
-                # add to the actions list the possible problems from modules
-                new_problems = self.clean_problems(prob_rules.group(3).split(','))
-                rules_dict[action][1] += new_problems
+        def parenthesize(body: str) -> str:
+            """Per sicurezza, racchiude ogni corpo tra parentesi quando lo congiungiamo con AND."""
+            if body == 'true':
+                return body
+            return f'({body})'
 
-        # iterate over every probabilistic action
-        for action in rules_dict:
-            # init rule with prob and name of the action
-            new_rule = rules_dict[action][0] + action
- 
-            # delete duplicate problems with set
-            merged_problem = list(set(rules_dict[action][1]))
+        # Parse
+        for raw_line in full_model.splitlines():
+            line = raw_line.rstrip()
 
-            # complete the rule and add it to the model
-            for new_p in merged_problem:
-                new_rule += " " + new_p +  ","    
-            rules += new_rule[:-1] + ".\n"
-        f = open("{}/symbolic/sym_prob.pl".format(cfg.NAME_EXP), "w")
-        f.write(rules)
-        f.close()
+            if comment_or_empty_re.match(line):
+                if line not in seen_other:
+                    other_lines.append(line)
+                    seen_other.add(line)
+                continue
+
+            m = prob_with_body_re.match(line)
+            if m:
+                prob = float(m.group(1))
+                head = normalize_text(m.group(2))
+                body = normalize_text(m.group(3))
+                if head not in heads_to_bodies:
+                    heads_to_bodies[head] = {'prob': prob, 'body': body}
+                else:
+                    heads_to_bodies[head]['prob'] = (heads_to_bodies[head]['prob'] + prob)/2
+                    tot_body = set((heads_to_bodies[head]['body'] +', ' + body).split(', '))
+                    heads_to_bodies[head]['body'] = ', '.join(b for b in tot_body)
+                continue
+
+            # deterministic/atomi
+            if line not in seen_other:
+                other_lines.append(line)
+                seen_other.add(line)
+
+        # Ricostruzione
+        out_lines = []
+        # out_lines.extend(other_lines)
+
+        # Per ogni testa, congiungi i corpi e imposta 0.5
+        for idx, item in heads_to_bodies.items():
+            out_lines.append(f"{item['prob']}::{idx} :- {item['body']}.")
+
+        final_text = "\n".join(out_lines).rstrip() + "\n"
+        with open(f"{cfg.NAME_EXP}/symbolic/sym_prob.pl", "w") as f:
+            f.write(final_text)
 
     def edit_probs(self, sym_model):
         """
@@ -181,33 +173,12 @@ class NeuralSymbolicBridge:
         # read the file containing the old set of actions
         prev_model = open("{}/symbolic/sym_prob.pl".format(cfg.NAME_EXP), "r").read()
 
-        # get the new probabilities of the tuning actions as a result of reasoning,
-        # this using a regular expression with the pattern defined as the first parameter
-        # x = re.findall("[0-9][.].*[:][:]['a']", sym_model)
-        # print("sym model: ", sym_model)
-        # print("Prev: ", prev_model)
-        # # iterate over each actions probabilty
-        # for i in range(len(x)):
-        #     # proceed using the same regular expression to get the old probabilities
-        #     # and replace them with the 'sub' function of regular expressions
-        #     xx = re.findall("[0-9][.].*[:][:]['a']", prev_model)
-        #     print(xx[i], ' --> ', x[i])
-        #     new = re.sub(xx[i], x[i], sym_model)
-        
-        # print("new final: ", new)
-        # print("sym model final: ", sym_model)
-
-        new = sym_model
-            
-
         # call the method for completing each action with the body of the each rule
-        new = self.complete_probs(new, prev_model.split("\n"))
-
+        new = self.complete_probs(sym_model, prev_model)
         # updates the file on which the actions are stored
         f = open("{}/symbolic/sym_prob.pl".format(cfg.NAME_EXP), "w")
         f.write(new)
         f.close()
-        # print("New Probabilities: ", new)
 
     def symbolic_reasoning(self, facts, diagnosis_logs, tuning_logs, rules):
         """

@@ -48,7 +48,7 @@ def create_experiment_folders():
 
 def copy_symbolic_files():
     try:
-        os.system(f"cp /hpc/home/bzzlca/Symbolic_DNN-Tuner/symbolic_base/* {cfg.NAME_EXP}/symbolic/")
+        os.system(f"cp ./symbolic_base/* {cfg.NAME_EXP}/symbolic/")
     except OSError:
         print(colors.FAIL, "Failed to copy symbolic directory", colors.ENDC)
         exit()
@@ -145,7 +145,7 @@ def run_optimization(search_space, controller, max_iter):
         print(colors.MAGENTA, f"--- ITERATION {it+1} ---", colors.ENDC)
         it += 1
         res = load('{}/checkpoints/checkpoint.pkl'.format(cfg.NAME_EXP))
-        print_diff(search_space, new_space)
+        # print_diff(search_space, new_space)
 
         if len(new_space.dimensions) == len(search_space.dimensions):
             if cfg.OPT in with_rules:

@@ -3,10 +3,8 @@ from tensorflow.keras import backend as K
 import matplotlib.pyplot as plt
 
 from components.colors import colors
-from components.diagnosis import diagnosis
 from components.neural_network import neural_network
 from components.search_space import search_space
-from components.tuning_rules import tuning_rules
 from components.tuning_rules_symbolic import tuning_rules_symbolic
 from components.neural_sym_bridge import NeuralSymbolicBridge
 from components.lfi_integration import LfiIntegration
@@ -183,7 +181,7 @@ class controller:
             _, _, opt_value = self.modules.optimiziation()
             score = opt_value
         
-        if score > self.best_score:
+        if score < self.best_score:
             self.best_score = score
             # print("Best model saved")
             self.model.save("{}/Model/best-model.keras".format(cfg.NAME_EXP))
@@ -255,13 +253,7 @@ class controller:
         diagnosis_logs.close()
         tuning_logs.close()
         
-        # print(self.symbolic_tuning)
-        # print(self.symbolic_diagnosis)
-        for p in self.symbolic_diagnosis:
-            print("I've found a problem: ", p)
-        
-        for s in self.symbolic_tuning:
-            print("I've found a solution: ", s)
+
 
         print(colors.CYAN, "| END SYMBOLIC DIAGNOSIS   ----------------------------------  |\n", colors.ENDC)
 

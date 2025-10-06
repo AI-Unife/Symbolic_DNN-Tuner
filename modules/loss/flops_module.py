@@ -15,12 +15,12 @@ class flops_module(common_interface):
     problems = ['latency', 'model_size']
 
     #weight of the module for the final loss calculation
-    weight = 0.5
+    weight = 0.33
 
     def __init__(self):
-        self.epsilon = 0.33
-        self.flops_th = 10000000 # 0.1 GFLOPs
-        self.nparams_th = 2500000 # 2.5M params 
+        # self.epsilon = 0.33
+        self.flops_th = 100000000 # 0.1 GFLOPs
+        self.nparams_th = 25000000 # 25M params
         self.tuner_opt_function = []
         self.flops_gap = []
         self.tuner_steps = 0
@@ -47,7 +47,7 @@ class flops_module(common_interface):
         flops_th = 1
         nflops = self.flops / self.flops_th
         fit_up_flops = flops_th - nflops
-        res = -(self.accuracy + fit_up_flops*self.epsilon)
+        res = -fit_up_flops
         self.flops_gap.append(fit_up_flops)
         self.tuner_steps += 1
         self.tuner_opt_function.append(res)
