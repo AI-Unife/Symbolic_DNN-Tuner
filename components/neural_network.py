@@ -255,7 +255,7 @@ class neural_network:
                     history["accuracy"].append(random.uniform(0.1, 1.0))
             else:
                 history = model.fit(self.train_data, self.train_labels, epochs=self.epochs, batch_size=params['batch_size'],
-                            verbose=1,
+                            verbose=2,
                             validation_data=(self.test_data, self.test_labels),
                             callbacks=[tensorboard, reduce_lr, es1, es2]).history
 
@@ -270,7 +270,7 @@ class neural_network:
             if "debug" in cfg.NAME_EXP:
                 score = [random.uniform(0.1, 0.5), random.uniform(0.1, 1.0)]  # Simulated score for depth mode
             else:
-                score = model.evaluate(self.test_data, self.test_labels)
+                score = model.evaluate(self.test_data, self.test_labels, verbose=2)
 
         # save the neural network weights and then reload them from the same json file you just saved
         # this avoids errors because of the changes in the network structure before training
