@@ -281,6 +281,7 @@ def build_stacked_fractional_change_plot(csv_path: Path,
         deltas.to_csv(out_csv)
 
     # Plot (one figure, default colors, stacked)
+    deltas = deltas[1:]
     x = np.arange(len(deltas.index))
     bottom = np.zeros(len(deltas), dtype=float)
     plt.figure(figsize=(12, 6))

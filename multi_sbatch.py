@@ -23,6 +23,14 @@ def generate_jobs():
         job_configs.append({
             "data_name": dataset,
             "opt": optimizer,
+            "mod_list": "accuracy_module",
+            "seed": seed,
+            "frames": 1,
+            "channels": 1
+        })
+        job_configs.append({
+            "data_name": dataset,
+            "opt": optimizer,
             "mod_list": "flops_module accuracy_module",
             "seed": seed,
             "frames": 1,
@@ -30,15 +38,15 @@ def generate_jobs():
         })
 
     # CIFAR - accuracy only
-    for dataset, optimizer, seed in product(datasets_cifar, optimizers, seeds):
-        job_configs.append({
-            "data_name": dataset,
-            "opt": optimizer,
-            "mod_list": "accuracy_module",
-            "seed": seed,
-            "frames": 1,
-            "channels": 1
-        })
+    # for dataset, optimizer, seed in product(datasets_cifar, optimizers, seeds):
+    #     job_configs.append({
+    #         "data_name": dataset,
+    #         "opt": optimizer,
+    #         "mod_list": "accuracy_module",
+    #         "seed": seed,
+    #         "frames": 1,
+    #         "channels": 1
+    #     })
 
     # # Gesture - accuracy only
     # for optimizer, mode, frames, channel, seed in product(optimizers, gesture_modes, frames_list, channels_list, seeds):
