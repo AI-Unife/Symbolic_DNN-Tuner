@@ -16,12 +16,12 @@ from .gesture_dataset import gesture_data
 Dataset2Class = {
     "cifar10": 10,
     "cifar100": 100,
-    "imagenet-1k-s": 1000,
-    "imagenet-1k": 1000,
+    "imagenet1ks": 1000,
+    "imagenet1k": 1000,
     "imagenet16": 1000,
-    "imagenet16-150": 150,
-    "imagenet16-120": 120,
-    "imagenet16-200": 200,
+    "imagenet16150": 150,
+    "imagenet16120": 120,
+    "imagenet16200": 200,
     "gesture": 11,
     "roigesture": 11
 }
@@ -58,13 +58,13 @@ def get_datasets(name):
     elif name == "imagenet16":
         x_train, y_train, x_test, y_test = load_imagenet16(root)
         assert len(x_train) == 1281167 and len(x_test) == 50000
-    elif name == "imagenet16-120":
+    elif name == "imagenet16120":
         x_train, y_train, x_test, y_test = load_imagenet16(root, 120)
         assert len(x_train) == 151700 and len(x_test) == 6000
-    elif name == "imagenet16-150":
+    elif name == "imagenet16150":
         x_train, y_train, x_test, y_test = load_imagenet16(root, 150)
         assert len(x_train) == 190272 and len(x_test) == 7500
-    elif name == "imagenet16-200":
+    elif name == "imagenet16200":
         x_train, y_train, x_test, y_test = load_imagenet16(root, 200)
         assert len(x_train) == 254775 and len(x_test) == 10000
     else:

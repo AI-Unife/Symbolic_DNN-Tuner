@@ -7,10 +7,14 @@ problem(latency) :- high_flops.
 problem(model_size) :- high_numb_params.
 
 % rules for hardware constraints
-t(0.4)::action(dec_neurons, latency).
-t(0.5)::action(dec_layers, latency).
-t(0.4)::action(dec_neurons, model_size).
-t(0.5)::action(dec_layers, model_size).
+t(0.45)::action(new_fc_layer, underfitting).
+t(0.45)::action(new_conv_layer, underfitting).
+t(0.45)::action(inc_neurons, underfitting).
+t(0.40)::action(dec_neurons, latency).
+t(1.00)::action(dec_layers, latency).
+t(0.40)::action(dec_neurons, model_size).
+t(0.50)::action(dec_layers, model_size).
+t(0.50)::action(dec_fc,model_size).
 
 %problem rules
 0.45::action(new_fc_layer, underfitting):- problem(underfitting), \+problem(latency), \+problem(model_size).

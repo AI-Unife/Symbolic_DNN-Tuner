@@ -1,71 +1,124 @@
-import sys
+from __future__ import annotations
+
+import os
 import re
+from typing import Dict, List, Tuple, Iterable
+
 from problog.program import PrologString
 from problog import get_evaluatable
-from problog.tasks import sample
+from problog.tasks import sample  # kept for compatibility if you use it elsewhere
 
 import config as cfg
-from tensorflow.python.keras.utils.np_utils import normalize
 
 
 class NeuralSymbolicBridge:
     """
-    class used to interact with the prolog part, managing the model and
-    updating it as needed as a result of the reasoning
+    Bridge between numeric training signals and the ProbLog symbolic layer.
+    Responsibilities:
+      - Build a complete ProbLog program by stitching facts + problems + base model + new rules.
+      - Update learned probabilities inside the current probabilistic rule set.
+      - Run inference to obtain action probabilities conditioned on observed facts.
     """
+
     def __init__(self):
         """
-        init attributes, defining the list containing the terms that maps the initial facts and problems of the symbolic part
+        Initialize the list of fact "functors" and the canonical problem names.
+        The order in `initial_facts` must match the order of numeric facts you pass later.
         """
-        self.initial_facts = ['l', 'sl', 'a', 'sa', 'vl', 'va',
-                              'int_loss', 'int_slope', 'lacc', 'hloss']
-        self.problems = ['overfitting', 'underfitting', 'inc_loss', 'floating_loss', 'high_lr', 'low_lr']
+        self.initial_facts: List[str] = [
+            "l", "sl", "a", "sa", "vl", "va", "int_loss", "int_slope", "lacc", "hloss"
+        ]
+        self.problems: List[str] = [
+            "overfitting", "underfitting", "inc_loss", "floating_loss", "high_lr", "low_lr"
+        ]
 
-    def build_symbolic_model(self, facts, rules):
+    # -------------------------------------------------------------------------
+    # Program assembly
+    # -------------------------------------------------------------------------
+
+    def build_symbolic_model(self, facts: Iterable, rules: str) -> PrologString:
         """
-        build logic program
-        :param facts: facts to code dynamically into the symbolic program
-        :return: logic program
+        Assemble a ProbLog program from:
+          - dynamically injected numeric facts (order must match `self.initial_facts`)
+          - previously built probabilistic problems file (sym_prob.pl)
+          - a static base model (symbolic_analysis.pl)
+          - new rules (string `rules`)
+
+        Args:
+            facts: sequence of values to encode as facts, aligned with `self.initial_facts`.
+            rules: additional ProbLog rules to append.
+
+        Returns:
+            PrologString containing the full model ready for evaluation.
         """
-        # reading model from file
-        f = open("{}/symbolic/symbolic_analysis.pl".format(cfg.NAME_EXP), "r")
-        sym_model = f.read()
-        f.close()
+        sym_dir = os.path.join(cfg.NAME_EXP, "symbolic")
+        os.makedirs(sym_dir, exist_ok=True)
 
-        p = open("{}/symbolic/sym_prob.pl".format(cfg.NAME_EXP), "r")
-        sym_prob = p.read()
-        p.close()
+        base_model_path = os.path.join(sym_dir, "symbolic_analysis.pl")
+        prob_model_path = os.path.join(sym_dir, "sym_prob.pl")
+        out_path = os.path.join(sym_dir, "final.pl")
 
-        # create facts string for complete the symbolic model
-        sym_facts = ""
-        for fa, i in zip(facts, self.initial_facts):
-            sym_facts = sym_facts + i + "(" + str(fa) + ").\n"
-        # print("Symbolic facts: ", sym_facts, "\nSymbolic problems: ", sym_prob, "\nSymbolic model: ", sym_model, "\nrules: ", rules)
-        output = open("{}/symbolic/final.pl".format(cfg.NAME_EXP), "w")
-        output.write(sym_facts + "\n" + sym_prob + "\n" + sym_model + "\n" + rules)
-        output.close()
+        # Load base files (allow empty if missing, but warn via print)
+        try:
+            with open(base_model_path, "r") as f:
+                sym_model = f.read()
+        except FileNotFoundError:
+            sym_model = ""
+            print(f"[warn] Missing base model: {base_model_path}")
 
-        # return the assembled model
-        return PrologString(sym_facts + "\n" + sym_prob + "\n" + sym_model + "\n" + rules)
+        try:
+            with open(prob_model_path, "r") as p:
+                sym_prob = p.read()
+        except FileNotFoundError:
+            sym_prob = ""
+            print(f"[warn] Missing probabilistic model: {prob_model_path}")
 
-    def complete_probs(self, sym_model, prev_model):
+        # Encode numeric facts in the form: functor(value).
+        sym_facts_lines = []
+        for fa, functor in zip(facts, self.initial_facts):
+            sym_facts_lines.append(f"{functor}({fa}).")
+        sym_facts = "\n".join(sym_facts_lines)
+
+        full_program = "\n".join([sym_facts, sym_prob, sym_model, rules or ""]).strip() + "\n"
+
+        # Persist a copy for debugging/inspection
+        with open(out_path, "w") as output:
+            output.write(full_program)
+
+        return PrologString(full_program)
+
+    # -------------------------------------------------------------------------
+    # Probability editing
+    # -------------------------------------------------------------------------
+
+    def complete_probs(self, sym_model: str, prev_model: str) -> str:
         """
-        method used to complete each action by adding the body of rules
-        :param sym_model prev_model: old and new set of actions used to update various rules
-        :return: complete model with the new probabilities
-        """
-        fact_re = re.compile(r'^\s*([0-9.]+)\s*::\s*([a-z][A-Za-z0-9_]*(?:\([^)]*\))?)\s*\.\s*$')
-        rule_re = re.compile(r'^\s*([0-9.]+)\s*::\s*([a-z][A-Za-z0-9_]*(?:\([^)]*\))?)\s*:-\s*(.+?)\s*\.\s*$')
+        Replace the probability of each *probabilistic rule* in `prev_model`
+        with the (new) probability learned in `sym_model`, preserving rule bodies.
 
-        # mappa head -> nuova probabilità da progA
-        prob_map = {}
+        - We match lines like: 0.7::head(args) :- body.
+        - Facts like: 0.3::head(args). are read to collect probabilities, but we only
+          overwrite rules in `prev_model`.
+
+        Args:
+            sym_model: text containing learned probs (facts of form P::head(...).)
+            prev_model: existing prob. rules with bodies to be updated.
+
+        Returns:
+            Updated probabilistic model with replaced probabilities where available.
+        """
+        fact_re = re.compile(r"^\s*([0-9]*\.?[0-9]+)\s*::\s*([a-z][A-Za-z0-9_]*(?:\([^)]*\))?)\s*\.\s*$")
+        rule_re = re.compile(r"^\s*([0-9]*\.?[0-9]+)\s*::\s*([a-z][A-Za-z0-9_]*(?:\([^)]*\))?)\s*:-\s*(.+?)\s*\.\s*$")
+
+        # Map head -> new probability
+        prob_map: Dict[str, str] = {}
         for line in sym_model.splitlines():
             m = fact_re.match(line)
             if m:
                 p, head = m.group(1), m.group(2)
                 prob_map[head] = p
 
-        out_lines = []
+        out_lines: List[str] = []
         for line in prev_model.splitlines():
             m = rule_re.match(line)
             if m:
@@ -74,65 +127,64 @@ class NeuralSymbolicBridge:
                 if p is not None:
                     out_lines.append(f"{p}::{head} :- {body}.")
                     continue
-            out_lines.append(line)  # se non c'è match o non c'è prob sostitutiva
+            # pass-through for lines we don't update (facts, comments, or unmatched)
+            out_lines.append(line)
 
         return "\n".join(out_lines)
 
-    def clean_problems(self, problems):
+    def clean_problems(self, problems: List[str]) -> List[str]:
         """
-        method used to delete space and dots from problems definition
-        :param problems: problems to clean up from certain chars
-        :return: problem definitions without the specified chars
+        Remove spaces and dots from problem names (used for sanitizing).
         """
-        clean_p = r'[.\s]'
-        return [re.sub(clean_p, '', p) for p in problems]
+        return [re.sub(r"[.\s]", "", p) for p in problems]
 
-    import re
-
-    def build_sym_prob(self, problems):
+    def build_sym_prob(self, problems: str) -> None:
         """
-        Unisce TUTTE le regole probabilistiche che hanno la stessa testa in UNA SOLA regola:
-        - congiunge i corpi con AND (',')
-        - imposta SEMPRE la probabilità a 0.5 (ignora le probabilità originali)
-        - preserva deterministic rules/atomi così come sono
+        Merge probabilistic rules having the same head into a single rule per head.
+        Strategy:
+          - load base (sym_prob_base.pl) and append `problems` (string with rules)
+          - parse probabilistic rules with bodies (P::head(...) :- body.)
+          - for the same head, combine bodies (set-union over comma-separated atoms)
+          - average the probabilities across duplicates (keeps numeric signal)
+          - re-emit one rule per head with the aggregated body and averaged prob
+
+        Notes:
+          - Deterministic atoms / comments are ignored here (kept in base file).
+          - This function *overwrites* sym_prob.pl with the merged rules only.
         """
-        # Carica base + aggiunte
-        with open(f"{cfg.NAME_EXP}/symbolic/sym_prob_base.pl", "r") as f:
-            base_model = f.read()
-        full_model = base_model + ("\n" if not base_model.endswith("\n") else "") + problems
+        sym_dir = os.path.join(cfg.NAME_EXP, "symbolic")
+        os.makedirs(sym_dir, exist_ok=True)
 
-        # Accumulatori
-        # Chiave: head (inclusi argomenti e arità) -> insieme di corpi (stringhe normalizzate)
-        heads_to_bodies = {}
-        other_lines = []
-        seen_other = set()
+        base_path = os.path.join(sym_dir, "sym_prob_base.pl")
+        out_path = os.path.join(sym_dir, "sym_prob.pl")
 
-        # Regex
+        try:
+            with open(base_path, "r") as f:
+                base_model = f.read()
+        except FileNotFoundError:
+            base_model = ""
+            print(f"[warn] Missing sym_prob_base.pl at: {base_path}")
+
+        full_model = base_model + ("" if base_model.endswith("\n") else "\n") + (problems or "")
+
+        heads_to_info: Dict[str, Dict[str, str]] = {}
+        other_lines: List[str] = []  # kept if you later want to re-append them
+
         prob_with_body_re = re.compile(
-            r'^\s*([0-9]*\.?[0-9]+)\s*::\s*([a-z][A-Za-z0-9_]*(?:\([^()]*\))?)\s*:-\s*(.+?)\s*\.\s*$'
+            r"^\s*([0-9]*\.?[0-9]+)\s*::\s*([a-z][A-Za-z0-9_]*(?:\([^()]*\))?)\s*:-\s*(.+?)\s*\.\s*$"
         )
-        comment_or_empty_re = re.compile(r'^\s*(%.*)?$')
+        comment_or_empty_re = re.compile(r"^\s*(%.*)?$")
 
         def normalize_text(s: str) -> str:
-            s = re.sub(r'\s+', ' ', s.strip())
-            s = re.sub(r'\s*,\s*', ', ', s)
-            s = re.sub(r'\s*;\s*', ' ; ', s)  # nel caso ci siano OR espliciti
+            s = re.sub(r"\s+", " ", s.strip())
+            s = re.sub(r"\s*,\s*", ", ", s)
+            s = re.sub(r"\s*;\s*", " ; ", s)  # if there are explicit ORs
             return s
 
-        def parenthesize(body: str) -> str:
-            """Per sicurezza, racchiude ogni corpo tra parentesi quando lo congiungiamo con AND."""
-            if body == 'true':
-                return body
-            return f'({body})'
-
-        # Parse
         for raw_line in full_model.splitlines():
             line = raw_line.rstrip()
 
             if comment_or_empty_re.match(line):
-                if line not in seen_other:
-                    other_lines.append(line)
-                    seen_other.add(line)
                 continue
 
             m = prob_with_body_re.match(line)
@@ -140,101 +192,114 @@ class NeuralSymbolicBridge:
                 prob = float(m.group(1))
                 head = normalize_text(m.group(2))
                 body = normalize_text(m.group(3))
-                if head not in heads_to_bodies:
-                    heads_to_bodies[head] = {'prob': prob, 'body': body}
+                if head not in heads_to_info:
+                    heads_to_info[head] = {"prob": prob, "body": body}
                 else:
-                    heads_to_bodies[head]['prob'] = (heads_to_bodies[head]['prob'] + prob)/2
-                    tot_body = set((heads_to_bodies[head]['body'] +', ' + body).split(', '))
-                    heads_to_bodies[head]['body'] = ', '.join(b for b in tot_body)
+                    # average probs over duplicates and union body atoms (set over ", ")
+                    prev_prob = heads_to_info[head]["prob"]
+                    prev_body = heads_to_info[head]["body"]
+                    merged_prob = (prev_prob + prob) / 2.0
+                    merged_body = ", ".join(sorted(set((prev_body + ", " + body).split(", "))))
+                    heads_to_info[head] = {"prob": merged_prob, "body": merged_body}
                 continue
 
-            # deterministic/atomi
-            if line not in seen_other:
-                other_lines.append(line)
-                seen_other.add(line)
+            # Collect non-probabilistic lines if ever needed
+            other_lines.append(line)
 
-        # Ricostruzione
-        out_lines = []
-        # out_lines.extend(other_lines)
-
-        # Per ogni testa, congiungi i corpi e imposta 0.5
-        for idx, item in heads_to_bodies.items():
-            out_lines.append(f"{item['prob']}::{idx} :- {item['body']}.")
-
+        out_lines: List[str] = []
+        for head, info in heads_to_info.items():
+            out_lines.append(f"{info['prob']}::{head} :- {info['body']}.")
+        out_lines.extend(other_lines)
         final_text = "\n".join(out_lines).rstrip() + "\n"
-        with open(f"{cfg.NAME_EXP}/symbolic/sym_prob.pl", "w") as f:
+        with open(out_path, "w") as f:
             f.write(final_text)
 
-    def edit_probs(self, sym_model):
+    def edit_probs(self, sym_model: str) -> None:
         """
-        method used to update the probabilities of actions in the symbolic part
-        :param sym_model: set of actions that need to be updated
+        Update probabilities in `sym_prob.pl` using the learned probabilities in `sym_model`.
         """
-        # read the file containing the old set of actions
-        prev_model = open("{}/symbolic/sym_prob.pl".format(cfg.NAME_EXP), "r").read()
+        sym_dir = os.path.join(cfg.NAME_EXP, "symbolic")
+        prev_path = os.path.join(sym_dir, "sym_prob.pl")
 
-        # call the method for completing each action with the body of the each rule
-        new = self.complete_probs(sym_model, prev_model)
-        # updates the file on which the actions are stored
-        f = open("{}/symbolic/sym_prob.pl".format(cfg.NAME_EXP), "w")
-        f.write(new)
-        f.close()
+        try:
+            with open(prev_path, "r") as f:
+                prev_model = f.read()
+        except FileNotFoundError:
+            prev_model = ""
+            print(f"[warn] Missing sym_prob.pl at: {prev_path}")
+
+        new_text = self.complete_probs(sym_model, prev_model)
+        with open(prev_path, "w") as f:
+            f.write(new_text)
+
+    # -------------------------------------------------------------------------
+    # Reasoning
+    # -------------------------------------------------------------------------
 
     def symbolic_reasoning(self, facts, diagnosis_logs, tuning_logs, rules):
         """
-        Start symbolic reasoning
-        :param facts diagnosis_logs tuning_logs rules: facts and new rules to code into the symbolic program
-        :return: result of symbolic reasoning in form of list
-        """
-        tuning = []
-        diagnosis = []
-        res = {}
-        problems = []
+        Run the symbolic reasoning pipeline:
+          1) build the model from facts + problems + base + rules
+          2) evaluate it to obtain probabilities for queries (actions)
+          3) group actions by problem; pick the max-probability action per problem
+          4) return the sequence of proposed tuning actions and corresponding diagnoses
 
-        # create symbolic model, joining the various parts
+        Args:
+            facts: numeric facts in the order of `self.initial_facts`
+            diagnosis_logs: opened file handle for logging diagnoses
+            tuning_logs: opened file handle for logging actions
+            rules: extra rules to append
+
+        Returns:
+            (tuning, diagnosis) as lists (duplicates preserved to keep original behavior)
+        """
+        tuning: List[str] = []
+        diagnosis: List[str] = []
+        res: Dict[str, Dict[str, float]] = {}
+        problems: List[str] = []
+
+        # 1) Build the complete symbolic program
         symbolic_model = self.build_symbolic_model(facts, rules)
 
-        # based on the model, create a dict that maps each query term to its probability
+        # 2) Evaluate (map query term -> probability)
         symbolic_evaluation = get_evaluatable().create_from(symbolic_model).evaluate()
 
-        # collect all the problem, specifically the second argument of each action, in the problem list
-        for i in symbolic_evaluation.keys():
-            problems.append(str(i)[str(i).find(",") + 1:str(i).find(")")])
-        # turn problems into keys of a dictionary, allowing to remove duplicate problems,
-        # and then turn it into a list
+        # 3) Extract problem names from terms like action(ActionName, ProblemName)
+        for term in symbolic_evaluation.keys():
+            s = str(term)
+            # naive parse: take substring between first "," and ")"
+            problems.append(s[s.find(",") + 1 : s.find(")")])
+        # Unique problems in insertion order
         problems = list(dict.fromkeys(problems))
 
-        # iterate on each pair (nested loop) of problems and actions obtained from reasoning
-        for i in problems:
-            # set the dict used to collect possible solutions in this iteration as an empty dict
-            inner = {}
-            for j in symbolic_evaluation.keys():
-                # if problem "i" is present in action "j"
-                if i in str(j):
-                    # put into the partial dict "inner" the probability of that action,
-                    # using the name of the possible solution to problem "i" as the key.
-                    # this allow to collect for a specific problem the possible solutions
-                    inner[str(j)[str(j).find("(") + 1:str(j).find(",")]] = symbolic_evaluation[j]
+        # 4) For each problem, map action -> probability
+        for prob in problems:
+            inner: Dict[str, float] = {}
+            for term, prob_val in symbolic_evaluation.items():
+                s = str(term)
+                if prob in s:
+                    action_name = s[s.find("(") + 1 : s.find(",")]
+                    inner[action_name] = prob_val
+            res[prob] = inner
 
-            # put collected solutions into the dictionary using the problem as a key
-            res[i] = inner
-
-        # iterate over each problem
-        for i in res.keys():
-            # if one of them is overfitting
-            if i == "overfitting":
-                # Set the value of the regularization probability to 0 and
-                # add overfitting and regl to the tuning and diagnosis lists
-                res[i]["reg_l2"] = 0
+        # 5) Turn map into ordered action/diagnosis lists
+        for prob in res.keys():
+            # Special-casing "overfitting": force reg_l2 prob to 0 (legacy) and add a direct reg_l2 action.
+            # NOTE: This is the original behavior; it *adds* two diagnosis entries for "overfitting".
+            if prob == "overfitting":
+                res[prob]["reg_l2"] = 0
                 tuning.append("reg_l2")
-                diagnosis.append(i)
-            diagnosis.append(i)
-            # find the solution with maximum probability and add it to the tuning operations
-            tuning.append(max(res[i], key=res[i].get))
+                diagnosis.append(prob)
 
-        # remove duplicates from tuning and diagnosis and then store them on dedicated log files
+            diagnosis.append(prob)
+            if res[prob]:
+                # choose argmax action for this problem
+                tuning.append(max(res[prob], key=res[prob].get))
+
+        # Log unique sets, but return the raw (possibly duplicated) sequences to preserve behavior
         to_log_tuning = list(dict.fromkeys(tuning))
         to_log_diagnosis = list(dict.fromkeys(diagnosis))
         diagnosis_logs.write(str(to_log_diagnosis) + "\n")
         tuning_logs.write(str(to_log_tuning) + "\n")
+
         return tuning, diagnosis

@@ -1,101 +1,163 @@
+from __future__ import annotations
+
 from problog.program import PrologString
 from problog.logic import Term
 from problog.learning import lfi
 
+import os
+from typing import Any, Iterable, List, Sequence, Tuple
+
 import config as cfg
+
 
 class LfiIntegration:
     """
-    class used to generate evidence during training, from which to learn and model the probability
-    with which to apply certain action to fix problems from which the network is affected
+    Bridge between the training loop and ProbLog's LFI (Learning From Interpretations).
+
+    Responsibilities:
+      - Turn (tuning action, diagnosis, improvement flag) triplets into ProbLog evidence.
+      - Keep an in-memory "experience" (list of evidences over time).
+      - Read a ProbLog program (actions + rules) and run LFI to learn weights.
     """
+
     def __init__(self, db):
         """
-        initialise the attributes in which to save the evidence
-        and define the actions that will populate the symbolic part
+        Initialize the evidence buffer and store a DB handle for persistence/logging.
+
+        Args:
+            db: user-provided storage object expected to expose `insert_evidence(evidence: tuple)`.
         """
         self.db = db
-        self.experience = []
+        # Experience is a list of evidence-sets; each element corresponds to one call to `evidence(...)`
+        # Format expected by ProbLog LFI: a list of lists of tuples [(atom, truth_value), ...]
+        self.experience: List[List[Tuple[Any, bool]]] = []
 
+    # ------------------------------ Helpers ----------------------------------
 
     def get_str(self, s, before, after):
+        """
+        Extract substrings between `before` and `after` delimiters.
+        NOTE: This is a generator; behavior unchanged from the original.
+        """
         return (i.split(after)[0] for i in s.split(before)[1:] if after in i)
+
+    # ----------------------------- Evidence API ------------------------------
 
     def create_evidence(self, t, d, bool):
         """
-        method for creating an evidence
-        :param t d bool: tuning rule 't' with associated diagnosis 'd', with a performance improvement indicated by 'bool'
-        :return: evidence created according to the tuning rule
+        Create a pair of ProbLog evidence atoms from a tuning action and its diagnosis.
+
+        Args:
+            t: tuning rule name (string-like or Term-compatible)
+            d: diagnosis name (string-like)
+            bool: Python bool indicating whether applying `t` improved the metric
+
+        Returns:
+            ( (action(t, d), bool), (prob(d_prefix), bool) )
+
+        Notes:
+            - The second atom uses the first 3 chars of `d` as a predicate name (legacy behavior).
+            - We keep the signature as-is to avoid breaking callers, even though `bool` shadows
+              the built-in name; internally we alias it to `success`.
         """
-        # once the names of the tuning rule and its diagnosis have been converted into terms,
-        # proceeds by creating the final term as the triple ('action' tuning diagnosis)
+        success = bool  # avoid shadowing the built-in name elsewhere
         t1 = Term(str(t))
         t2 = Term(str(d))
+
+        # Legacy: diagnosis prefix (first 3 chars) as a probability predicate, e.g., 'ove' for 'overfitting'
         prob = Term(d[:3])
+
         action = Term('action', t1, t2)
-        evidence1 = (action, bool)
-        evidence2 = (prob, bool)
+        evidence1 = (action, success)
+        evidence2 = (prob, success)
         return evidence1, evidence2
 
     def evidence(self, improve, tuning, diagnosis):
         """
-        method for generating evidence, inserting them in db and in a dedicated log file
-        :param improve tuning diagnosis: list of tuning rules and diagnosis, with 'improve' bool to indicate if their application led to an improvement
-        :return: list of evidence
+        Build a set of evidence pairs for the current iteration and persist them.
+
+        Args:
+            improve (bool): whether the last round produced an improvement.
+            tuning (Iterable[str]): list of tuning action names applied.
+            diagnosis (Iterable[str]): list of diagnoses aligned with `tuning`.
+
+        Returns:
+            List of evidence tuples acceptable by ProbLog LFI:
+              [(Term('action', ...), bool), ...]
+            (We keep only `e1` entries to preserve original behavior.)
         """
-        # initialise the evidence list as an empty list
-        evidence = []
-        
-        # for each pair 'anomaly' and possible resolution
-        # create the corresponding evidence and add it to the initial list
+        # Defensive: handle empty input gracefully
+        tuning = list(tuning or [])
+        diagnosis = list(diagnosis or [])
+
+        evidence: List[Tuple[Any, bool]] = []
         for t, d in zip(tuning, diagnosis):
-            if improve:
-                e1, e2 = self.create_evidence(t, d, improve)
-            else:
-                e1, e2 = self.create_evidence(t, d, improve)
+            e1, e2 = self.create_evidence(t, d, improve)
             evidence.append(e1)
+            # Original code kept e2 commented out; we preserve that behavior:
             # evidence.append(e2)
 
-        # enters the evidence in the corresponding log file and db
-        e = open("{}/algorithm_logs/evidence.txt".format(cfg.NAME_EXP), "a")
-        e.write(str(evidence))
-        self.db.insert_evidence(evidence[0])
-        e.close()
+        # Ensure log directory exists
+        log_dir = os.path.join(cfg.NAME_EXP, "algorithm_logs")
+        os.makedirs(log_dir, exist_ok=True)
+
+        # Append to evidence log and DB (only first item, as per original)
+        log_path = os.path.join(log_dir, "evidence.txt")
+        with open(log_path, "a") as efile:
+            efile.write(str(evidence) + "\n")
+
+        if evidence:
+            try:
+                self.db.insert_evidence(evidence[0])
+            except Exception:
+                # Best-effort: don't crash LFI if DB write fails
+                pass
+
         return evidence
+
+    # ------------------------------- Learning --------------------------------
 
     def learning(self, improve, tuning, diagnosis, actions):
         """
-        method used to learn, based on the past evidence, the probability with which to apply the tuning rules
-        :param improve tuning diagnosi actions: used to generate evidence, dynamically create the file from which to learn
-        :return: probability list, one for each action and model containing the actions
+        Run ProbLog LFI to learn action probabilities from accumulated evidence.
+
+        Args:
+            improve (bool): improvement flag for the most recent iteration.
+            tuning (Iterable[str]): tuning actions just applied.
+            diagnosis (Iterable[str]): diagnoses corresponding to `tuning`.
+            actions (str): ProbLog clauses defining actions; these are concatenated to the base file.
+
+        Returns:
+            (weights, lfi_problem)
+              - weights: learned weights from ProbLog
+              - lfi_problem: the ProbLog problem/model object (for downstream use)
         """
-        # generate evidence and add them to the main list
-        evidence = self.evidence(improve, tuning, diagnosis)
-        self.experience.append(evidence)
+        # 1) Add current evidence to the in-memory experience
+        current = self.evidence(improve, tuning, diagnosis)
+        self.experience.append(current)
 
-        # read the set of actions from the prolog file
-        f1 = open("{}/symbolic/lfi.pl".format(cfg.NAME_EXP), "r")
-        to_learn = f1.read()
-        f1.close()
+        # 2) Load the base program from disk and append dynamic actions
+        sym_dir = os.path.join(cfg.NAME_EXP, "symbolic")
+        os.makedirs(sym_dir, exist_ok=True)
+        base_path = os.path.join(sym_dir, "lfi.pl")
 
-        # dynamically add actions from modules loaded by the controller
-        to_learn += actions
+        try:
+            with open(base_path, "r") as f:
+                to_learn = f.read()
+        except FileNotFoundError:
+            # Fallback: allow empty base if file is missing; training may still work with just `actions`
+            to_learn = ""
 
-        # get probabilities of each action and the model on which the learning was performed
-        # print("experience: ", self.experience)
-        _, weights, _, _, lfi_problem = lfi.run_lfi(PrologString(to_learn), self.experience)
+        if actions:
+            to_learn += actions
+
+        # 3) Run LFI. `self.experience` must be a list of interpretations (lists of (atom, bool)).
+        try:
+            # print(self.experience)
+            # print(to_learn)
+            _, weights, _, _, lfi_problem = lfi.run_lfi(PrologString(to_learn), self.experience)
+        except Exception as e:
+            # Surface a clearer error while keeping the same return contract (raise is better here)
+            raise RuntimeError(f"ProbLog LFI failed: {e}")
 
         return weights, lfi_problem
-
-
-
-# 1 [[(action(new_fc_layer,underfitting), False), (action(dec_layers,latency), False), (action(dec_layers,model_size), False)],
-# 2 [(action(inc_neurons,underfitting), True), (action(dec_layers,latency), True), (action(dec_layers,model_size), True)],
-# 3 [(action(reg_l2,overfitting), False), (action(dec_layers,overfitting), False), (action(inc_neurons,underfitting), False), (action(dec_layers,latency), False), (action(dec_layers,model_size), False)],
-# 4 [(action(inc_neurons,underfitting), False), (action(dec_layers,latency), False), (action(dec_layers,model_size), False)],
-# 5 [(action(reg_l2,overfitting), True), (action(dec_layers,overfitting), True), (action(new_conv_layer,underfitting), True), (action(dec_layers,latency), True), (action(dec_layers,model_size), True)],
-# 6 [(action(reg_l2,overfitting), True), (action(dec_layers,overfitting), True), (action(dec_layers,latency), True), (action(dec_layers,model_size), True)],
-# 7 [(action(reg_l2,overfitting), False), (action(dec_layers,overfitting), False), (action(new_conv_layer,underfitting), False), (action(dec_layers,latency), False), (action(dec_layers,model_size), False)],
-# 8 [(action(reg_l2,overfitting), True), (action(dec_layers,overfitting), True), (action(inc_neurons,underfitting), True), (action(dec_layers,latency), True), (action(dec_layers,model_size), True)],
-# 9 [(action(inc_neurons,underfitting), False), (action(dec_layers,latency), False),
-#                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  (action(dec_layers,model_size), False)]]

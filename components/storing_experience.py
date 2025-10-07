@@ -1,6 +1,5 @@
 import sqlite3 as db
 from sqlite3 import Error
-import re
 
 import config as cfg
 
