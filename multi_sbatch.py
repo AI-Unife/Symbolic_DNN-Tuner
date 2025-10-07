@@ -1,13 +1,13 @@
 import subprocess
 from itertools import product
 
-datasets_cifar = ['CIFAR-10', 'CIFAR-100']
+datasets_cifar = ['CIFAR-10']
 optimizers = ['filtered', 'standard', 'basic', 'RS', 'RS_ruled']
 modules_list = [
     ['accuracy_module'],
-    # ['accuracy_module', 'flops_module'],
+    ['accuracy_module', 'flops_module'],
     # ['accuracy_module', 'hardware_module'],
-    ['accuracy_module', 'flops_module', 'hardware_module']
+    # ['accuracy_module', 'flops_module', 'hardware_module']
 ]
 gesture_modes = ['fwd']#, 'hybrid', 'depth']
 frames_list = [32, 64]
@@ -18,12 +18,23 @@ seeds = [42, 84, 123, 256]
 def generate_jobs():
     job_configs = []
 
+    # CIFAR - flops
+    for dataset, optimizer, seed in product(datasets_cifar, optimizers, seeds):
+        job_configs.append({
+            "data_name": dataset,
+            "opt": optimizer,
+            "mod_list": "flops_module accuracy_module",
+            "seed": seed,
+            "frames": 1,
+            "channels": 1
+        })
+
     # CIFAR - accuracy only
     for dataset, optimizer, seed in product(datasets_cifar, optimizers, seeds):
         job_configs.append({
             "data_name": dataset,
             "opt": optimizer,
-            "mod_list": "flops_module",
+            "mod_list": "accuracy_module",
             "seed": seed,
             "frames": 1,
             "channels": 1
