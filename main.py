@@ -170,7 +170,7 @@ def run_optimization(search_space: Space, controller: controller, max_iter: int)
     """
     all_x, all_y = [], []
     ckpt_path = f"{cfg.NAME_EXP}/checkpoints/checkpoint.pkl"
-    callback = CheckpointSaver(ckpt_path, compress=9)
+    callback = None # CheckpointSaver(ckpt_path, compress=9)
 
     obj_fn = ObjectiveWrapper(search_space, controller)
     no_rules = ["RS", "standard"]
@@ -179,7 +179,9 @@ def run_optimization(search_space: Space, controller: controller, max_iter: int)
     # Initialize the chosen optimizer for the very first evaluation
     if "RS" in cfg.OPT:
         random_search = RandomSearch(random_state=cfg.SEED, total_iter=max_iter)
-        res = random_search(obj_fn.objective, search_space, callback=[callback])
+        res = random_search(obj_fn.objective, search_space,
+                            # callback=[callback]
+                            )
     else:
         res = gp_minimize(
             obj_fn.objective,
@@ -188,7 +190,7 @@ def run_optimization(search_space: Space, controller: controller, max_iter: int)
             random_state=cfg.SEED,
             n_calls=1,
             n_random_starts=1,
-            callback=[callback],
+            # callback=[callback],
         )
 
     # Accumulate results
@@ -225,7 +227,9 @@ def run_optimization(search_space: Space, controller: controller, max_iter: int)
             try:
                 if "RS" in cfg.OPT:
                     # Random search: keep drawing one more sample/eval
-                    res = random_search(obj_fn.objective, search_space, callback=[callback])
+                    res = random_search(obj_fn.objective, search_space,
+                                        # callback=[callback]
+                                        )
                 else:
                     # BO: one more call using warm-start data
                     res = gp_minimize(
@@ -237,12 +241,14 @@ def run_optimization(search_space: Space, controller: controller, max_iter: int)
                         n_calls=1,
                         n_random_starts=0,
                         random_state=cfg.SEED,
-                        callback=[callback],
+                        # callback=[callback],
                     )
             except Exception as e:
                 print(colors.FAIL, f"Optimization error: {e}", colors.ENDC)
                 if "RS" in cfg.OPT:
-                    res = random_search(obj_fn.objective, search_space, callback=[callback])
+                    res = random_search(obj_fn.objective, search_space,
+                                        # callback=[callback]
+                                        )
                 else:
                     res = gp_minimize(
                         obj_fn.objective,
@@ -251,7 +257,7 @@ def run_optimization(search_space: Space, controller: controller, max_iter: int)
                         n_calls=1,
                         n_random_starts=1,
                         random_state=cfg.SEED,
-                        callback=[callback],
+                        # callback=[callback],
                     )
 
             if cfg.OPT in with_rules:
@@ -268,7 +274,9 @@ def run_optimization(search_space: Space, controller: controller, max_iter: int)
             if "RS" in cfg.OPT:
                 # Reset RS history so it doesn't bias sampling with stale configs
                 random_search.Xi, random_search.Yi = [], []
-                res = random_search(obj_fn.objective, search_space, callback=[callback])
+                res = random_search(obj_fn.objective, search_space,
+                                    # callback=[callback]
+                                    )
             else:
                 res = gp_minimize(
                     obj_fn.objective,
@@ -277,7 +285,7 @@ def run_optimization(search_space: Space, controller: controller, max_iter: int)
                     n_calls=1,
                     n_random_starts=1,
                     random_state=cfg.SEED,
-                    callback=[CheckpointSaver(ckpt_path, compress=9)],
+                    # callback=[callback],
                 )
 
             if cfg.OPT in with_rules:

@@ -22,7 +22,7 @@ def parse_args() -> argparse.Namespace:
         "--mod_list", nargs="+", default=["accuracy_module"],
         help="List of active modules (e.g., hardware_module accuracy_module)"
     )
-    parser.add_argument("--dataset", type=str, default="ImageNet16-120",
+    parser.add_argument("--dataset", type=str, default="cifar-10",
                         help="Dataset name")
     parser.add_argument("--name", type=str, default="debug",
                         help="Experiment name")
@@ -39,7 +39,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=42,
                         help="Random seed for reproducibility")
     parser.add_argument(
-        "--opt", type=str, default="RS_ruled",
+        "--opt", type=str, default="standard",
         choices=["standard", "filtered", "basic", "RS", "RS_ruled"],
         help="Optimizer type for the analysis"
     )
