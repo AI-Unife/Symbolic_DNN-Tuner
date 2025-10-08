@@ -134,7 +134,8 @@ class LfiIntegration:
         """
         # 1) Add current evidence to the in-memory experience
         current = self.evidence(improve, tuning, diagnosis)
-        self.experience.append(current)
+        if "X" not in curent:
+            self.experience.append(current)
 
         # 2) Load the base program from disk and append dynamic actions
         sym_dir = os.path.join(cfg.NAME_EXP, "symbolic")
