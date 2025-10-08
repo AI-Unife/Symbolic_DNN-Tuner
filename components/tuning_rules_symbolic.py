@@ -233,12 +233,12 @@ class tuning_rules_symbolic:
         for hp in self._iter_hparams():
             if hp.name == "learning_rate":
                 hp.low  = max(hp.low * 0.5, 1e-7)
-                hp.high = max(hp.low * 4, min(hp.high * 0.5, 1e-1))  # mantieni ordine low<high
+                hp.high = max(params[hp.name], min(hp.high * 0.5, 1e-1))  # mantieni ordine low<high
 
     def inc_lr(self, params):
         for hp in self._iter_hparams():
             if hp.name == "learning_rate":
-                hp.low  = min(hp.low * 2.0, 1e-1)
+                hp.low  = min(hp.low * 2.0, params[hp.name])
                 hp.high = min(hp.high * 2.0, 1.0)
 
     def inc_dropout(self, params):
@@ -251,22 +251,29 @@ class tuning_rules_symbolic:
 
     def inc_neurons(self, params):
         for hp in self._iter_hparams():
-            if any(k in hp.name for k in ["unit_c1", "unit_c2", "unit_d", "new_conv", "new_fc"]):
-                hp.low = int(max(hp.low * 1.2, hp.low + 16))
-                hp.high = max(hp.high, hp.low + 16)
+            if any(k in hp.name for k in ["unit_c1", "unit_c2", "new_conv"]):
+                hp.low = int(max(params[hp.name]-1, 1))
+                hp.high = max(hp.high * 1.5, hp.low + 8)
+            if any(k in hp.name for k in ["unit_d", "new_fc"]):
+                hp.low = int(max(params[hp.name]-16, 4))
+                hp.high = max(hp.high * 1.5, hp.low + 256)
 
     def dec_neurons(self, params):
         for hp in self._iter_hparams():
-            if any(k in hp.name for k in ["unit_c1", "unit_c2", "unit_d", "new_conv", "new_fc"]):
-                hp.high = int(max(hp.low + 8, hp.high / 1.25))
-
+            if any(k in hp.name for k in ["unit_c1", "unit_c2", "new_conv"]):
+                hp.high = int(min(params[hp.name] + 1, hp.high))
+                hp.low = int(min(hp.low, hp.high - 8))
+            if any(k in hp.name for k in ["unit_d", "new_fc"]):
+                hp.high = int(min(params[hp.name] + 16, hp.high))
+                hp.low = int(min(hp.low, hp.high - 256))
+                
     def inc_batch_size(self, params):
         for hp in self._iter_hparams():
             if hp.name == "batch_size":
                 base = int(self._safe_param_get(params, "batch_size", max(8, hp.low)))
                 new_low = max(8, int(base * 1.5))
-                new_high = max(new_low + 16, int(hp.high * 1.25), 128)
-                hp.low, hp.high = new_low, min(new_high, 512)
+                new_high = max(new_low + 16, int(hp.high * 1.25))
+                hp.low, hp.high = min(new_low, 496), min(new_high, 512)
 
     # ------------------------- System configuration --------------------------
 
@@ -339,3 +346,4 @@ class tuning_rules_symbolic:
                 method()
 
         return self.space, model
+        

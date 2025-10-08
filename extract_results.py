@@ -46,7 +46,7 @@ def setup_logging(verbosity: int) -> None:
     level = logging.WARNING
     if verbosity == 1:
         level = logging.INFO
-    elif verbosity >= 2:, re.IGNORECASE
+    elif verbosity >= 2:
         level = logging.DEBUG
 
     logging.basicConfig(
