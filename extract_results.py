@@ -68,7 +68,7 @@ _METRIC_PATTERNS: Dict[str, re.Pattern] = {
     "params": re.compile(r"PARAMS\s*[:=]?\s*([0-9]*\.?[0-9]+)", re.IGNORECASE),
     "latency": re.compile(r"LATENCY\s*[:=]?\s*([0-9]*\.?[0-9]+)", re.IGNORECASE),
     "total_cost": re.compile(r"TOTAL\s*COST\s*[:=]?\s*([0-9]*\.?[0-9]+)", re.IGNORECASE),
-    "score": re.compile(r"SCORE\s*[:=]?\s*([0-9]*\.?[0-9]+)", re.IGNORECASE),
+    "score": re.compile(r"SCORE\s*[:=]?\s*(-?[0-9]*\.?[0-9]+)", re.IGNORECASE),
 }
 
 # Metadata patterns from `output.log`
@@ -317,7 +317,7 @@ class ExperimentInfo:
     max_net_eval: float = np.nan
     epochs_for_training: float = np.nan
     seed: float = np.nan
-    total_time_s: float = 86400.0  # default to 1 day if absent
+    total_time_s: float = 86400000  # default to 1 day if absent
     modules_flags: Dict[str, bool] = field(default_factory=dict)
     best_iteration: Optional[int] = None
     eval_count: int = 0
@@ -334,7 +334,7 @@ def extract_tuner(exp_name: str) -> Optional[str]:
     Heuristically infer the tuner name from the experiment folder string.
     Expand this list if you add more tuners.
     """
-    tuner_names = ["filtered", "basic", "standard", "RS", "RS_ruled"]
+    tuner_names = ["filtered", "basic", "standard", "RS_ruled", "RS"]
     for t in tuner_names:
         if t in exp_name:
             return t
