@@ -134,7 +134,7 @@ class LfiIntegration:
         """
         # 1) Add current evidence to the in-memory experience
         current = self.evidence(improve, tuning, diagnosis)
-        if "X" not in curent:
+        if "X" not in current:
             self.experience.append(current)
 
         # 2) Load the base program from disk and append dynamic actions

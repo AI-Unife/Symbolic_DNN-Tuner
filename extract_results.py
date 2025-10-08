@@ -46,7 +46,7 @@ def setup_logging(verbosity: int) -> None:
     level = logging.WARNING
     if verbosity == 1:
         level = logging.INFO
-    elif verbosity >= 2:
+    elif verbosity >= 2:, re.IGNORECASE
         level = logging.DEBUG
 
     logging.basicConfig(
@@ -62,13 +62,13 @@ def setup_logging(verbosity: int) -> None:
 
 _METRIC_PATTERNS: Dict[str, re.Pattern] = {
     # Accept both ":" and "=" separators; ignore case where it makes sense.
-    "iteration": re.compile(r"ITERATION\s*[:=]?\s*(\d+)", re.IGNORECASE),
-    "accuracy": re.compile(r"ACCURACY\s*[:=]?\s*([0-9]*\.?[0-9]+)", re.IGNORECASE),
-    "flops": re.compile(r"FLOPS\s*[:=]?\s*([0-9]*\.?[0-9]+)", re.IGNORECASE),
-    "params": re.compile(r"PARAMS\s*[:=]?\s*([0-9]*\.?[0-9]+)", re.IGNORECASE),
-    "latency": re.compile(r"LATENCY\s*[:=]?\s*([0-9]*\.?[0-9]+)", re.IGNORECASE),
-    "total_cost": re.compile(r"TOTAL\s*COST\s*[:=]?\s*([0-9]*\.?[0-9]+)", re.IGNORECASE),
-    "score": re.compile(r"SCORE\s*[:=]?\s*(-?[0-9]*\.?[0-9]+)", re.IGNORECASE),
+    "iteration": re.compile(r"ITERATION\s*[:=]?\s*(\d+)"),
+    "accuracy": re.compile(r"ACCURACY\s*[:=]?\s*([0-9]*\.?[0-9]+)"),
+    "flops": re.compile(r"FLOPS\s*[:=]?\s*([0-9]*\.?[0-9]+)"),
+    "params": re.compile(r"PARAMS\s*[:=]?\s*([0-9]*\.?[0-9]+)"),
+    "latency": re.compile(r"LATENCY\s*[:=]?\s*([0-9]*\.?[0-9]+)"),
+    "total_cost": re.compile(r"TOTAL\s*COST\s*[:=]?\s*([0-9]*\.?[0-9]+)"),
+    "score": re.compile(r"Score\s*[:=]?\s*(-?[0-9]*\.?[0-9]+)"),
 }
 
 # Metadata patterns from `output.log`
