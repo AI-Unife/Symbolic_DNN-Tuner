@@ -9,6 +9,7 @@ from problog import get_evaluatable
 from problog.tasks import sample  # kept for compatibility if you use it elsewhere
 
 import config as cfg
+import numpy as np
 
 
 class NeuralSymbolicBridge:
@@ -125,6 +126,7 @@ class NeuralSymbolicBridge:
                 _, head, body = m.groups()
                 p = prob_map.get(head)
                 if p is not None:
+                    p = np.clip(float(p), 1e-5, 1-1e-5)
                     out_lines.append(f"{p}::{head} :- {body}.")
                     continue
             # pass-through for lines we don't update (facts, comments, or unmatched)

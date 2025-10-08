@@ -11,7 +11,7 @@ t(0.45)::action(new_fc_layer, underfitting).
 t(0.45)::action(new_conv_layer, underfitting).
 t(0.45)::action(inc_neurons, underfitting).
 t(0.40)::action(dec_neurons, latency).
-t(1.00)::action(dec_layers, latency).
+t(0.99)::action(dec_layers, latency).
 t(0.40)::action(dec_neurons, model_size).
 t(0.50)::action(dec_layers, model_size).
 t(0.50)::action(dec_fc,model_size).
@@ -20,8 +20,8 @@ t(0.50)::action(dec_fc,model_size).
 0.45::action(new_fc_layer, underfitting):- problem(underfitting), \+problem(latency), \+problem(model_size).
 0.45::action(new_conv_layer, underfitting):- problem(underfitting), \+problem(latency), \+problem(model_size).
 0.45::action(inc_neurons, underfitting):- problem(underfitting), \+problem(latency), \+problem(model_size).
-0.4::action(dec_neurons, latency):- problem(latency).
-1.0::action(dec_layers, latency):- problem(latency).
-0.4::action(dec_neurons, model_size):- problem(model_size).
-0.5::action(dec_layers, model_size):- problem(model_size).
-0.5::action(dec_fc,model_size):- problem(model_size).
+0.40::action(dec_neurons, latency):- problem(latency).
+0.99::action(dec_layers, latency):- problem(latency).
+0.40::action(dec_neurons, model_size):- problem(model_size).
+0.50::action(dec_layers, model_size):- problem(model_size).
+0.50::action(dec_fc,model_size):- problem(model_size).
