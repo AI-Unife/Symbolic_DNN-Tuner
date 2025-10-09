@@ -174,7 +174,8 @@ def run_optimization(search_space: Space, controller: controller, max_iter: int)
 
     obj_fn = ObjectiveWrapper(search_space, controller)
     no_rules = ["RS", "standard"]
-    with_rules = ["filtered", "RS_ruled"]
+    with_rules = ["filtered", "RS_ruled", "basic"]
+    use_filter = (cfg.OPT == "filtered") 
 
     # Initialize the chosen optimizer for the very first evaluation
     if "RS" in cfg.OPT:
@@ -206,15 +207,15 @@ def run_optimization(search_space: Space, controller: controller, max_iter: int)
         it += 1
 
         # Reload last checkpointed result to keep skopt internal state consistent
-        try:
-            res = load(ckpt_path)
-        except Exception:
-            # If the checkpoint does not exist yet (or is corrupted), we proceed with current `res`
-            pass
+        # try:
+        #     res = load(ckpt_path)
+        # except Exception:
+        #     # If the checkpoint does not exist yet (or is corrupted), we proceed with current `res`
+        #     pass
 
         # If the space shape didn't change, we can warm-start BO with previous data
         if len(new_space.dimensions) == len(search_space.dimensions):
-            if cfg.OPT in with_rules:
+            if use_filter:
                 # Re-inject past points that satisfy current constraints (avoid duplicates)
                 for x, y in zip(all_x, all_y):
                     if apply_constraints(new_space, x) and x not in res.x_iters:

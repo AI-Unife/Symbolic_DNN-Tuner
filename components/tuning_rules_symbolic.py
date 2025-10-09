@@ -230,50 +230,92 @@ class tuning_rules_symbolic:
     # -------------------------- Hyperparam tweaks ----------------------------
 
     def decr_lr(self, params):
-        for hp in self._iter_hparams():
-            if hp.name == "learning_rate":
-                hp.low  = max(hp.low * 0.5, 1e-7)
-                hp.high = max(params[hp.name], min(hp.high * 0.5, 1e-1))  # mantieni ordine low<high
+        """
+        method used to decrement learning rate
+        """
+        for hp in self.space:
+            # check if learning rate is present in the search space and in that case
+            # proceed by increasing the upper range adding half of its value
+            if hp.name == 'learning_rate':
+                hp.high = params['learning_rate'] + (params['learning_rate'] / 2)
 
     def inc_lr(self, params):
-        for hp in self._iter_hparams():
-            if hp.name == "learning_rate":
-                hp.low  = min(hp.low * 2.0, params[hp.name])
-                hp.high = min(hp.high * 2.0, 1.0)
-
-    def inc_dropout(self, params):
-        self.controller.set_data_augmentation(False)
-        for hp in self._iter_hparams():
-            if "dr" in hp.name:
-                base = self._safe_param_get(params, hp.name, hp.low)
-                hp.low = min(max(base + 0.05, 0.0), 0.8)  # evita over-regularization >0.8
-                hp.high = max(hp.high, hp.low + 0.05)
+        """
+        method used to increment learning rate
+        """
+        for hp in self.space:
+            # check if learning rate is present in the search space and in that case
+            # proceed by incresing the upper range with the current learning rate value
+            if hp.name == 'learning_rate':
+                hp.high = params['learning_rate'] + hp.high
 
     def inc_neurons(self, params):
-        for hp in self._iter_hparams():
-            if any(k in hp.name for k in ["unit_c1", "unit_c2", "new_conv"]):
-                hp.low = int(max(params[hp.name]-1, 1))
-                hp.high = max(hp.high * 1.5, hp.low + 8)
-            if any(k in hp.name for k in ["unit_d", "new_fc"]):
-                hp.low = int(max(params[hp.name]-16, 4))
-                hp.high = max(hp.high * 1.5, hp.low + 256)
+        """
+        method used to increment the number of neurons
+        """
+        # itereate over each hyperparameter and if one of these is a convolutional
+        # or dense layer decrease the lower value of the range
+        for hp in self.space:
+            if 'unit_c1' in hp.name:
+                hp.low = max(params['unit_c1'] - 16, 16)
+            if 'unit_c2' in hp.name:
+                hp.low = max(params['unit_c2'] - 16, 64)
+            if 'unit_d' in hp.name:
+                hp.low = max(params['unit_d'] - 16, 0)
+            if 'new_conv' in hp.name:
+                hp.low = max(params[hp.name] - 16, abs(int(512 / self.space.epsilon_d)))
+            if 'new_fc' in hp.name:
+                hp.low = max(params[hp.name] - 16, 0)
+    
+    def inc_batch_size(self, params):
+        for hp in self.space:
+            if hp.name == 'batch_size':
+                hp.low = params['batch_size'] - 1
+                
+    
+    def inc_dropout(self, params):
+        """
+        method used to increment dropout
+        """
+
+        # iterate over hyperparameters space
+        for hp in self.space:
+            # check if dropout is present in the search space and in that case
+            # proceed by increasing the lower range
+            if 'dr' in hp.name:
+                hp.low = params[hp.name] - params[hp.name] / 100
 
     def dec_neurons(self, params):
-        for hp in self._iter_hparams():
-            if any(k in hp.name for k in ["unit_c1", "unit_c2", "new_conv"]):
-                hp.high = int(min(params[hp.name] + 1, hp.high))
-                hp.low = int(min(hp.low, hp.high - 8))
-            if any(k in hp.name for k in ["unit_d", "new_fc"]):
-                hp.high = int(min(params[hp.name] + 16, hp.high))
-                hp.low = int(min(hp.low, hp.high - 256))
+        """
+        method used to decrement the number of neurons
+        """
+        # itereate over each hyperparameter and if one of these is a convolutional
+        # or dense layer increase the upper value of the range
+        for hp in self.space:
+            if 'unit_c1' in hp.name:
+                hp.high = min(params['unit_c1'] + 16, 64)
+            if 'unit_c2' in hp.name:
+                hp.high = min(params['unit_c2'] + 16, 128)
+            if 'unit_d' in hp.name:
+                hp.high = min(params['unit_d'] + 16, 2048)
+            if 'new_conv' in hp.name:
+                try:
+                    hp.high = min(params[hp.name] + 16, 512)
+                except KeyError:
+                    continue
+            if 'new_fc' in hp.name:
+                try:
+                    hp.high = min(params[hp.name] + 16, 2048)
+                except KeyError:
+                    continue
                 
-    def inc_batch_size(self, params):
-        for hp in self._iter_hparams():
-            if hp.name == "batch_size":
-                base = int(self._safe_param_get(params, "batch_size", max(8, hp.low)))
-                new_low = max(8, int(base * 1.5))
-                new_high = max(new_low + 16, int(hp.high * 1.25))
-                hp.low, hp.high = min(new_low, 496), min(new_high, 512)
+    # def inc_batch_size(self, params):
+    #     for hp in self._iter_hparams():
+    #         if hp.name == "batch_size":
+    #             base = int(self._safe_param_get(params, "batch_size", max(8, hp.low)))
+    #             new_low = max(8, int(base * 1.5))
+    #             new_high = max(new_low + 16, int(hp.high * 1.25))
+    #             hp.low, hp.high = min(new_low, 496), min(new_high, 512)
 
     # ------------------------- System configuration --------------------------
 

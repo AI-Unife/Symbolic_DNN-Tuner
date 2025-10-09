@@ -575,8 +575,8 @@ def summarize_experiment(exp_dir: Path, all_modules: Iterable[str]) -> Optional[
         numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
 
         # Best iteration by highest accuracy (if available)
-        if "accuracy" in df.columns and not df["accuracy"].dropna().empty:
-            best_idx = int(df["accuracy"].idxmax())
+        if "score" in df.columns and not df["score"].dropna().empty:
+            best_idx = int(df["score"].idxmax())
             info.best_iteration = int(df.loc[best_idx, "iteration"]) if "iteration" in df.columns else None
         else:
             info.best_iteration = None
@@ -587,7 +587,10 @@ def summarize_experiment(exp_dir: Path, all_modules: Iterable[str]) -> Optional[
             if col == "iteration":
                 continue
             series = df[col].dropna()
-            info.best_metrics[f"Best {col}"] = float(series.max()) if not series.empty else np.nan
+            if col in ["latency", "total_cost", "flops", "score"]:
+                info.best_metrics[f"Best {col}"] = float(series.min()) if not series.empty else np.nan
+            else:
+                info.best_metrics[f"Best {col}"] = float(series.max()) if not series.empty else np.nan
 
         info.eval_count = int(len(df["accuracy"])) if "accuracy" in df.columns else int(len(df))
     except pd.errors.EmptyDataError:
@@ -635,6 +638,7 @@ def run(
         logging.warning("No experiments summarized. Nothing to write.")
         # Still create an empty CSV for consistency
         pd.DataFrame().to_csv(output_csv, index=False)
+        pd.DataFrame().to_excel(output_csv.with_suffix('.xlsx'), index=False)
         return output_csv
 
     # Convert to a flat DataFrame
@@ -660,6 +664,7 @@ def run(
 
     df_total = pd.DataFrame(rows)
     df_total.to_csv(output_csv, index=False)
+    df_total.to_excel(output_csv.with_suffix('.xlsx'), index=False)
     logging.info("Wrote summary CSV: %s", output_csv)
     return output_csv
 
