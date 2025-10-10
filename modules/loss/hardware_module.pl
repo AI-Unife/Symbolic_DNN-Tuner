@@ -5,9 +5,9 @@ high_latency :- hw_latency(L), max_latency(Max_L), L > Max_L.
 problem(out_range):- high_latency.
 
 % rules for power constraints
-t(0.5)::action(dec_layers, out_range).
-t(0.5)::action(dec_fc, out_range).
-t(0.5)::action(dec_neurons, out_range).
+t(0.50)::action(dec_layers, out_range).
+t(0.50)::action(dec_fc, out_range).
+t(0.50)::action(dec_neurons, out_range).
 
 %problem rules
 0.50::action(dec_layers, out_range):- problem(out_range).
@@ -16,5 +16,5 @@ t(0.5)::action(dec_neurons, out_range).
 
 %expanding old rules
 0.50::action(new_fc_layer, underfitting):- problem(underfitting), \+problem(out_range).
-0.45::action(new_conv_layer, underfitting):- problem(underfitting), \+problem(out_range).
-0.45::action(inc_neurons, underfitting):- problem(underfitting), \+problem(out_range).
+0.50::action(new_conv_layer, underfitting):- problem(underfitting), \+problem(out_range).
+0.50::action(inc_neurons, underfitting):- problem(underfitting), \+problem(out_range).

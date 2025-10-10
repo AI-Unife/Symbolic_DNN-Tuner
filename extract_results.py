@@ -456,6 +456,7 @@ def process_out_files_in_dir(exp_dir: Path) -> Optional[Path]:
     y1 = results["score"]
     plt.plot(x, y1, label="Total Score")
     plt.savefig("{}/objective_funct.png".format(exp_dir))
+
     logging.info("Wrote metrics CSV: %s", csv_path)
     return csv_path
 
