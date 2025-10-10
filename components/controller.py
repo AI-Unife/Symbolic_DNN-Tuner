@@ -97,7 +97,7 @@ class controller:
         self.iter: int = 0
 
         # Dynamic thresholds (updated at given epochs)
-        self.lacc: float = 0.15
+        self.lacc: float = 0.30
         self.hloss: float = 1.2
         self.levels: List[int] = [7, 10, 13]
 
@@ -108,6 +108,7 @@ class controller:
         # Optimization objective bookkeeping
         self.best_score: float = float("inf")  # lower is better if we minimize
         self.convergence: bool = False
+        self.best_iter: int = -1
 
     # ------------------- Signals from tuning_rules_symbolic -------------------
 
@@ -179,8 +180,6 @@ class controller:
         self.modules.print()
         self.modules.log()
 
-        self.da = False
-
         self.iter += 1
 
         # Decide the optimization target:
@@ -195,11 +194,16 @@ class controller:
         # Track the best score and persist the model artifact
         if score < self.best_score:
             self.best_score = score
+            self.best_iter = self.iter
             try:
                 os.makedirs(os.path.join(cfg.NAME_EXP, "Model"), exist_ok=True)
                 self.model.save(f"{cfg.NAME_EXP}/Model/best-model.keras")
             except Exception as e:
                 logger.warning("Failed to save best model: %s", e)
+
+        # if we have no improv in 10 iter end tuner evaluations
+        if self.iter > self.best_iter + 10:
+            self.convergence = True
 
         return score
 
@@ -230,9 +234,9 @@ class controller:
             int_loss, int_slope = integrals(val_loss_hist)
 
             # Dynamically update detection thresholds at specific iterations
-            if self.iter in self.levels:
-                self.lacc = self.lacc / 2.0 + 0.05
-                self.hloss = self.hloss / 2.0 + 0.15
+            # if self.iter in self.levels:
+            #     self.lacc = self.lacc / 2.0 + 0.05
+            #     self.hloss = self.hloss / 2.0 + 0.15
 
             # Base fact list (raw + smoothed histories)
             facts_list_module = [
