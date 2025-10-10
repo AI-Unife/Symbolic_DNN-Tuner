@@ -574,9 +574,9 @@ def summarize_experiment(exp_dir: Path, all_modules: Iterable[str]) -> Optional[
         # Ensure we have numeric columns identified
         numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
 
-        # Best iteration by highest accuracy (if available)
+        # Best iteration by highest score (if available)
         if "score" in df.columns and not df["score"].dropna().empty:
-            best_idx = int(df["score"].idxmax())
+            best_idx = int(df["score"].idxmin())
             info.best_iteration = int(df.loc[best_idx, "iteration"]) if "iteration" in df.columns else None
         else:
             info.best_iteration = None
@@ -592,7 +592,7 @@ def summarize_experiment(exp_dir: Path, all_modules: Iterable[str]) -> Optional[
             else:
                 info.best_metrics[f"Best {col}"] = float(series.max()) if not series.empty else np.nan
 
-        info.eval_count = int(len(df["accuracy"])) if "accuracy" in df.columns else int(len(df))
+        info.eval_count = int(len(df))
     except pd.errors.EmptyDataError:
         logging.warning("Empty CSV for %s; skipping.", exp_name)
         return None
