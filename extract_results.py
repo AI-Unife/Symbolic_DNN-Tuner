@@ -36,7 +36,6 @@ from typing import Dict, Iterable, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-
 # ---------------------------
 # Logging setup
 # ---------------------------
@@ -401,6 +400,12 @@ def extract_metrics_from_out(file_path: Path) -> pd.DataFrame:
         with file_path.open("r", encoding="utf-8", errors="ignore") as fh:
             for line in fh:
                 # Accumulate known metrics from the current line
+                if _METRIC_PATTERNS["iteration"].search(line):
+                    # Only append if we have iteration and at least one other metric (e.g., score)
+                    if current["iteration"] is not None:
+                        rows.append(current.copy())
+                    # Start a fresh row for the next iteration block
+                    current = {k: None for k in _METRIC_PATTERNS.keys()}
                 for key, pat in _METRIC_PATTERNS.items():
                     m = pat.search(line)
                     if m:
@@ -409,12 +414,7 @@ def extract_metrics_from_out(file_path: Path) -> pd.DataFrame:
                         else:
                             current[key] = float(m.group(1))
                 # Use the *appearance* of ITERATION as a boundary to finalize a row
-                if _METRIC_PATTERNS["iteration"].search(line):
-                    # Only append if we have iteration and at least one other metric (e.g., score)
-                    if current["iteration"] is not None:
-                        rows.append(current.copy())
-                    # Start a fresh row for the next iteration block
-                    current = {k: None for k in _METRIC_PATTERNS.keys()}
+
     except FileNotFoundError:
         logging.warning("File not found: %s", file_path)
         return pd.DataFrame()
@@ -717,9 +717,6 @@ def parse_args() -> argparse.Namespace:
         help="Only print mean best metrics by tuner from total_results.csv and exit.",
     )
     return parser.parse_args()
-
-import pandas as pd
-from typing import Optional
 
 def print_mean_best_by_tuner(csv_path: str, out_csv: Optional[str] = None) -> pd.DataFrame:
     """
