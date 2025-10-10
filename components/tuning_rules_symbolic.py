@@ -122,7 +122,6 @@ class tuning_rules_symbolic:
         """
         self.count_br += 1
         if self.count_br <= 1:
-            self.controller.set_case(True)
             new_p = {"reg": 1e-4}
             self.space = self.ss.add_params(new_p)
             logger.info("Enabled L2 regularization with reg=1e-4")
@@ -152,7 +151,6 @@ class tuning_rules_symbolic:
             return
 
         self.count_new_fc += 1
-        self.controller.add_fc_layer(True, self.count_new_fc)
         new_p = {f"new_fc_{self.count_new_fc}": 512}
         self.space = self.ss.add_params(new_p)
         logger.info("Added dense layer #%d with 512 units", self.count_new_fc)
@@ -180,7 +178,6 @@ class tuning_rules_symbolic:
         self.count_new_cv += 1
         new_p = {f"new_conv_{self.count_new_cv}": 512}
         self.space = self.ss.add_params(new_p)
-        self.controller.add_conv_section(True, self.count_new_cv)
         logger.info("Added conv section #%d with 512 filters", self.count_new_cv)
 
     def dec_layers(self) -> None:
@@ -198,7 +195,6 @@ class tuning_rules_symbolic:
         # Remove param key associated with the *next* (now absent) conv
         new_p = {f"new_conv_{self.count_new_cv}": 512}
         self.space = self.ss.remove_params(new_p)
-        self.controller.remove_conv_section(True)
         logger.info("Removed one conv section; remaining added sections: %d", self.count_new_cv)
 
     def dec_fc(self) -> None:
@@ -215,7 +211,6 @@ class tuning_rules_symbolic:
         self.count_new_fc -= 1
         new_p = {f"new_fc_{self.count_new_fc}": 512}
         self.space = self.ss.remove_params(new_p)
-        self.controller.remove_fully_connected(True)
         logger.info("Removed one dense layer; remaining added layers: %d", self.count_new_fc)
 
     # -------------------------- Data augmentation ----------------------------
