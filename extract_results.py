@@ -451,6 +451,10 @@ def process_out_files_in_dir(exp_dir: Path) -> Optional[Path]:
     results = pd.concat(all_rows, ignore_index=True).sort_values("iteration").reset_index(drop=True)
     csv_path = exp_dir / "results.csv"
     results.to_csv(csv_path, index=False)
+    x = results["iteration"]
+    y1 = results["score"]
+    plt.plot(x, y1, color='black', label="Total Score")
+    plt.savefig("{}/objective_funct.png".format(exp_dir))
     logging.info("Wrote metrics CSV: %s", csv_path)
     return csv_path
 
