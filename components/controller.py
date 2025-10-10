@@ -73,7 +73,7 @@ class controller:
         self.space = self.ss.search_sp()
         self.tr = tuning_rules_symbolic(self.space, self.ss, self)
 
-        # Symbolic reasoning & learning-from-interactions
+        # Symbolic reasoning & learning-from-interpretations
         self.nsb = NeuralSymbolicBridge()
         self.db = StoringExperience()
         self.db.create_db()
@@ -88,11 +88,6 @@ class controller:
         self.weight: float = 0.6
 
         # Action flags (reset each training call)
-        self.new: Optional[bool] = None
-        self.new_fc: Optional[List[Any]] = None
-        self.new_conv: Optional[List[Any]] = None
-        self.rem_conv: Optional[bool] = None
-        self.rem_fc: Optional[bool] = None
         self.da: Optional[bool] = None
 
         # Model/training bookkeeping
@@ -115,26 +110,6 @@ class controller:
         self.convergence: bool = False
 
     # ------------------- Signals from tuning_rules_symbolic -------------------
-
-    def set_case(self, new: bool) -> None:
-        """Flag to indicate batch norm / case handling should be applied."""
-        self.new = new
-
-    def add_fc_layer(self, new_fc: bool, c: int) -> None:
-        """Request to add one or more dense layers; `c` is the count."""
-        self.new_fc = [new_fc, c]
-
-    def add_conv_section(self, new_conv: bool, c: int) -> None:
-        """Request to add one or more convolutional sections; `c` is the count."""
-        self.new_conv = [new_conv, c]
-
-    def remove_conv_section(self, rem_conv: bool) -> None:
-        """Request to remove a convolutional section."""
-        self.rem_conv = rem_conv
-
-    def remove_fully_connected(self, rem_fc: bool) -> None:
-        """Request to remove a dense layer."""
-        self.rem_fc = rem_fc
 
     def set_data_augmentation(self, da: bool) -> None:
         """Enable/disable data augmentation for the next training call."""
@@ -204,12 +179,6 @@ class controller:
         self.modules.print()
         self.modules.log()
 
-        # Reset action flags (applied actions are "consumed" after training)
-        self.new_fc = False
-        self.rem_conv = False
-        self.rem_fc = False
-        self.new_conv = False
-        self.new = False
         self.da = False
 
         self.iter += 1
@@ -286,11 +255,11 @@ class controller:
             if self.iter == 1:
                 self.rules, self.actions, self.problems = self.modules.get_rules()
 
-                # Only import facts/problems from modules that are ready
-                for module_obj, ready in zip(self.modules.modules_obj, self.modules.modules_ready):
-                    if ready:
-                        self.nsb.initial_facts += module_obj.facts
-                        self.nsb.problems += module_obj.problems
+                for module, no_err in zip(self.modules.modules_obj, self.modules.modules_ready):
+                    # if there are no errors in the module, dynamically add facts and problems to the symbolic part
+                    if no_err:
+                        self.nsb.initial_facts += module.facts
+                        self.nsb.problems += module.problems
 
                 # Create/refresh the symbolic problem file
                 self.nsb.build_sym_prob(self.problems)
@@ -342,31 +311,3 @@ class controller:
         print(colors.FAIL, "| END SYMBOLIC TUNING      ----------------------------------  |\n", colors.ENDC)
 
         return new_space, -float(self.score[1]), self.model
-
-    # ------------------------------- Plots -----------------------------------
-
-    def plotting_obj_function(self) -> None:
-        """Delegate plotting of module-specific objective traces."""
-        self.modules.plot()
-
-    # --------------------------- Persistence ---------------------------------
-
-    def save_experience(self) -> None:
-        """
-        Save a copy of the DB file, suffixed by the last model id for easier retrieval.
-        """
-        db_path = self.db.db_name
-        base, ext = os.path.splitext(db_path)
-
-        # Guard if nn/model id is missing
-        last_id = getattr(self.nn, "last_model_id", None)
-        if last_id is None:
-            logger.warning("No last_model_id found on neural_network; skipping DB copy.")
-            return
-
-        db_dest = f"{base}-{last_id}{ext}"
-        try:
-            copyfile(db_path, db_dest)
-        except Exception as e:
-            print(colors.FAIL, "|  -------------- FAILED TO SAVE DB -------------  |\n", colors.ENDC)
-            logger.warning("Failed to copy DB from %s to %s: %s", db_path, db_dest, e)

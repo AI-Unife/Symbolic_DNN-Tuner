@@ -329,7 +329,3 @@ if __name__ == "__main__":
     res = run_optimization(first_space, ctrl, cfg.MAX_EVAL)
     print(colors.OKGREEN, "\nALGORITHM FINISHED \n", colors.ENDC)
     print(colors.CYAN, "\nTOTAL TIME --------> \n", time.time() - start_time, colors.ENDC)
-
-    # Visual diagnostics & persistence
-    # ctrl.plotting_obj_function()
-    ctrl.save_experience()

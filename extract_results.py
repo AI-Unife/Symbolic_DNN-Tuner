@@ -760,6 +760,7 @@ def print_mean_best_by_tuner(csv_path: str, out_csv: Optional[str] = None) -> pd
     if time_col:
         # Converti secondi in ore
         work["Total Time (h)"] = pd.to_numeric(df[time_col], errors="coerce") / 3600.0
+        work = work[work["Total Time (h)"] < 24.0]
 
     # Calcola media e std per tuner
     grouped = work.groupby("Tuner", dropna=False)
