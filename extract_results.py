@@ -517,8 +517,8 @@ def summarize_experiment(exp_dir: Path, all_modules: Iterable[str]) -> Optional[
 
     # 1) Ensure results.csv exists (aggregate from .out files)
     results_csv = exp_dir / "results.csv"
-    if not results_csv.is_file():
-        results_csv = process_out_files_in_dir(exp_dir)  # may be None
+    # if not results_csv.is_file():
+    results_csv = process_out_files_in_dir(exp_dir)  # may be None
 
     # 2) Ensure we have a representative log saved at output/output.log
     rep_log = pick_representative_log(exp_dir)
