@@ -331,5 +331,5 @@ if __name__ == "__main__":
     print(colors.CYAN, "\nTOTAL TIME --------> \n", time.time() - start_time, colors.ENDC)
 
     # Visual diagnostics & persistence
-    ctrl.plotting_obj_function()
+    # ctrl.plotting_obj_function()
     ctrl.save_experience()
