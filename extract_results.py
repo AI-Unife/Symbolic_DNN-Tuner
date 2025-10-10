@@ -709,20 +709,105 @@ def parse_args() -> argparse.Namespace:
         default=0,
         help="Increase verbosity (-v for INFO, -vv for DEBUG).",
     )
+    parser.add_argument(
+        "--only-metrics",
+        type=bool,
+        default=False,
+        action=argparse.BooleanOptionalAction,
+        help="Only print mean best metrics by tuner from total_results.csv and exit.",
+    )
     return parser.parse_args()
 
+import pandas as pd
+from typing import Optional
+
+def print_mean_best_by_tuner(csv_path: str, out_csv: Optional[str] = None) -> pd.DataFrame:
+    """
+    Legge `total_results.csv`, raggruppa per Tuner e calcola la media (± std)
+    delle colonne che iniziano con 'Best' e di 'Total Time (s)' (convertito in ore).
+
+    Parametri
+    ---------
+    csv_path : str
+        Path al total_results.csv.
+    out_csv : Optional[str]
+        Se fornito, salva il risultato anche su CSV.
+
+    Ritorna
+    -------
+    pd.DataFrame
+        DataFrame indicizzato per Tuner con media e std per ogni metrica.
+    """
+    df = pd.read_csv(csv_path)
+    if "Tuner" not in df.columns:
+        raise ValueError("Nel CSV manca la colonna 'Tuner'.")
+
+    # Seleziona colonne Best + tempo
+    best_cols = [c for c in df.columns if c.lower().startswith("best")]
+    time_col = "Total Time (s)" if "Total Time (s)" in df.columns else None
+
+    if not best_cols and not time_col:
+        raise ValueError("Nessuna colonna 'Best*' o 'Total Time (s)' trovata nel CSV.")
+
+    # Prepara dataframe di lavoro
+    work = df[["Tuner"]].copy()
+    for c in best_cols:
+        work[c] = pd.to_numeric(df[c], errors="coerce")
+
+    if time_col:
+        # Converti secondi in ore
+        work["Total Time (h)"] = pd.to_numeric(df[time_col], errors="coerce") / 3600.0
+
+    # Calcola media e std per tuner
+    grouped = work.groupby("Tuner", dropna=False)
+    mean_df = grouped.mean(numeric_only=True)
+    std_df = grouped.std(numeric_only=True)
+
+    # Crea un DataFrame con media ± std (formattato)
+    formatted_df = pd.DataFrame(index=mean_df.index, columns=mean_df.columns)
+    for col in mean_df.columns:
+        for tuner in mean_df.index:
+            m = mean_df.loc[tuner, col]
+            s = std_df.loc[tuner, col]
+            if pd.isna(m):
+                formatted_df.loc[tuner, col] = "-"
+            else:
+                formatted_df.loc[tuner, col] = f"{m:.4f} (±{s:.4f})"
+
+    # Stampa leggibile
+    print("\n================  MEAN (±STD) OF 'Best*' METRICS BY TUNER  ================\n")
+    for tuner in mean_df.index:
+        print(f"▶ Tuner: {tuner}")
+        for col in mean_df.columns:
+            val = formatted_df.loc[tuner, col]
+            print(f"  - {col}: {val}")
+        print()
+
+    # Salva CSV opzionale con i valori numerici (non formattati)
+    if out_csv:
+        mean_out = mean_df.copy()
+        if time_col:
+            mean_out.rename(columns={"Total Time (h)": "Mean Total Time (h)"}, inplace=True)
+            std_df.rename(columns={"Total Time (h)": "Std Total Time (h)"}, inplace=True)
+        combined = mean_out.add_suffix("_mean").join(std_df.add_suffix("_std"))
+        combined.to_csv(out_csv, index=True)
+        print(f"📁 Salvato file: {out_csv}")
+
+    return formatted_df
 
 def main() -> None:
     args = parse_args()
     setup_logging(args.verbose)
     logging.info("Base dir: %s", args.base_dir)
-    run(
-        base_dir=args.base_dir,
-        exp_prefix=args.exp_prefix,
-        all_modules=args.modules,
-        output_csv=args.output_csv,
-    )
-    print("✅ Created:", args.output_csv)
+    if not args.only_metrics:
+        run(
+            base_dir=args.base_dir,
+            exp_prefix=args.exp_prefix,
+            all_modules=args.modules,
+            output_csv=args.output_csv,
+        )
+        print("✅ Created:", args.output_csv)
+    print_mean_best_by_tuner("total_results.csv")
 
 
 if __name__ == "__main__":
