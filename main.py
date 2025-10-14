@@ -199,19 +199,10 @@ def run_optimization(search_space: Space, controller: controller, max_iter: int)
     all_y.extend(res.func_vals)
 
     # Decide initial new_space (rule-driven or fixed)
-    new_space = copy.deepcopy(search_space) if cfg.OPT in no_rules else controller.diagnosis()[0]
+    new_space = copy.deepcopy(search_space) if cfg.OPT in no_rules else controller.diagnosis()
 
-    it = 0
-    while it < max_iter and not controller.convergence:
-        print(colors.MAGENTA, f"--- ITERATION {it + 1} ---", colors.ENDC)
-        it += 1
-
-        # Reload last checkpointed result to keep skopt internal state consistent
-        # try:
-        #     res = load(ckpt_path)
-        # except Exception:
-        #     # If the checkpoint does not exist yet (or is corrupted), we proceed with current `res`
-        #     pass
+    while controller.iter <= max_iter and not controller.convergence:
+        print(colors.MAGENTA, f"--- ITERATION {controller.iter} ---", colors.ENDC)
 
         # If the space shape didn't change, we can warm-start BO with previous data
         if len(new_space.dimensions) == len(search_space.dimensions):
@@ -293,7 +284,7 @@ def run_optimization(search_space: Space, controller: controller, max_iter: int)
                 all_x, all_y = list(res.x_iters), list(res.func_vals)
 
         # Ask controller again: either keep the same space (no_rules) or update by diagnosis (with_rules)
-        new_space = copy.deepcopy(search_space) if cfg.OPT in no_rules else controller.diagnosis()[0]
+        new_space = copy.deepcopy(search_space) if cfg.OPT in no_rules else controller.diagnosis()
 
     return res
 

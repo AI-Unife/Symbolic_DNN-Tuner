@@ -288,12 +288,12 @@ class NeuralSymbolicBridge:
         for prob in res.keys():
             # Special-casing "overfitting": force reg_l2 prob to 0 (legacy) and add a direct reg_l2 action.
             # NOTE: This is the original behavior; it *adds* two diagnosis entries for "overfitting".
-            if prob == "overfitting":
-                res[prob]["reg_l2"] = 0
-                tuning.append("reg_l2")
-                diagnosis.append(prob)
+            # if prob == "overfitting":
+            #     res[prob]["reg_l2"] = 0
+            #     tuning.append("reg_l2")
+            #     diagnosis.append(prob)
 
-            diagnosis.append(prob)
+            # diagnosis.append(prob)
             if res[prob]:
                 # choose argmax action for this problem
                 tuning.append(max(res[prob], key=res[prob].get))

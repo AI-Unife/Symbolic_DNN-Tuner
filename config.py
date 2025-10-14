@@ -19,8 +19,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--epochs", type=int, default=2,
                         help="Epochs for training")
     parser.add_argument(
-        "--mod_list", nargs="+", default=["accuracy_module"],
-        help="List of active modules (e.g., hardware_module accuracy_module)"
+        "--mod_list", nargs="+", default=[],
+        help="List of active modules (e.g., hardware_module flops_module)"
     )
     parser.add_argument("--dataset", type=str, default="cifar-10",
                         help="Dataset name")
@@ -47,7 +47,7 @@ def parse_args() -> argparse.Namespace:
     args = parser.parse_args()
 
     # Validate module list
-    valid_modules = {"hardware_module", "accuracy_module", "flops_module"}
+    valid_modules = {"hardware_module", "flops_module"}
     for mod in args.mod_list:
         if mod not in valid_modules:
             parser.error(
