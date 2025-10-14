@@ -13,32 +13,18 @@ class ImprovementChecker:
         :return: boolean indicating if there was an improvement
         """
         # obtain the values from db
-        acc, loss = self.db.get()
+        score, acc = self.db.get()
 
-        # if the length of the accuracy history is 0, nothing has been saved yet in the db
-        if len(acc) == 0:
+        # if the length of the score history is 0, nothing has been saved yet in the db
+        if len(score) == 0:
             return None
 
-        # set to true that there was an improvement in loss and accuracy
+        # set to true that there was an improvement in socre and accuracy
+        score_check = True
         acc_check = True
-        loss_check = True
 
         # if there's a degradation compared to the last training
-        if val_acc < acc[len(acc) - 1]:
-            acc_check = False
-        '''
-
-        # iterate over all accuracy values and, in case there was a degradation,
-        # set the boolean 'acc_check' to false
-        for a in acc:
-            if val_acc < a:
-                acc_check = False
-                break
+        if val_acc < score[len(score) - 1]:
+            score_check = False
         
-        # the same applies to loss values
-        for l in loss:
-            if val_loss > l:
-                loss_check = False
-                break
-        '''
-        return acc_check
+        return score_check

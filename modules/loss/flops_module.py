@@ -26,8 +26,7 @@ class flops_module(common_interface):
         self.tuner_steps = 0
 
     def update_state(self, *args):
-        self.accuracy = args[1]
-        self.model = args[2]
+        self.model = args[0]
         self.flops, _ = fc.analyze_model(self.model)
         self.flops = self.flops.total_float_ops
         trainableParams = np.sum([np.prod(v.shape)for v in self.model.trainable_weights])
@@ -66,5 +65,5 @@ class flops_module(common_interface):
         # if os.path.exists("{}/graph_report.txt".format(cfg.NAME_EXP)):
         #     os.remove("{}/graph_report.txt".format(cfg.NAME_EXP))
         f = open("{}/graph_report.txt".format(cfg.NAME_EXP), "a")
-        f.write(str(self.flops_th) + " " + str(self.flops) + " " + str(self.accuracy) + "\n")
+        f.write(str(self.flops_th) + " " + str(self.flops) + "\n")
         f.close()

@@ -58,7 +58,7 @@ class hardware_module(common_interface):
 
     def update_state(self, *args):
         # import current model reference
-        self.model = args[2]
+        self.model = args[0]
 
         self.flops, _ = fc.analyze_model(self.model)
         self.flops = self.flops.total_float_ops

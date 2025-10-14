@@ -402,8 +402,10 @@ def extract_metrics_from_out(file_path: Path) -> pd.DataFrame:
                 # Accumulate known metrics from the current line
                 if _METRIC_PATTERNS["iteration"].search(line):
                     # Only append if we have iteration and at least one other metric (e.g., score)
-                    if current["iteration"] is not None:
-                        rows.append(current.copy())
+                    if current["iteration"] is None:
+                        current["iteration"] = 0
+
+                    rows.append(current.copy())
                     # Start a fresh row for the next iteration block
                     current = {k: None for k in _METRIC_PATTERNS.keys()}
                 for key, pat in _METRIC_PATTERNS.items():
@@ -456,7 +458,7 @@ def process_out_files_in_dir(exp_dir: Path) -> Optional[Path]:
     y1 = results["score"]
     plt.plot(x, y1, label="Total Score")
     plt.savefig("{}/objective_funct.png".format(exp_dir))
-
+    plt.close()
     logging.info("Wrote metrics CSV: %s", csv_path)
     return csv_path
 
@@ -584,6 +586,7 @@ def summarize_experiment(exp_dir: Path, all_modules: Iterable[str]) -> Optional[
         if "score" in df.columns and not df["score"].dropna().empty:
             best_idx = int(df["score"].idxmin())
             info.best_iteration = int(df.loc[best_idx, "iteration"]) if "iteration" in df.columns else None
+            idx_acc = int(df["accuracy"].idxmin())
         else:
             info.best_iteration = None
 
@@ -595,8 +598,10 @@ def summarize_experiment(exp_dir: Path, all_modules: Iterable[str]) -> Optional[
             series = df[col].dropna()
             if col in ["latency", "total_cost", "flops", "score"]:
                 info.best_metrics[f"Best {col}"] = float(series.min()) if not series.empty else np.nan
+                info.best_metrics[f"{col} @ best acc"] = float(df.at[idx_acc, col]) if not series.empty else np.nan
             else:
                 info.best_metrics[f"Best {col}"] = float(series.max()) if not series.empty else np.nan
+                
 
         info.eval_count = int(len(df))
     except pd.errors.EmptyDataError:
@@ -623,7 +628,7 @@ def run(
     Walk the base directory, summarize each experiment, and write a global CSV.
     """
     if all_modules is None:
-        all_modules = ["accuracy_module", "flops_module", "hardware_module"]
+        all_modules = ["flops_module", "hardware_module"]
 
     exp_infos: List[ExperimentInfo] = []
 
@@ -724,7 +729,7 @@ def parse_args() -> argparse.Namespace:
     )
     return parser.parse_args()
 
-def print_mean_best_by_tuner(csv_path: str, out_csv: Optional[str] = None) -> pd.DataFrame:
+def print_mean_best_by_tuner(csv_path: str, out_csv: Optional[Path] = None) -> pd.DataFrame:
     """
     Legge `total_results.csv`, raggruppa per Tuner e calcola la media (± std)
     delle colonne che iniziano con 'Best' e di 'Total Time (s)' (convertito in ore).
@@ -761,40 +766,70 @@ def print_mean_best_by_tuner(csv_path: str, out_csv: Optional[str] = None) -> pd
         # Converti secondi in ore
         work["Total Time (h)"] = pd.to_numeric(df[time_col], errors="coerce") / 3600.0
         work = work[work["Total Time (h)"] < 24.0]
+        
+    work["flops_module"] = pd.to_numeric(df["flops_module"])
+
 
     # Calcola media e std per tuner
-    grouped = work.groupby("Tuner", dropna=False)
-    mean_df = grouped.mean(numeric_only=True)
-    std_df = grouped.std(numeric_only=True)
+    print("\n================  MEAN (±STD) OF 'Best*' METRICS BY TUNER  ================\n")
+    grouped_fl = work[work["flops_module"]==True].groupby("Tuner", dropna=False)
+    mean_fl = grouped_fl.mean(numeric_only=True)
+    std_fl = grouped_fl.std(numeric_only=True)
 
     # Crea un DataFrame con media ± std (formattato)
-    formatted_df = pd.DataFrame(index=mean_df.index, columns=mean_df.columns)
-    for col in mean_df.columns:
-        for tuner in mean_df.index:
-            m = mean_df.loc[tuner, col]
-            s = std_df.loc[tuner, col]
+    formatted_df = pd.DataFrame()
+    for col in mean_fl.columns:
+        for tuner in mean_fl.index:
+            m = mean_fl.loc[tuner, col]
+            s = std_fl.loc[tuner, col]
             if pd.isna(m):
-                formatted_df.loc[tuner, col] = "-"
+                formatted_df.loc[f"{tuner} flops", col] = "-"
+                formatted_df.loc[f"{tuner} flops", f"{col}_std"] = "-"
             else:
-                formatted_df.loc[tuner, col] = f"{m:.4f} (±{s:.4f})"
+                formatted_df.loc[f"{tuner} flops", col] = m
+                formatted_df.loc[f"{tuner} flops", f"{col}_std"] = s
+                
+    grouped_acc = work[work["flops_module"]==False].groupby("Tuner", dropna=False)
+    mean_acc = grouped_acc.mean(numeric_only=True)
+    std_acc = grouped_acc.std(numeric_only=True)
+
+    # Crea un DataFrame con media ± std (formattato)
+    for col in mean_acc.columns:
+        for tuner in mean_acc.index:
+            m = mean_acc.loc[tuner, col]
+            s = std_acc.loc[tuner, col]
+            if pd.isna(m):
+                formatted_df.loc[f"{tuner} acc", col] = "-"
+                formatted_df.loc[f"{tuner} acc", f"{col}_std"] = "-"
+            else:
+                formatted_df.loc[f"{tuner} acc", col] = m
+                formatted_df.loc[f"{tuner} acc", f"{col}_std"] = s
 
     # Stampa leggibile
-    print("\n================  MEAN (±STD) OF 'Best*' METRICS BY TUNER  ================\n")
-    for tuner in mean_df.index:
+    for tuner in mean_acc.index:
         print(f"▶ Tuner: {tuner}")
-        for col in mean_df.columns:
-            val = formatted_df.loc[tuner, col]
-            print(f"  - {col}: {val}")
+        print(f"with Flops module")
+        for col in mean_fl.columns:
+            m = mean_fl.loc[tuner, col]
+            s = std_fl.loc[tuner, col]
+            print(f"  - {col}: {m:.4f} (±{s:.4f})")
+        print("Only Accuracy module")
+        for col in mean_acc.columns:
+            m = mean_acc.loc[tuner, col]
+            s = std_acc.loc[tuner, col]
+            print(f"  - {col}: {m:.4f} (±{s:.4f})")
         print()
 
     # Salva CSV opzionale con i valori numerici (non formattati)
     if out_csv:
-        mean_out = mean_df.copy()
-        if time_col:
-            mean_out.rename(columns={"Total Time (h)": "Mean Total Time (h)"}, inplace=True)
-            std_df.rename(columns={"Total Time (h)": "Std Total Time (h)"}, inplace=True)
-        combined = mean_out.add_suffix("_mean").join(std_df.add_suffix("_std"))
-        combined.to_csv(out_csv, index=True)
+        # mean_out = pd.concat([mean_acc.copy(), mean_fl.copy()])
+        # std_out = pd.concat([std_acc.copy(), std_fl.copy()])
+        # if time_col:
+        #     mean_out.rename(columns={"Total Time (h)": "Mean Total Time (h)"}, inplace=True)
+        #     std_out.rename(columns={"Total Time (h)": "Std Total Time (h)"}, inplace=True)
+        # combined = mean_out.add_suffix("_mean")#.join(std_out.add_suffix("_std"))
+        formatted_df.to_csv(out_csv, index=True)
+        formatted_df.to_excel(out_csv.with_suffix('.xlsx'), index=True)
         print(f"📁 Salvato file: {out_csv}")
 
     return formatted_df
@@ -811,7 +846,7 @@ def main() -> None:
             output_csv=args.output_csv,
         )
         print("✅ Created:", args.output_csv)
-    print_mean_best_by_tuner("total_results.csv")
+    print_mean_best_by_tuner("total_results.csv", Path("mean_results.csv"))
 
 
 if __name__ == "__main__":

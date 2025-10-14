@@ -99,7 +99,7 @@ class controller:
         # Dynamic thresholds (updated at given epochs)
         self.lacc: float = 0.30
         self.hloss: float = 1.2
-        self.levels: List[int] = [7, 10, 13]
+        self.acc_w = 0.5  # weight of accuracy in combined score
 
         # Improvement checker + modules
         self.imp_checker = ImprovementChecker(self.db, self.lfi)
@@ -173,27 +173,39 @@ class controller:
 
         # Build and train model
         self.nn = neural_network(self.X_train, self.Y_train, self.X_test, self.Y_test, self.n_classes)
-        self.score, self.history, self.model = self.nn.training(params, self.da)
+        if self.nn.flops is None or self.nn.flops <= cfg.MAX_FLOPS:
+            self.scoreNN, self.history, self.model = self.nn.training(params, self.da)
+            self.log()
+            # Update external modules and log their state
+            self.modules.state(self.model)
+            self.modules.print()
+            self.modules.log()
+            
+            # Decide the optimization target:
+            # - If there are no/invalid modules, optimize accuracy (minimize -acc).
+            # - Otherwise use module-provided objective.
+            if (len(self.modules.modules_obj) == 0) or (not self.modules.all_zeros_weights()) or (not self.modules.ready()):
+                self.score = -float(self.scoreNN[1])  # usually validation accuracy
+            else:
+                _, _, opt_value = self.modules.optimiziation()
+                self.score = float(opt_value)-self.scoreNN[1]*self.acc_w  # combine module opt with accuracy
 
-        # Update external modules and log their state
-        self.modules.state(self.score[0], self.score[1], self.model)
-        self.modules.print()
-        self.modules.log()
-
-        self.iter += 1
-
-        # Decide the optimization target:
-        # - If there are no/invalid modules, optimize accuracy (minimize -acc).
-        # - Otherwise use module-provided objective.
-        if (len(self.modules.modules_obj) == 0) or (not self.modules.all_zeros_weights()) or (not self.modules.ready()):
-            score = -float(self.score[1])  # usually validation accuracy
         else:
-            _, _, opt_value = self.modules.optimiziation()
-            score = float(opt_value)
+            print(f"Model FLOPs {self.nn.flops} exceed maximum {cfg.MAX_FLOPS}. Skipping training.")
+            self.scoreNN, self.history, self.model = None, None, self.nn.model
+    
+            self.log()
+            # Update external modules and log their state
+            self.modules.state(self.model)
+            self.modules.print()
+            self.modules.log()
 
+            self.score = float('inf')
+            
+        self.iter += 1
         # Track the best score and persist the model artifact
-        if score < self.best_score:
-            self.best_score = score
+        if self.score < self.best_score:
+            self.best_score = self.score
             self.best_iter = self.iter
             try:
                 os.makedirs(os.path.join(cfg.NAME_EXP, "Model"), exist_ok=True)
@@ -205,8 +217,7 @@ class controller:
         if self.iter > self.best_iter + 20:
             self.convergence = True
 
-        return score
-
+        return self.score
     # ------------------------------ Diagnosis --------------------------------
 
     def diagnosis(self) -> Tuple[Any, float]:
@@ -225,18 +236,13 @@ class controller:
         tune_path = f"{cfg.NAME_EXP}/algorithm_logs/tuning_symbolic_logs.txt"
 
         with open(diag_path, "a") as diagnosis_logs, open(tune_path, "a") as tuning_logs:
-            # Check last-iteration improvement; persist scores to DB
-            improv = self.imp_checker.checker(self.score[1], self.score[0])
-            self.db.insert_ranking(self.score[1], self.score[0])
+            # Check last-iteration improvement; persist scores (score and loss) to DB
+            improv = self.imp_checker.checker(self.score, self.scoreNN[1])
+            self.db.insert_ranking(self.score, self.scoreNN[1])
 
             # Integral features of validation loss (used by symbolic layer)
             val_loss_hist = self.history.get("val_loss", [])
             int_loss, int_slope = integrals(val_loss_hist)
-
-            # Dynamically update detection thresholds at specific iterations
-            # if self.iter in self.levels:
-            #     self.lacc = self.lacc / 2.0 + 0.05
-            #     self.hloss = self.hloss / 2.0 + 0.15
 
             # Base fact list (raw + smoothed histories)
             facts_list_module = [
@@ -270,7 +276,6 @@ class controller:
 
             # If we have improvement data, update the symbolic model probabilities
             if improv is not None:
-                print("improv: ", improv)
                 _, lfi_problem = self.lfi.learning(
                     improv, self.symbolic_tuning, self.symbolic_diagnosis, self.actions
                 )
@@ -286,10 +291,10 @@ class controller:
 
         # If we have candidate repairs, perform tuning; otherwise return current space
         if self.symbolic_tuning:
-            new_space, to_optimize, _ = self.tuning()
-            return new_space, to_optimize
+            new_space = self.tuning()
+            return new_space
         else:
-            return self.space, -float(self.score[1])
+            return self.space
 
     # ------------------------------- Tuning ----------------------------------
 
@@ -314,4 +319,9 @@ class controller:
         self.issues = []
         print(colors.FAIL, "| END SYMBOLIC TUNING      ----------------------------------  |\n", colors.ENDC)
 
-        return new_space, -float(self.score[1]), self.model
+        return new_space
+
+    def log(self) -> None:
+        f = open(f"{cfg.NAME_EXP}/algorithm_logs/acc_report.txt", "a")
+        f.write(str(self.scoreNN[0]) + "\n")
+        f.close()

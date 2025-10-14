@@ -30,6 +30,7 @@ from components.gesture_dataset import gesture_data
 from components.search_space import search_space
 from components.colors import colors
 from components.custom_train import train_model, eval_model
+from flops.flops_calculator import analyze_model
 
 import config as cfg
 
@@ -155,6 +156,7 @@ class neural_network:
 
         # Populated during training
         self.last_model_id: Optional[str] = None
+        self.flops: Optional[float] = None
 
     # --------------------------- Build the model -----------------------------
 
@@ -190,21 +192,23 @@ class neural_network:
         inputs = Input(input_shape)
         x = Conv2D(params["unit_c1"], (3, 3), padding="same", kernel_regularizer=reg_layer)(inputs)
         x = Activation(params["activation"])(x)
-        x = Conv2D(params["unit_c1"], (3, 3), kernel_regularizer=reg_layer)(x)
+        x = Conv2D(params["unit_c1"], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
         x = Activation(params["activation"])(x)
         x = MaxPooling2D(pool_size=(2, 2))(x)
         x = Dropout(params["dr1_2"])(x)
 
         x = Conv2D(params["unit_c2"], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
         x = Activation(params["activation"])(x)
-        x = Conv2D(params["unit_c2"], (3, 3), kernel_regularizer=reg_layer)(x)
+        x = Conv2D(params["unit_c2"], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
         x = Activation(params["activation"])(x)
         x = MaxPooling2D(pool_size=(2, 2))(x)
         x = Dropout(params["dr1_2"])(x)
 
-        # Dynamically added conv blocks (conv -> act -> pool -> dropout)
+        # Dynamically added conv blocks (conv -> act -> conv -> act -> pool -> dropout)
         added_convs = [k for k in params if re.match(r"new_conv_\d+$", k)]
         for layer_key in sorted(added_convs, key=lambda s: int(s.split("_")[-1])):  # stable order
+            x = Conv2D(params[layer_key], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
+            x = Activation(params["activation"])(x)
             x = Conv2D(params[layer_key], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
             x = Activation(params["activation"])(x)
             x = MaxPooling2D(pool_size=(2, 2))(x)
@@ -224,6 +228,14 @@ class neural_network:
 
         outputs = Dense(self.n_classes, activation="softmax")(x)
         model = Model(inputs=inputs, outputs=outputs)
+        
+        if "flops_module" in cfg.MOD_LIST:
+            # Compute FLOPs (approximate; counts MACs as 2 FLOPs)
+            try:
+                self.flops = analyze_model(model)
+            except Exception:
+                self.flops = None  # FLOPs computation failed; ignore 
+        
         return model
 
     # ------------------------------ Training ---------------------------------
@@ -244,7 +256,7 @@ class neural_network:
               - model: trained (and reloaded) Keras model
         """
         _ensure_dirs()
-        model = self.build_network(params)
+        self.model = self.build_network(params)
 
         # Unique id for artifacts of this run
         model_name_id = datetime.now().strftime("%y_%m_%d_%H_%M_%S_%f")
@@ -253,13 +265,13 @@ class neural_network:
         # Persist the (fresh) architecture JSON for later reloading
         model_json_path = f"{cfg.NAME_EXP}/Model/model-{model_name_id}.json"
         with open(model_json_path, "w") as json_file:
-            json_file.write(model.to_json())
+            json_file.write(self.model.to_json())
 
         # Try loading previous weights if available (fine-tune / warm start)
         try:
             prev_weights = f"{cfg.NAME_EXP}/Weights/weights.h5"
             if os.path.exists(prev_weights):
-                model.load_weights(prev_weights)
+                self.model.load_weights(prev_weights)
         except Exception:
             pass  # ignore if incompatible
 
@@ -274,13 +286,13 @@ class neural_network:
         multiplier: Dict[str, float] = {}
         trainable_names = [
             (getattr(var, "path", None) or var.name).split("/")[0]
-            for var in model.trainable_variables
+            for var in self.model.trainable_variables
         ]
 
         current_mul = 1.0
         lr_factor = 1.414213  # sqrt(2)
         for layer_name in trainable_names[::2]:  # skip bias variables (kernel/bias pairs)
-            layer_type = model.get_layer(layer_name).__class__.__name__
+            layer_type = self.model.get_layer(layer_name).__class__.__name__
             if layer_type in {"Conv2D"}:
                 multiplier[layer_name] = current_mul
                 current_mul /= lr_factor
@@ -288,11 +300,11 @@ class neural_network:
         opt = LayerWiseLR(base_opt, multiplier, learning_rate=float(params["learning_rate"]))
 
         # --- Callbacks ---
-        es1 = EarlyStopping(monitor="val_loss", min_delta=0.005, patience=300, verbose=1,
+        es1 = EarlyStopping(monitor="val_loss", min_delta=0.005, patience=30, verbose=1,
                             mode="min", restore_best_weights=True)
-        es2 = EarlyStopping(monitor="val_accuracy", min_delta=0.005, patience=300, verbose=1,
+        es2 = EarlyStopping(monitor="val_accuracy", min_delta=0.005, patience=30, verbose=1,
                             mode="max", restore_best_weights=True)
-        reduce_lr = ReduceLROnPlateau(monitor="val_loss", factor=0.2, patience=50,
+        reduce_lr = ReduceLROnPlateau(monitor="val_loss", factor=0.2, patience=20,
                                       verbose=1, min_lr=1e-4)
 
         # --- Optional data augmentation ---
@@ -303,10 +315,10 @@ class neural_network:
                 tf.keras.layers.RandomFlip("horizontal"),
                 tf.keras.layers.RandomTranslation(height_factor=0.1, width_factor=0.1, fill_mode="nearest"),
             ])
-            model = tf.keras.Sequential([aug, *model.layers])
+            self.model = tf.keras.Sequential([aug, *self.model.layers])
 
         # --- Compile ---
-        model.compile(loss="categorical_crossentropy", optimizer=opt, metrics=["accuracy"])
+        self.model.compile(loss="categorical_crossentropy", optimizer=opt, metrics=["accuracy"])
 
         # --- Train ---
         if (cfg.MODE in ("fwdPass", "hybrid")) and cfg.DATA_NAME == "gesture":
@@ -320,7 +332,7 @@ class neural_network:
                     history["accuracy"].append(random.uniform(0.1, 1.0))
             else:
                 history = train_model(
-                    model, opt,
+                    self.model, opt,
                     self.train_data, self.train_labels,
                     self.test_data, self.test_labels,
                     self.epochs, params,
@@ -335,7 +347,7 @@ class neural_network:
                     history["loss"].append(random.uniform(0.1, 0.5))
                     history["accuracy"].append(random.uniform(0.1, 1.0))
             else:
-                history = model.fit(
+                history = self.model.fit(
                     self.train_data, self.train_labels,
                     epochs=self.epochs,
                     batch_size=int(params["batch_size"]),
@@ -349,20 +361,20 @@ class neural_network:
             if "debug" in cfg.NAME_EXP:
                 score = [random.uniform(0.1, 0.5), random.uniform(0.1, 1.0)]
             else:
-                score = eval_model(model, self.test_data, self.test_labels)
+                score = eval_model(self.model, self.test_data, self.test_labels)
         else:
             if "debug" in cfg.NAME_EXP:
                 score = [random.uniform(0.1, 0.5), random.uniform(0.1, 1.0)]
             else:
-                score = model.evaluate(self.test_data, self.test_labels, verbose=2)
+                score = self.model.evaluate(self.test_data, self.test_labels, verbose=2)
 
         # --- Save weights and canonical dashboard model ---
         weights_tmp = f"{cfg.NAME_EXP}/Weights/weights-{model_name_id}.weights.h5"
-        model.save_weights(weights_tmp)
+        self.model.save_weights(weights_tmp)
 
         dash_model_path = f"{cfg.NAME_EXP}/dashboard/model/model.keras"
         try:
-            model.save(dash_model_path)
+            self.model.save(dash_model_path)
         except Exception:
             # If the wrapper/augmentation created a non-serializable wrapper, we still
             # preserve weights and architecture JSON; downstream code can rebuild.
@@ -371,8 +383,8 @@ class neural_network:
         # --- Rebuild model from JSON + reload weights (cleans the graph/session coupling) ---
         with open(model_json_path, "r") as f:
             mj = json.load(f)
-        model = tf.keras.models.model_from_json(json.dumps(mj))
-        model.load_weights(weights_tmp)
+        self.model = tf.keras.models.model_from_json(json.dumps(mj))
+        self.model.load_weights(weights_tmp)
 
         # Cleanup temp artifacts
         try:
@@ -384,7 +396,7 @@ class neural_network:
         except OSError:
             pass
 
-        return score, history, model
+        return score, history, self.model
 
 
 # ------------------------------ Standalone test ------------------------------

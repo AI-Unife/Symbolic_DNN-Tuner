@@ -22,8 +22,8 @@ class StoringExperience:
         self.create1 = """
             CREATE TABLE IF NOT EXISTS ranking (
             id integer PRIMARY KEY,
-            val_acc real,
-            val_loss real)
+            score real,
+            val_acc real)
         """
         self.create2 = """
             CREATE TABLE IF NOT EXISTS experience (
@@ -61,14 +61,14 @@ class StoringExperience:
         conn.commit()
         conn.close()
 
-    def insert_ranking(self, val_acc, val_loss):
+    def insert_ranking(self, score, val_acc):
         """
-        method used to insert accuracy and loss values into the db
+        method used to insert accuracy and score values into the db
         """
         conn = self.connection()
         c = conn.cursor()
         try:
-            c.execute('INSERT INTO ranking (val_acc, val_loss) VALUES (' + str(val_acc) + ',' + str(val_loss) + ')')
+            c.execute('INSERT INTO ranking (score, val_acc) VALUES (' + str(score) + ',' + str(val_acc) + ')')
         except Error as e:
             print(e)
         conn.commit()
