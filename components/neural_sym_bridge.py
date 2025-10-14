@@ -3,13 +3,14 @@ from __future__ import annotations
 import os
 import re
 from typing import Dict, List, Tuple, Iterable
+import random
+import numpy as np
 
 from problog.program import PrologString
 from problog import get_evaluatable
 from problog.tasks import sample  # kept for compatibility if you use it elsewhere
 
 import config as cfg
-import numpy as np
 
 
 class NeuralSymbolicBridge:
@@ -27,10 +28,10 @@ class NeuralSymbolicBridge:
         The order in `initial_facts` must match the order of numeric facts you pass later.
         """
         self.initial_facts: List[str] = [
-            "l", "sl", "a", "sa", "vl", "va", "int_loss", "int_slope", "lacc", "hloss"
+            "l", "sl", "a", "sa", "vl", "va", "int_loss", "int_slope", "lacc", "hloss", "grad_global_norm", "vanish_th", "exploding_th"
         ]
         self.problems: List[str] = [
-            "overfitting", "underfitting", "inc_loss", "floating_loss", "high_lr", "low_lr"
+            "overfitting", "underfitting", "inc_loss", "floating_loss", "high_lr", "low_lr", "gradient"
         ]
 
     # -------------------------------------------------------------------------
@@ -121,6 +122,7 @@ class NeuralSymbolicBridge:
 
         out_lines: List[str] = []
         for line in prev_model.splitlines():
+            line = line.replace(" ", "")
             m = rule_re.match(line)
             if m:
                 _, head, body = m.groups()
@@ -133,12 +135,6 @@ class NeuralSymbolicBridge:
             out_lines.append(line)
 
         return "\n".join(out_lines)
-
-    def clean_problems(self, problems: List[str]) -> List[str]:
-        """
-        Remove spaces and dots from problem names (used for sanitizing).
-        """
-        return [re.sub(r"[.\s]", "", p) for p in problems]
 
     def build_sym_prob(self, problems: str) -> None:
         """
@@ -238,7 +234,7 @@ class NeuralSymbolicBridge:
     # Reasoning
     # -------------------------------------------------------------------------
 
-    def symbolic_reasoning(self, facts, diagnosis_logs, tuning_logs, rules):
+    def symbolic_reasoning(self, facts, diagnosis_logs, tuning_logs, rules, controller):
         """
         Run the symbolic reasoning pipeline:
           1) build the model from facts + problems + base + rules
@@ -286,17 +282,39 @@ class NeuralSymbolicBridge:
 
         # 5) Turn map into ordered action/diagnosis lists
         for prob in res.keys():
-            # Special-casing "overfitting": force reg_l2 prob to 0 (legacy) and add a direct reg_l2 action.
-            # NOTE: This is the original behavior; it *adds* two diagnosis entries for "overfitting".
-            # if prob == "overfitting":
-            #     res[prob]["reg_l2"] = 0
-            #     tuning.append("reg_l2")
-            #     diagnosis.append(prob)
-
-            # diagnosis.append(prob)
+            diagnosis.append(prob)
             if res[prob]:
-                # choose argmax action for this problem
-                tuning.append(max(res[prob], key=res[prob].get))
+                # choose argmax action for this problem (with random tie-breaking)
+
+                # if regularization l2 is already applied, disable it
+                if controller.reg:
+                    res[prob]["reg_l2"] = 0
+                if controller.residual:
+                    res[prob]["residual"] = 0
+                # apply architectural constraints
+                tot_conv = controller.start_conv + controller.count_new_cv * 2
+                if tot_conv > controller.max_conv:
+                    res[prob]["new_conv_block"] = 0
+                if controller.count_new_cv <= 0:
+                    res[prob]["dec_conv_block"] = 0
+                if controller.layer_x_block > controller.max_layer_x_block:
+                    res[prob]["inc_conv_layer"] = 0
+                if controller.layer_x_block < 2:
+                    res[prob]["dec_conv_layer"] = 0
+                if controller.count_new_fc + controller.start_fc > controller.max_fc:
+                    res[prob]["new_fc_layer"] = 0
+                if controller.count_new_fc <= 0:
+                    res[prob]["dec_fc_layer"] = 0
+
+                # get all actions with the maximum value
+                vals = res[prob]
+                max_val = max(vals.values())
+                max_keys = [k for k, v in vals.items() if v == max_val]
+
+                # choose one action randomly among the top ones
+                chosen_action = random.choice(max_keys)
+
+                tuning.append(chosen_action)
 
         # Log unique sets, but return the raw (possibly duplicated) sequences to preserve behavior
         to_log_tuning = list(dict.fromkeys(tuning))

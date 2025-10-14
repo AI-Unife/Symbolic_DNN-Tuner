@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import random
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import numpy as np  # only for type hints; safe if arrays are numpy-like
@@ -32,7 +33,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
-
 
 class controller:
     """
@@ -88,7 +88,9 @@ class controller:
         self.weight: float = 0.6
 
         # Action flags (reset each training call)
-        self.da: Optional[bool] = None
+        self.da: Optional[bool] = True
+        self.reg: Optional[bool] = None
+        self.residual: Optional[bool] = None
 
         # Model/training bookkeeping
         self.nn: Optional[neural_network] = None
@@ -100,15 +102,29 @@ class controller:
         self.lacc: float = 0.30
         self.hloss: float = 1.2
         self.acc_w = 0.5  # weight of accuracy in combined score
+        self.vanish_th = 1e-8
+        self.exploding_th = 100.0
 
         # Improvement checker + modules
         self.imp_checker = ImprovementChecker(self.db, self.lfi)
         self.modules = module(cfg.MOD_LIST)
+        if "flops_module" in cfg.MOD_LIST:
+            self.flops_th = self.modules.get_module("flops_module").flops_th
 
         # Optimization objective bookkeeping
         self.best_score: float = float("inf")  # lower is better if we minimize
         self.convergence: bool = False
         self.best_iter: int = -1
+
+        # Internal counters
+        self.count_new_fc = 0
+        self.count_new_cv = 0
+        self.max_fc = 3
+        self.max_conv = self.count_max_conv()
+        self.start_conv, self.start_fc = self.ss.count_initial_layers(self.space)
+        self.count_no_probs = 0
+        self.layer_x_block = 2
+        self.max_layer_x_block = 6
 
     # ------------------- Signals from tuning_rules_symbolic -------------------
 
@@ -116,7 +132,61 @@ class controller:
         """Enable/disable data augmentation for the next training call."""
         self.da = da
 
+    def set_residual(self, residual: bool) -> None:
+        """Enable/disable residual connection for the next training call."""
+        self.residual = residual
+
+    def set_reg_l2(self, reg: bool) -> None:
+        """Enable/disable data augmentation for the next training call."""
+        self.reg = reg
+
     # ----------------------------- Utilities ---------------------------------
+
+    def count_max_conv(self) -> int:
+        """
+        Heuristic upper bound for how many conv+pool blocks fit given the input size.
+
+        The estimate assumes a pattern:
+            Conv2D(kernel=3x3, stride=1, valid padding) -> MaxPool2D(2x2)
+        and stops before spatial dims drop below 3x3.
+
+        Returns:
+            int: Maximum number of stacked (conv+pool) sections that can fit.
+        """
+        # Expecting X_train to be an image-like array with shape [H, W, ...] or [N, H, W, ...].
+        shape = self.X_train
+        if shape is None or not hasattr(shape, "shape"):
+            logger.warning("controller.X_train not found or missing shape; defaulting max_conv to 0")
+            return 0
+
+        # Support either (H, W, C) or (N, H, W, C)
+        dims = shape.shape
+        if len(dims) >= 2 and len(dims) <= 3:
+            h, w = dims[0], dims[1]
+        elif len(dims) >= 4:
+            h, w = dims[1], dims[2]
+        else:
+            logger.warning("Unexpected X_train shape %s; defaulting max_conv to 0", dims)
+            return 0
+
+        max_layers = 0
+        while h >= 3 and w >= 3:
+            # After a valid 3x3 conv: size shrinks by 2 each dim
+            h -= 2
+            w -= 2
+            if h < 1 or w < 1:
+                break
+
+            # Then a 2x2 maxpool (floor division by 2)
+            h //= 2
+            w //= 2
+
+            if h < 3 or w < 3:
+                break
+
+            max_layers += 1
+
+        return max_layers
 
     def smooth(self, scalars: List[float]) -> List[float]:
         """
@@ -172,9 +242,10 @@ class controller:
         K.clear_session()
 
         # Build and train model
-        self.nn = neural_network(self.X_train, self.Y_train, self.X_test, self.Y_test, self.n_classes)
-        if self.nn.flops is None or self.nn.flops <= cfg.MAX_FLOPS:
-            self.scoreNN, self.history, self.model = self.nn.training(params, self.da)
+        self.nn = neural_network(self.X_train, self.Y_train, self.X_test, self.Y_test, self.n_classes, self.reg, self.da, self.residual)
+        self.nn.build_network(params, self.layer_x_block)
+        if self.nn.flops is None or self.nn.flops <= self.flops_th:
+            self.scoreNN, self.history, self.model = self.nn.training(params)
             self.log()
             # Update external modules and log their state
             self.modules.state(self.model)
@@ -191,7 +262,7 @@ class controller:
                 self.score = float(opt_value)-self.scoreNN[1]*self.acc_w  # combine module opt with accuracy
 
         else:
-            print(f"Model FLOPs {self.nn.flops} exceed maximum {cfg.MAX_FLOPS}. Skipping training.")
+            print(f"Model FLOPs {self.nn.flops} exceed maximum {self.flops_th}. Skipping training.")
             self.scoreNN, self.history, self.model = None, None, self.nn.model
     
             self.log()
@@ -245,6 +316,11 @@ class controller:
             int_loss, int_slope = integrals(val_loss_hist)
 
             # Base fact list (raw + smoothed histories)
+            gnorm = getattr(self.model.optimizer, "last_grad_global_norm", 1.0)
+            if "test" in cfg.NAME_EXP:
+                gnorm = random.uniform(100.0, 150.0)
+            if not isinstance(gnorm, float):
+                gnorm = float(gnorm.numpy())
             facts_list_module = [
                 self.history.get("loss", []),
                 self.smooth(self.history.get("loss", [])),
@@ -256,6 +332,9 @@ class controller:
                 int_slope,
                 self.lacc,
                 self.hloss,
+                gnorm,
+                self.vanish_th,
+                self.exploding_th
             ]
 
             # Add facts from loaded modules
@@ -284,7 +363,7 @@ class controller:
 
             # Run rule-based reasoning to produce candidate repairs and diagnoses
             self.symbolic_tuning, self.symbolic_diagnosis = self.nsb.symbolic_reasoning(
-                facts_list_module, diagnosis_logs, tuning_logs, self.rules
+                facts_list_module, diagnosis_logs, tuning_logs, self.rules, self
             )
 
         print(colors.CYAN, "| END SYMBOLIC DIAGNOSIS   ----------------------------------  |\n", colors.ENDC)
@@ -323,5 +402,8 @@ class controller:
 
     def log(self) -> None:
         f = open(f"{cfg.NAME_EXP}/algorithm_logs/acc_report.txt", "a")
-        f.write(str(self.scoreNN[0]) + "\n")
+        if self.scoreNN is not None:
+            f.write(str(self.scoreNN[0]) + "\n")
+        else:
+            f.write("None \n")
         f.close()

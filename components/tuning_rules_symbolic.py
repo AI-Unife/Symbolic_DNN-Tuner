@@ -45,94 +45,50 @@ class tuning_rules_symbolic:
         self.ss = ss
         self.controller = controller
 
-        # Internal counters / caps
-        self.count_lr = 0
-        self.count_da = 0
-        self.count_br = 0
-        self.count_new_fc = 0
-        self.count_new_cv = 0
-        self.max_fc = 5
-        self.max_conv = self.count_max_conv()
-        self.start_conv, self.start_fc = self.ss.count_initial_layers(self.space)
-        self.count_no_probs = 0
-
-    # ----------------------------- Utilities ---------------------------------
-
-    def _iter_hparams(self) -> Iterable[Any]:
-        """Shorthand to iterate the search space hyperparameters."""
-        return self.space
-
-    def _safe_param_get(self, params: Dict[str, Any], key: str, default: Any = None) -> Any:
-        """Fetch a param by key with a safe default to avoid KeyErrors."""
-        return params.get(key, default)
-
-    def count_max_conv(self) -> int:
-        """
-        Heuristic upper bound for how many conv+pool blocks fit given the input size.
-
-        The estimate assumes a pattern:
-            Conv2D(kernel=3x3, stride=1, valid padding) -> MaxPool2D(2x2)
-        and stops before spatial dims drop below 3x3.
-
-        Returns:
-            int: Maximum number of stacked (conv+pool) sections that can fit.
-        """
-        # Expecting X_train to be an image-like array with shape [H, W, ...] or [N, H, W, ...].
-        shape = getattr(self.controller, "X_train", None)
-        if shape is None or not hasattr(shape, "shape"):
-            logger.warning("controller.X_train not found or missing shape; defaulting max_conv to 0")
-            return 0
-
-        # Support either (H, W, C) or (N, H, W, C)
-        dims = shape.shape
-        if len(dims) >= 2 and len(dims) <= 3:
-            h, w = dims[0], dims[1]
-        elif len(dims) >= 4:
-            h, w = dims[1], dims[2]
-        else:
-            logger.warning("Unexpected X_train shape %s; defaulting max_conv to 0", dims)
-            return 0
-
-        max_layers = 0
-        while h >= 3 and w >= 3:
-            # After a valid 3x3 conv: size shrinks by 2 each dim
-            h -= 2
-            w -= 2
-            if h < 1 or w < 1:
-                break
-
-            # Then a 2x2 maxpool (floor division by 2)
-            h //= 2
-            w //= 2
-
-            if h < 3 or w < 3:
-                break
-
-            max_layers += 1
-
-        return max_layers
 
     # --------------------------- Regularization ------------------------------
 
     def reg_l2(self) -> None:
         """
-        Enable L2 regularization (and potentially batch norm) once.
-
-        Idempotent-ish: applied only the first time it's requested.
+        Enable L2 regularization once.
         """
-        self.count_br += 1
-        if self.count_br <= 1:
-            new_p = {"reg": 1e-4}
-            self.space = self.ss.add_params(new_p)
-            logger.info("Enabled L2 regularization with reg=1e-4")
+        self.controller.set_reg_l2(True)
+        logger.info("Enabled L2 regularization")
 
+    def remove_reg_l2(self) -> None:
+        """
+        Disable reg in the controller.
+        """
+        self.controller.set_reg_l2(False)
+        logger.info("Disable L2 regularization")
+
+    def data_augmentation(self) -> None:
+        """
+        Enable data augmentation in the controller.
+        """
+        self.controller.set_data_augmentation(True)
+        logger.info("Enabled data augmentation")
+
+    def remove_data_augmentation(self) -> None:
+        """
+        Enable data augmentation in the controller.
+        """
+        self.controller.set_data_augmentation(False)
+        logger.info("Disabled data augmentation")
+
+    def add_residual(self) -> None:
+        """
+        Enable residual connection in the controller.
+        """
+        self.controller.set_residual(True)
+        logger.info("Enabled residual connection")
     # -------------------------- Architecture edits ---------------------------
 
     def new_fc_layer(self) -> None:
         """
         Add a fully-connected (dense) layer, respecting a soft upper bound to avoid bloat.
         """
-        if self.count_new_fc + self.start_fc > self.max_fc:
+        if self.controller.count_new_fc + self.controller.start_fc > self.controller.max_fc:
             print(
                 colors.FAIL,
                 "Max number of dense layers reached",
@@ -141,86 +97,87 @@ class tuning_rules_symbolic:
             print(
                 colors.FAIL,
                 "start dense layers: ",
-                self.start_fc,
+                self.controller.start_fc,
                 " Dense layers: ",
-                self.count_new_fc + self.start_fc,
+                self.controller.count_new_fc + self.controller.start_fc,
                 " Max dense layers: ",
-                self.max_fc,
+                self.controller.max_fc,
                 colors.ENDC,
             )
             return
 
-        self.count_new_fc += 1
-        new_p = {f"new_fc_{self.count_new_fc}": 512}
+        self.controller.count_new_fc += 1
+        new_p = {f"new_fc_{self.controller.count_new_fc}": 512}
         self.space = self.ss.add_params(new_p)
-        logger.info("Added dense layer #%d with 512 units", self.count_new_fc)
+        logger.info("Added dense layer #%d with 512 units", self.controller.count_new_fc)
 
-    def new_conv_layer(self) -> None:
+    def dec_fc_layer(self) -> None:
+        """
+        Remove one dense layer if present.
+        """
+        print("Removing dense layer")
+        print(self.controller.count_new_fc)
+        if self.controller.count_new_fc < 1:
+            print(colors.FAIL, "No more dense layers to remove", colors.ENDC)
+            self.controller.count_new_fc = 0
+            return
+
+        new_p = {f"new_fc_{self.controller.count_new_fc}": 512}
+        self.space = self.ss.remove_params(new_p)
+        logger.info("Removed one dense layer; remaining added layers: %d", self.controller.count_new_fc)
+        self.controller.count_new_fc -= 1
+
+    def new_conv_block(self) -> None:
         """
         Add a convolutional *section* (e.g., conv block). Respect input-size constraints.
         """
-        if not self.max_conv:
+        if not self.controller.max_conv:
             return
 
-        tot_conv = self.start_conv + self.count_new_cv * 2
-        if tot_conv > self.max_conv:
+        tot_conv = self.controller.start_conv + self.controller.count_new_cv * 2
+        if tot_conv > self.controller.max_conv:
             print(colors.FAIL, "Max number of convolutional layers reached", colors.ENDC)
             print(
                 colors.FAIL,
                 "Convolutional layers: ",
                 tot_conv - 2,
                 " Max convolutional layers: ",
-                self.max_conv,
+                self.controller.max_conv,
                 colors.ENDC,
             )
             return
 
-        self.count_new_cv += 1
-        new_p = {f"new_conv_{self.count_new_cv}": 512}
+        self.controller.count_new_cv += 1
+        new_p = {f"new_conv_{self.controller.count_new_cv}": 512}
         self.space = self.ss.add_params(new_p)
-        logger.info("Added conv section #%d with 512 filters", self.count_new_cv)
+        logger.info("Added conv section #%d with 512 filters", self.controller.count_new_cv)
 
-    def dec_layers(self) -> None:
+    def dec_conv_block(self) -> None:
         """
         Remove one convolutional section if present.
         """
-        print("Removing convolutional layer")
-        print(self.count_new_cv)
-        if self.count_new_cv < 1:
-            print(colors.FAIL, "No more convolutional layers to remove", colors.ENDC)
+        if self.controller.count_new_cv < 1:
+            logger.info("No more convolutional section to remove")
             self.count_new_cv = 0
             return
 
-        self.count_new_cv -= 1
         # Remove param key associated with the *next* (now absent) conv
-        new_p = {f"new_conv_{self.count_new_cv}": 512}
+        new_p = {f"new_conv_{self.controller.count_new_cv}": 512}
         self.space = self.ss.remove_params(new_p)
-        logger.info("Removed one conv section; remaining added sections: %d", self.count_new_cv)
+        logger.info("Removed one conv section; remaining added sections: %d", self.controller.count_new_cv)
+        self.controller.count_new_cv -= 1
 
-    def dec_fc(self) -> None:
-        """
-        Remove one dense layer if present.
-        """
-        print("Removing dense layer")
-        print(self.count_new_fc)
-        if self.count_new_fc < 1:
-            print(colors.FAIL, "No more dense layers to remove", colors.ENDC)
-            self.count_new_fc = 0
-            return
+    def inc_conv_layer(self) -> None:
+        if self.controller.layer_x_block < self.controller.max_layer_x_block:
+            self.controller.layer_x_block += 1
+            logger.info("Add one conv layer per section; new layers per sections: %d", self.controller.layer_x_block)
+        logger.info("No more convolutional layers per section to add")
 
-        self.count_new_fc -= 1
-        new_p = {f"new_fc_{self.count_new_fc}": 512}
-        self.space = self.ss.remove_params(new_p)
-        logger.info("Removed one dense layer; remaining added layers: %d", self.count_new_fc)
-
-    # -------------------------- Data augmentation ----------------------------
-
-    def data_augmentation(self) -> None:
-        """
-        Enable data augmentation in the controller.
-        """
-        self.controller.set_data_augmentation(True)
-        logger.info("Enabled data augmentation")
+    def dec_conv_layer(self) -> None:
+        if self.controller.layer_x_block < self.controller.max_layer_x_block:
+            self.controller.layer_x_block -= 1
+            logger.info("Removed one conv layer per section; remaining layers per sections: %d", self.controller.layer_x_block)
+        logger.info("No more convolutional layers per section to remove")
 
     # -------------------------- Hyperparam tweaks ----------------------------
 
@@ -263,11 +220,13 @@ class tuning_rules_symbolic:
                 hp.low = max(params[hp.name] - 16, 0)
     
     def inc_batch_size(self, params):
+        """
+        method used to increment batch_size
+        """
         for hp in self.space:
             if hp.name == 'batch_size':
                 hp.low = params['batch_size'] - 1
-                
-    
+
     def inc_dropout(self, params):
         """
         method used to increment dropout
@@ -278,7 +237,7 @@ class tuning_rules_symbolic:
             # check if dropout is present in the search space and in that case
             # proceed by increasing the lower range
             if 'dr' in hp.name:
-                hp.low = params[hp.name] - params[hp.name] / 100
+                hp.low = min(params[hp.name] - params[hp.name] / 100, 0.0)
 
     def dec_neurons(self, params):
         """
@@ -303,14 +262,22 @@ class tuning_rules_symbolic:
                     hp.high = min(params[hp.name] + 16, 2048)
                 except KeyError:
                     continue
-                
-    # def inc_batch_size(self, params):
-    #     for hp in self._iter_hparams():
-    #         if hp.name == "batch_size":
-    #             base = int(self._safe_param_get(params, "batch_size", max(8, hp.low)))
-    #             new_low = max(8, int(base * 1.5))
-    #             new_high = max(new_low + 16, int(hp.high * 1.25))
-    #             hp.low, hp.high = min(new_low, 496), min(new_high, 512)
+
+    def dec_batch_size(self, params):
+        """
+        method used to decrement batch_size
+        """
+        for hp in self.space:
+            if hp.name == 'batch_size':
+                hp.high = params['batch_size'] + 1
+
+    def dec_dropout(self, params):
+        """
+        method used to decrement dropout
+        """
+        for hp in self.space:
+            if 'dr' in hp.name:
+                hp.high = max(params[hp.name] + params[hp.name] / 100, 0.8)
 
     # ------------------------- System configuration --------------------------
 
@@ -349,14 +316,15 @@ class tuning_rules_symbolic:
             # Preserve original control flow semantics:
             # - Some methods are called with params, others without.
             needs_params = (
-                action_name not in {
-                    "reg_l2",
-                    "data_augmentation",
-                    "new_fc_layer",
-                    "new_conv_layer",
-                    "dec_layers",
-                    "dec_fc",
-                    "new_config",
+                action_name in {
+                    "decr_lr",
+                    "inc_lr",
+                    "inc_dropout",
+                    "inc_neurons",
+                    "inc_batch_size",
+                    "dec_neurons",
+                    "dec_batch_size",
+                    "dec_dropout",
                 }
             )
 

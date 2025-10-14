@@ -21,6 +21,7 @@ from tensorflow.keras.layers import (
     MaxPooling2D,
     Dropout,
     Input,
+    Add
 )
 from tensorflow.keras.optimizers import Optimizer
 from tensorflow.keras.preprocessing.image import ImageDataGenerator  # (left for compatibility)
@@ -31,6 +32,7 @@ from components.search_space import search_space
 from components.colors import colors
 from components.custom_train import train_model, eval_model
 from flops.flops_calculator import analyze_model
+# from components.monitor_model import MonitoredModel, GradientMonitor
 
 import config as cfg
 
@@ -62,19 +64,12 @@ def _optimizer_from_name(name: str, lr: float) -> Optimizer:
 
 # ----------------------- Layer-wise LR wrapper -------------------------------
 
+import tensorflow as tf
+from tensorflow.keras.optimizers import Optimizer
+
 class LayerWiseLR(Optimizer):
-    """
-    Lightweight wrapper that scales gradients per-layer by a provided multiplier map.
-
-    Notes:
-      - Keeps base optimizer's LR synced with internal `_learning_rate` to honor callbacks
-        like ReduceLROnPlateau.
-      - Compatible with pre/post TF 2.11 Optimizer APIs.
-    """
-
-    def __init__(self, optimizer: Optimizer, multiplier: Dict[str, float],
-                 learning_rate: float = 0.001, name: str = "LWLR", **kwargs) -> None:
-        # New-style API check (TF 2.11+)
+    def __init__(self, optimizer: Optimizer, multiplier, learning_rate: float = 0.001, name: str = "LWLR", **kwargs):
+        # init base Optimizer (come già fai tu)...
         if hasattr(Optimizer, "_HAS_AGGREGATE_GRAD"):
             super().__init__(name, **kwargs)
             self._set_hyper("learning_rate", learning_rate)
@@ -85,25 +80,44 @@ class LayerWiseLR(Optimizer):
         self._optimizer = optimizer
         self._multiplier = dict(multiplier or {})
 
-    def apply_gradients(self, grads_and_vars, name: Optional[str] = None,
-                        experimental_aggregate_gradients: Optional[bool] = True):
-        """
-        Scale each gradient by a layer-specific multiplier before delegating to the base optimizer.
-        """
-        updated_grads_and_vars = []
+        # 👉 Variabili non addestrabili per le metriche dei gradienti
+        self.last_grad_global_norm = tf.Variable(0.0, trainable=False, dtype=tf.float32)
+        self.last_grad_max_norm    = tf.Variable(0.0, trainable=False, dtype=tf.float32)
+        self.last_grad_mean_norm   = tf.Variable(0.0, trainable=False, dtype=tf.float32)
+
+    def apply_gradients(self, grads_and_vars, name: str = None, experimental_aggregate_gradients: bool = True):
+        updated = []
+        per_var_norms = []
+        clean_grads = []
+
         for grad, var in grads_and_vars:
             if grad is not None:
-                # Resolve "layer name" robustly across TF versions
                 layer_name = (getattr(var, "path", None) or var.name).split("/")[0]
                 scale = self._multiplier.get(layer_name, 1.0)
-                updated_grads_and_vars.append((grad * scale, var))
+                g = grad * scale
+                updated.append((g, var))
+                clean_grads.append(g)
+                per_var_norms.append(tf.norm(g))
             else:
-                updated_grads_and_vars.append((grad, var))
+                updated.append((grad, var))
 
-        # Keep the wrapped optimizer's LR synced (e.g., to honor ReduceLROnPlateau updates)
+        # Compute and save graph
+        if clean_grads:
+            gnorm = tf.linalg.global_norm(clean_grads)
+            gmax  = tf.reduce_max(per_var_norms)
+            gmean = tf.reduce_mean(per_var_norms)
+            self.last_grad_global_norm.assign(gnorm)
+            self.last_grad_max_norm.assign(gmax)
+            self.last_grad_mean_norm.assign(gmean)
+        else:
+            self.last_grad_global_norm.assign(0.0)
+            self.last_grad_max_norm.assign(0.0)
+            self.last_grad_mean_norm.assign(0.0)
+
         if hasattr(self._optimizer, "learning_rate"):
             self._optimizer.learning_rate.assign(self._learning_rate)
-        return self._optimizer.apply_gradients(updated_grads_and_vars)
+
+        return self._optimizer.apply_gradients(updated)
 
     # Delegate required slots/config to the base optimizer
     def _create_slots(self, var_list):
@@ -136,6 +150,9 @@ class neural_network:
         X_test: np.ndarray,
         Y_test: np.ndarray,
         n_classes: int,
+        da: bool,
+        reg: bool,
+        residual: bool,
     ) -> None:
         # Store dataset (ensure dtype for Keras)
         self.train_data = X_train.astype("float32")
@@ -158,9 +175,13 @@ class neural_network:
         self.last_model_id: Optional[str] = None
         self.flops: Optional[float] = None
 
+        self.da = da
+        self.reg = reg
+        self.residual = residual
+        self.model = None
     # --------------------------- Build the model -----------------------------
 
-    def build_network(self, params: Dict[str, Any]) -> Model:
+    def build_network(self, params: Dict[str, Any], layer_x_block) -> None:
         """
         Define (or reload) the network architecture from params.
 
@@ -169,14 +190,13 @@ class neural_network:
           2) Otherwise build a new model based on `params`.
         """
         _ensure_dirs()
-
         # 1) Resume if possible
         try:
             model_path = f"{cfg.NAME_EXP}/dashboard/model/model.keras"
             if os.path.exists(model_path):
-                model = tf.keras.models.load_model(model_path)
+                self.model = tf.keras.models.load_model(model_path)
                 print("Loaded previous model from dashboard/model.")
-                return model
+                return
         except Exception:
             # Fall through to rebuild a fresh model if loading fails
             print("Previous model could not be loaded; building a new one.")
@@ -187,30 +207,46 @@ class neural_network:
         else:
             input_shape = self.train_data.shape[1:]  # generic (H, W, C)
 
-        reg_layer = reg.l2(params["reg"]) if "reg" in params else None
+        reg_layer = reg.l2() if self.reg else None
 
         inputs = Input(input_shape)
         x = Conv2D(params["unit_c1"], (3, 3), padding="same", kernel_regularizer=reg_layer)(inputs)
-        x = Activation(params["activation"])(x)
-        x = Conv2D(params["unit_c1"], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
-        x = Activation(params["activation"])(x)
+        for _ in range(1, layer_x_block):
+            x = Conv2D(params["unit_c1"], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
+            x = Activation(params["activation"])(x)
         x = MaxPooling2D(pool_size=(2, 2))(x)
         x = Dropout(params["dr1_2"])(x)
 
-        x = Conv2D(params["unit_c2"], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
-        x = Activation(params["activation"])(x)
-        x = Conv2D(params["unit_c2"], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
-        x = Activation(params["activation"])(x)
+        shortcut = x
+        for _ in range(layer_x_block):
+            x = Conv2D(params["unit_c2"], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
+            x = Activation(params["activation"])(x)
+        if self.residual:
+            # If input and output channel dimensions differ, align them via 1x1 conv
+            if shortcut.shape[-1] != params["unit_c2"]:
+                shortcut = Conv2D(params["unit_c2"], (1, 1), padding="same", kernel_regularizer=reg_layer)(shortcut)
+            # Add skip connection
+            x = Add()([shortcut, x])
+            # Apply activation after addition (ResNet-style)
+            x = Activation(params["activation"])(x)
         x = MaxPooling2D(pool_size=(2, 2))(x)
         x = Dropout(params["dr1_2"])(x)
 
         # Dynamically added conv blocks (conv -> act -> conv -> act -> pool -> dropout)
         added_convs = [k for k in params if re.match(r"new_conv_\d+$", k)]
         for layer_key in sorted(added_convs, key=lambda s: int(s.split("_")[-1])):  # stable order
-            x = Conv2D(params[layer_key], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
-            x = Activation(params["activation"])(x)
-            x = Conv2D(params[layer_key], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
-            x = Activation(params["activation"])(x)
+            shortcut = x
+            for _ in range(layer_x_block):
+                x = Conv2D(params[layer_key], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
+                x = Activation(params["activation"])(x)
+            if self.residual:
+                # If input and output channel dimensions differ, align them via 1x1 conv
+                if shortcut.shape[-1] != params[layer_key]:
+                    shortcut = Conv2D(params[layer_key], (1, 1), padding="same", kernel_regularizer=reg_layer)(shortcut)
+                # Add skip connection
+                x = Add()([shortcut, x])
+                # Apply activation after addition (ResNet-style)
+                x = Activation(params["activation"])(x)
             x = MaxPooling2D(pool_size=(2, 2))(x)
             x = Dropout(params["dr1_2"])(x)
 
@@ -227,27 +263,24 @@ class neural_network:
             x = Dropout(params["dr_f"])(x)
 
         outputs = Dense(self.n_classes, activation="softmax")(x)
-        model = Model(inputs=inputs, outputs=outputs)
+        self.model = Model(inputs=inputs, outputs=outputs)
         
         if "flops_module" in cfg.MOD_LIST:
             # Compute FLOPs (approximate; counts MACs as 2 FLOPs)
             try:
-                self.flops = analyze_model(model)
+                self.flops = analyze_model(self.model)[0].total_float_ops
             except Exception:
-                self.flops = None  # FLOPs computation failed; ignore 
-        
-        return model
+                self.flops = None  # FLOPs computation failed; ignore
 
     # ------------------------------ Training ---------------------------------
 
-    def training(self, params: Dict[str, Any], da: Optional[bool]) -> Tuple[List[float], Dict[str, List[float]], Model]:
+    def training(self, params: Dict[str, Any]) -> Tuple[List[float], Dict[str, List[float]], Model]:
         """
         Compile and train the model.
 
         Args:
             params: Hyperparameters (expects keys like unit_c1, unit_c2, unit_d, activation,
                     dr1_2, dr_f, optimizer (str), learning_rate (float), batch_size (int), [reg]).
-            da:     If True, apply lightweight on-the-fly data augmentation.
 
         Returns:
             (score, history, model) where:
@@ -256,8 +289,9 @@ class neural_network:
               - model: trained (and reloaded) Keras model
         """
         _ensure_dirs()
-        self.model = self.build_network(params)
-
+        if self.model is None:
+            print("Error: Model is not built.")
+            exit(1)
         # Unique id for artifacts of this run
         model_name_id = datetime.now().strftime("%y_%m_%d_%H_%M_%S_%f")
         self.last_model_id = model_name_id
@@ -306,17 +340,19 @@ class neural_network:
                             mode="max", restore_best_weights=True)
         reduce_lr = ReduceLROnPlateau(monitor="val_loss", factor=0.2, patience=20,
                                       verbose=1, min_lr=1e-4)
-
+        # gm = GradientMonitor()
         # --- Optional data augmentation ---
         # We prepend a small augmentation pipeline. Wrapping with Sequential is fine here
         # since the base model is purely sequential in topology (functional API).
-        if da:
+        if self.da:
             aug = tf.keras.Sequential([
                 tf.keras.layers.RandomFlip("horizontal"),
                 tf.keras.layers.RandomTranslation(height_factor=0.1, width_factor=0.1, fill_mode="nearest"),
             ])
             self.model = tf.keras.Sequential([aug, *self.model.layers])
 
+        # Wrap it with MonitoredModel
+        # self.model = MonitoredModel(inputs=self.model.inputs, outputs=self.model.outputs)
         # --- Compile ---
         self.model.compile(loss="categorical_crossentropy", optimizer=opt, metrics=["accuracy"])
 
@@ -355,7 +391,6 @@ class neural_network:
                     validation_data=(self.test_data, self.test_labels),
                     callbacks=[tensorboard, reduce_lr, es1, es2],
                 ).history
-
         # --- Evaluate ---
         if (cfg.MODE in ("fwdPass", "hybrid")) and cfg.DATA_NAME == "gesture":
             if "debug" in cfg.NAME_EXP:
@@ -380,11 +415,11 @@ class neural_network:
             # preserve weights and architecture JSON; downstream code can rebuild.
             pass
 
-        # --- Rebuild model from JSON + reload weights (cleans the graph/session coupling) ---
-        with open(model_json_path, "r") as f:
-            mj = json.load(f)
-        self.model = tf.keras.models.model_from_json(json.dumps(mj))
-        self.model.load_weights(weights_tmp)
+        # # --- Rebuild model from JSON + reload weights (cleans the graph/session coupling) ---
+        # with open(model_json_path, "r") as f:
+        #     mj = json.load(f)
+        # self.model = tf.keras.models.model_from_json(json.dumps(mj))
+        # self.model.load_weights(weights_tmp)
 
         # Cleanup temp artifacts
         try:

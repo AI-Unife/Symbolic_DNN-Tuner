@@ -32,6 +32,9 @@ up_down_loss :- l(L),add_to_UpList(L,Usl), add_to_DownList(L,Dsl), isclose(Usl,D
 to_low_lr :- area_sub(As), threshold_up(Th), As < Th.
 to_high_lr :- area_sub(As), threshold_down(Th), As > Th.
 
+vanish_gradient :- grad_global_norm(G), vanish_th(Th), G < Th.
+exploding_gradient :- grad_global_norm(G), exploding_th(Th), G > Th.
+
 % POSSIBLE PROBLEMS
 problem(overfitting) :- gap_tr_te_acc; gap_tr_te_loss.
 problem(underfitting) :- low_acc; high_loss.
@@ -39,6 +42,7 @@ problem(inc_loss) :- growing_loss_trend.
 problem(floating_loss) :- up_down_loss.
 problem(low_lr) :- to_low_lr.
 problem(high_lr) :- to_high_lr.
+problem(gradient) :- vanish_gradient; exploding_gradient.
 
 % QUERY ----------------------------------------------------------------------------------------------------------------
 query(action(_,_)).

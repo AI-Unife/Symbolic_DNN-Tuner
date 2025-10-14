@@ -14,12 +14,12 @@ def parse_args() -> argparse.Namespace:
         description="Symbolic DNN Tuner Configuration"
     )
 
-    parser.add_argument("--eval", type=int, default=3,
+    parser.add_argument("--eval", type=int, default=30,
                         help="Max number of evaluations")
     parser.add_argument("--epochs", type=int, default=2,
                         help="Epochs for training")
     parser.add_argument(
-        "--mod_list", nargs="+", default=[],
+        "--mod_list", nargs="+", default=["flops_module"],
         help="List of active modules (e.g., hardware_module flops_module)"
     )
     parser.add_argument("--dataset", type=str, default="cifar-10",
@@ -39,7 +39,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=42,
                         help="Random seed for reproducibility")
     parser.add_argument(
-        "--opt", type=str, default="standard",
+        "--opt", type=str, default="RS_ruled",
         choices=["standard", "filtered", "basic", "RS", "RS_ruled"],
         help="Optimizer type for the analysis"
     )
