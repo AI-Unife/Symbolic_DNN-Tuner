@@ -160,7 +160,7 @@ def apply_constraints(space: Space, params: List) -> bool:
 
 # ------------------------------ optimization ---------------------------------
 
-def run_optimization(search_space: Space, controller: controller, max_iter: int):
+def run_optimization(search_space: Space, controller: controller, max_iter: int, compress=0):
     """
     Outer optimization loop:
       - initialize (RS or BO),
@@ -170,7 +170,7 @@ def run_optimization(search_space: Space, controller: controller, max_iter: int)
     """
     all_x, all_y = [], []
     ckpt_path = f"{cfg.NAME_EXP}/checkpoints/checkpoint.pkl"
-    callback = None #CheckpointSaver(ckpt_path, compress=9)
+    callback = CheckpointSaver(ckpt_path, compress=compress)
 
     obj_fn = ObjectiveWrapper(search_space, controller)
     no_rules = ["RS", "standard"]
@@ -315,17 +315,19 @@ if __name__ == "__main__":
     # Load dataset by normalized key (e.g., "imagenet16-120" -> "imagenet16120")
     X_train, Y_train, X_test, Y_test, n_classes = get_datasets(cfg.DATA_NAME.strip().lower().replace("-", ""))
 
-    # Base search space
-    sp = search_space()
-    first_space = sp.search_sp()
-    print(colors.MAGENTA, "|  ----------- SEARCH SPACE ----------  |\n", colors.ENDC)
-    print(first_space)
+    for c in [0,3,9]:
+        # Base search space
+        sp = search_space()
+        first_space = sp.search_sp()
+        print(colors.MAGENTA, "|  ----------- SEARCH SPACE ----------  |\n", colors.ENDC)
+        print(first_space)
 
-    # Controller orchestrates training & symbolic tuning
-    ctrl = controller(X_train, Y_train, X_test, Y_test, n_classes)
+        # Controller orchestrates training & symbolic tuning
+        ctrl = controller(X_train, Y_train, X_test, Y_test, n_classes)
 
-    start_time = time.time()
-    print(colors.OKGREEN, "\nSTARTING ALGORITHM \n", colors.ENDC)
-    res = run_optimization(first_space, ctrl, cfg.MAX_EVAL)
-    print(colors.OKGREEN, "\nALGORITHM FINISHED \n", colors.ENDC)
-    print(colors.CYAN, "\nTOTAL TIME --------> \n", time.time() - start_time, colors.ENDC)
+        start_time = time.time()
+        print(colors.OKGREEN, "\nSTARTING ALGORITHM \n", colors.ENDC)
+        res = run_optimization(first_space, ctrl, 1, compress=c)
+        print(colors.OKGREEN, "\nALGORITHM FINISHED \n", colors.ENDC)
+        print(colors.OKGREEN, f"\ncompress: {c}\n", colors.ENDC)
+        print(colors.CYAN, "\nTOTAL TIME --------> \n", time.time() - start_time, colors.ENDC)
