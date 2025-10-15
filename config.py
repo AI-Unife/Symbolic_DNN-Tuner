@@ -19,7 +19,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--epochs", type=int, default=2,
                         help="Epochs for training")
     parser.add_argument(
-        "--mod_list", nargs="+", default=["flops_module"],
+        "--mod_list", nargs="+", default=[""],
         help="List of active modules (e.g., hardware_module flops_module)"
     )
     parser.add_argument("--dataset", type=str, default="cifar-10",
