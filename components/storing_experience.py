@@ -2,6 +2,7 @@ import sqlite3 as db
 from sqlite3 import Error
 
 import config as cfg
+import numpy as np
 
 
 class StoringExperience:
@@ -22,8 +23,7 @@ class StoringExperience:
         self.create1 = """
             CREATE TABLE IF NOT EXISTS ranking (
             id integer PRIMARY KEY,
-            score real,
-            val_acc real)
+            score real)
         """
         self.create2 = """
             CREATE TABLE IF NOT EXISTS experience (
@@ -61,14 +61,14 @@ class StoringExperience:
         conn.commit()
         conn.close()
 
-    def insert_ranking(self, score, val_acc):
+    def insert_ranking(self, score):
         """
         method used to insert accuracy and score values into the db
         """
         conn = self.connection()
         c = conn.cursor()
         try:
-            c.execute('INSERT INTO ranking (score, val_acc) VALUES (' + str(score) + ',' + str(val_acc) + ')')
+            c.execute('INSERT INTO ranking (score) VALUES (' + str(1e10) + ')')
         except Error as e:
             print(e)
         conn.commit()
@@ -91,16 +91,14 @@ class StoringExperience:
 
     def formatting(self, res):
         """
-        method used to split loss and accuracy values into two lists
+        method used to obtain score values into list
         :param res: list of lists, each of which will contain two values, one of acc and one of loss
-        :return: two lists containing loss and acc values
+        :return: list containing score values
         """
-        acc = []
-        loss = []
+        scores = []
         for i in res:
-            acc.append(i[1])
-            loss.append(i[2])
-        return acc, loss
+            scores.append(i[1])
+        return scores
 
     def get(self):
         """

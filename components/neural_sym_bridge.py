@@ -38,7 +38,7 @@ class NeuralSymbolicBridge:
     # Program assembly
     # -------------------------------------------------------------------------
 
-    def build_symbolic_model(self, facts: Iterable, rules: str) -> PrologString:
+    def build_symbolic_model(self, facts: Iterable, rules: str, only_modules=False) -> PrologString:
         """
         Assemble a ProbLog program from:
           - dynamically injected numeric facts (order must match `self.initial_facts`)
@@ -56,18 +56,8 @@ class NeuralSymbolicBridge:
         sym_dir = os.path.join(cfg.NAME_EXP, "symbolic")
         os.makedirs(sym_dir, exist_ok=True)
 
-        base_model_path = os.path.join(sym_dir, "symbolic_analysis.pl")
-        prob_model_path = os.path.join(sym_dir, "sym_prob.pl")
         out_path = os.path.join(sym_dir, "final.pl")
-
-        # Load base files (allow empty if missing, but warn via print)
-        try:
-            with open(base_model_path, "r") as f:
-                sym_model = f.read()
-        except FileNotFoundError:
-            sym_model = ""
-            print(f"[warn] Missing base model: {base_model_path}")
-
+        prob_model_path = os.path.join(sym_dir, "sym_prob.pl")
         try:
             with open(prob_model_path, "r") as p:
                 sym_prob = p.read()
@@ -75,9 +65,23 @@ class NeuralSymbolicBridge:
             sym_prob = ""
             print(f"[warn] Missing probabilistic model: {prob_model_path}")
 
+        if not only_modules:
+            base_model_path = os.path.join(sym_dir, "symbolic_analysis.pl")
+            # Load base files (allow empty if missing, but warn via print)
+            try:
+                with open(base_model_path, "r") as f:
+                    sym_model = f.read()
+            except FileNotFoundError:
+                sym_model = ""
+                print(f"[warn] Missing base model: {base_model_path}")
+            base_facts = self.initial_facts
+        else:
+            sym_model="% QUERY ----------------------------------------------------------------------------------------------------------------\nquery(action(_,_))."
+            base_facts = [fact for fact in self.initial_facts if fact not in ["l", "sl", "a", "sa", "vl", "va", "int_loss", "int_slope", "lacc", "hloss", "grad_global_norm", "vanish_th", "exploding_th"]]
+
         # Encode numeric facts in the form: functor(value).
         sym_facts_lines = []
-        for fa, functor in zip(facts, self.initial_facts):
+        for fa, functor in zip(facts, base_facts):
             sym_facts_lines.append(f"{functor}({fa}).")
         sym_facts = "\n".join(sym_facts_lines)
 
@@ -136,6 +140,12 @@ class NeuralSymbolicBridge:
 
         return "\n".join(out_lines)
 
+    def normalize_text(self, s: str) -> str:
+        s = re.sub(r"\s+", " ", s.strip())
+        s = re.sub(r"\s*,\s*", ", ", s)
+        s = re.sub(r"\s*;\s*", " ; ", s)  # if there are explicit ORs
+        return s
+
     def build_sym_prob(self, problems: str) -> None:
         """
         Merge probabilistic rules having the same head into a single rule per head.
@@ -173,11 +183,6 @@ class NeuralSymbolicBridge:
         )
         comment_or_empty_re = re.compile(r"^\s*(%.*)?$")
 
-        def normalize_text(s: str) -> str:
-            s = re.sub(r"\s+", " ", s.strip())
-            s = re.sub(r"\s*,\s*", ", ", s)
-            s = re.sub(r"\s*;\s*", " ; ", s)  # if there are explicit ORs
-            return s
 
         for raw_line in full_model.splitlines():
             line = raw_line.rstrip()
@@ -188,8 +193,8 @@ class NeuralSymbolicBridge:
             m = prob_with_body_re.match(line)
             if m:
                 prob = float(m.group(1))
-                head = normalize_text(m.group(2))
-                body = normalize_text(m.group(3))
+                head = self.normalize_text(m.group(2))
+                body = self.normalize_text(m.group(3))
                 if head not in heads_to_info:
                     heads_to_info[head] = {"prob": prob, "body": body}
                 else:
@@ -257,7 +262,7 @@ class NeuralSymbolicBridge:
         problems: List[str] = []
 
         # 1) Build the complete symbolic program
-        symbolic_model = self.build_symbolic_model(facts, rules)
+        symbolic_model = self.build_symbolic_model(facts, rules, controller.only_modules)
 
         # 2) Evaluate (map query term -> probability)
         symbolic_evaluation = get_evaluatable().create_from(symbolic_model).evaluate()

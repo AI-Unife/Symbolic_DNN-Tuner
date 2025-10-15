@@ -112,7 +112,7 @@ class controller:
             self.flops_th = self.modules.get_module("flops_module").flops_th
 
         # Optimization objective bookkeeping
-        self.best_score: float = float("inf")  # lower is better if we minimize
+        self.best_score: float = 1e10 #float("inf")  # lower is better if we minimize
         self.convergence: bool = False
         self.best_iter: int = -1
 
@@ -248,7 +248,7 @@ class controller:
             self.scoreNN, self.history, self.model = self.nn.training(params)
             self.log()
             # Update external modules and log their state
-            self.modules.state(self.model)
+            self.modules.state(self.model, self.nn.flops)
             self.modules.print()
             self.modules.log()
             
@@ -267,11 +267,11 @@ class controller:
     
             self.log()
             # Update external modules and log their state
-            self.modules.state(self.model)
+            self.modules.state(self.model, self.nn.flops)
             self.modules.print()
             self.modules.log()
 
-            self.score = float('inf')
+            self.score = 1e10 #float('inf')
             
         self.iter += 1
         # Track the best score and persist the model artifact
@@ -308,38 +308,42 @@ class controller:
 
         with open(diag_path, "a") as diagnosis_logs, open(tune_path, "a") as tuning_logs:
             # Check last-iteration improvement; persist scores (score and loss) to DB
-            improv = self.imp_checker.checker(self.score, self.scoreNN[1])
-            self.db.insert_ranking(self.score, self.scoreNN[1])
+            improv = self.imp_checker.checker(self.score)
+            self.db.insert_ranking(self.score)
 
-            # Integral features of validation loss (used by symbolic layer)
-            val_loss_hist = self.history.get("val_loss", [])
-            int_loss, int_slope = integrals(val_loss_hist)
+            if self.nn.flops is None or self.nn.flops <= self.flops_th:
+                # Integral features of validation loss (used by symbolic layer)
+                val_loss_hist = self.history.get("val_loss", [])
+                int_loss, int_slope = integrals(val_loss_hist)
 
-            # Base fact list (raw + smoothed histories)
-            gnorm = getattr(self.model.optimizer, "last_grad_global_norm", 1.0)
-            if "test" in cfg.NAME_EXP:
-                gnorm = random.uniform(100.0, 150.0)
-            if not isinstance(gnorm, float):
-                gnorm = float(gnorm.numpy())
-            facts_list_module = [
-                self.history.get("loss", []),
-                self.smooth(self.history.get("loss", [])),
-                self.history.get("accuracy", []),
-                self.smooth(self.history.get("accuracy", [])),
-                self.history.get("val_loss", []),
-                self.history.get("val_accuracy", []),
-                int_loss,
-                int_slope,
-                self.lacc,
-                self.hloss,
-                gnorm,
-                self.vanish_th,
-                self.exploding_th
-            ]
+                # Base fact list (raw + smoothed histories)
+                gnorm = getattr(self.model.optimizer, "last_grad_global_norm", 1.0)
+                if not isinstance(gnorm, float):
+                    gnorm = float(gnorm.numpy())
+                facts_list_module = [
+                    self.history.get("loss", []),
+                    self.smooth(self.history.get("loss", [])),
+                    self.history.get("accuracy", []),
+                    self.smooth(self.history.get("accuracy", [])),
+                    self.history.get("val_loss", []),
+                    self.history.get("val_accuracy", []),
+                    int_loss,
+                    int_slope,
+                    self.lacc,
+                    self.hloss,
+                    gnorm,
+                    self.vanish_th,
+                    self.exploding_th
+                ]
 
-            # Add facts from loaded modules
-            facts_list_module += list(self.modules.values().values())
+                # Add facts from loaded modules
+                facts_list_module += list(self.modules.values().values())
+                self.only_modules = False
 
+            else:
+                # Add facts from loaded modules
+                facts_list_module = list(self.modules.values().values())
+                self.only_modules = True
             # First diagnosis iteration: assemble rule base from modules and build logic program
             if self.iter == 1:
                 self.rules, self.actions, self.problems = self.modules.get_rules()
@@ -365,6 +369,7 @@ class controller:
             self.symbolic_tuning, self.symbolic_diagnosis = self.nsb.symbolic_reasoning(
                 facts_list_module, diagnosis_logs, tuning_logs, self.rules, self
             )
+
 
         print(colors.CYAN, "| END SYMBOLIC DIAGNOSIS   ----------------------------------  |\n", colors.ENDC)
 

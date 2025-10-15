@@ -19,16 +19,15 @@ class flops_module(common_interface):
 
     def __init__(self):
         # self.epsilon = 0.33
-        self.flops_th = 100000000 # 0.1 GFLOPs
-        self.nparams_th = 25000000 # 25M params
+        self.flops_th = 150000000 # 150 MFLOPs
+        self.nparams_th = 2500000 # 2.5M params
         self.tuner_opt_function = []
         self.flops_gap = []
         self.tuner_steps = 0
 
     def update_state(self, *args):
         self.model = args[0]
-        self.flops, _ = fc.analyze_model(self.model)
-        self.flops = self.flops.total_float_ops
+        self.flops = args[1]
         trainableParams = np.sum([np.prod(v.shape)for v in self.model.trainable_weights])
         nonTrainableParams = np.sum([np.prod(v.shape)for v in self.model.non_trainable_weights])
         self.nparams = trainableParams + nonTrainableParams

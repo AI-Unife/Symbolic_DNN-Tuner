@@ -24,8 +24,12 @@ from tensorflow.keras.layers import (
     Add
 )
 from tensorflow.keras.optimizers import Optimizer
-from tensorflow.keras.preprocessing.image import ImageDataGenerator  # (left for compatibility)
-from tensorflow.keras.models import Sequential
+try:
+    # Keras 3
+    from keras.saving import serialize_keras_object, deserialize_keras_object
+except Exception:
+    # TF/Keras 2.x
+    from tensorflow.keras.utils import serialize_keras_object, deserialize_keras_object
 
 from components.gesture_dataset import gesture_data
 from components.search_space import search_space
@@ -70,13 +74,8 @@ from tensorflow.keras.optimizers import Optimizer
 class LayerWiseLR(Optimizer):
     def __init__(self, optimizer: Optimizer, multiplier, learning_rate: float = 0.001, name: str = "LWLR", **kwargs):
         # init base Optimizer (come già fai tu)...
-        if hasattr(Optimizer, "_HAS_AGGREGATE_GRAD"):
-            super().__init__(name, **kwargs)
-            self._set_hyper("learning_rate", learning_rate)
-        else:
-            super().__init__(learning_rate, name, **kwargs)
-
-        self._learning_rate = tf.Variable(learning_rate, trainable=False, dtype=tf.float32)
+        super().__init__(name=name, **kwargs)
+        # self._learning_rate = tf.Variable(learning_rate, trainable=False, dtype=tf.float32)
         self._optimizer = optimizer
         self._multiplier = dict(multiplier or {})
 
@@ -125,13 +124,39 @@ class LayerWiseLR(Optimizer):
             self._optimizer._create_slots(var_list)
 
     def get_config(self):
-        # Minimal config; serialize base optimizer too if needed.
-        base_cfg = {}
-        if hasattr(self._optimizer, "get_config"):
-            base_cfg = self._optimizer.get_config()
-        return {"name": self._name, "learning_rate": float(self._learning_rate.numpy()),
-                "base_optimizer": base_cfg}
+        # Config del parent (include clipnorm/clipvalue, ecc.)
+        cfg = super().get_config()
 
+        # serializza l'optimizer interno in modo Keras-friendly
+        base_opt_cfg = serialize_keras_object(self._optimizer)
+
+        # multiplier deve essere JSON-serializzabile
+        mult_cfg = {str(k): float(v) if hasattr(v, "__float__") else v
+                    for k, v in self._multiplier.items()}
+
+        cfg.update({
+            "name": getattr(self, "name", self.__class__.__name__),
+            "optimizer": base_opt_cfg,
+            "multiplier": mult_cfg
+        })
+        return cfg
+
+    @classmethod
+    def from_config(cls, config):
+        # Estrai ciò che serve alla __init__
+        name = config.pop("name", "LWLR")
+
+        opt_cfg = config.pop("optimizer", None)
+        optimizer = deserialize_keras_object(opt_cfg) if isinstance(opt_cfg, dict) else opt_cfg
+        mult = config.pop("multiplier", None)
+
+        lr = config.get("learning_rate", None)
+
+        return cls(optimizer=optimizer,
+                   multiplier=mult,
+                   learning_rate=lr,
+                   name=name,
+                   **config)
 
 # --------------------------- Main network class ------------------------------
 
@@ -174,6 +199,7 @@ class neural_network:
         # Populated during training
         self.last_model_id: Optional[str] = None
         self.flops: Optional[float] = None
+        self.nparams: Optional[float] = None
 
         self.da = da
         self.reg = reg
@@ -190,17 +216,9 @@ class neural_network:
           2) Otherwise build a new model based on `params`.
         """
         _ensure_dirs()
-        # 1) Resume if possible
-        try:
-            model_path = f"{cfg.NAME_EXP}/dashboard/model/model.keras"
-            if os.path.exists(model_path):
-                self.model = tf.keras.models.load_model(model_path)
-                print("Loaded previous model from dashboard/model.")
-                return
-        except Exception:
-            # Fall through to rebuild a fresh model if loading fails
-            print("Previous model could not be loaded; building a new one.")
-
+        # 1) clear session
+        tf.keras.backend.clear_session()
+        self.model = None
         # 2) Build a new CNN
         if (cfg.MODE in ("fwdPass", "hybrid")) and cfg.DATA_NAME == "gesture":
             input_shape = self.train_data.shape[2:]  # (H, W, C) for gesture pipeline
@@ -264,13 +282,17 @@ class neural_network:
 
         outputs = Dense(self.n_classes, activation="softmax")(x)
         self.model = Model(inputs=inputs, outputs=outputs)
-        
+        # self.model.summary()
         if "flops_module" in cfg.MOD_LIST:
             # Compute FLOPs (approximate; counts MACs as 2 FLOPs)
             try:
                 self.flops = analyze_model(self.model)[0].total_float_ops
+                trainableParams = np.sum([np.prod(v.shape) for v in self.model.trainable_weights])
+                nonTrainableParams = np.sum([np.prod(v.shape) for v in self.model.non_trainable_weights])
+                self.nparams = trainableParams + nonTrainableParams
             except Exception:
                 self.flops = None  # FLOPs computation failed; ignore
+                self.nparams = None
 
     # ------------------------------ Training ---------------------------------
 
@@ -407,19 +429,15 @@ class neural_network:
         weights_tmp = f"{cfg.NAME_EXP}/Weights/weights-{model_name_id}.weights.h5"
         self.model.save_weights(weights_tmp)
 
+        # try:
         dash_model_path = f"{cfg.NAME_EXP}/dashboard/model/model.keras"
-        try:
-            self.model.save(dash_model_path)
-        except Exception:
-            # If the wrapper/augmentation created a non-serializable wrapper, we still
-            # preserve weights and architecture JSON; downstream code can rebuild.
-            pass
+        self.model.save(dash_model_path)
 
-        # # --- Rebuild model from JSON + reload weights (cleans the graph/session coupling) ---
-        # with open(model_json_path, "r") as f:
-        #     mj = json.load(f)
-        # self.model = tf.keras.models.model_from_json(json.dumps(mj))
-        # self.model.load_weights(weights_tmp)
+        if not getattr(self.model, "built", False) or self.model.inputs is None:
+            print("\n\n\n\n\n\n rebuilding model\n\n\n\n\n")
+            self.model = tf.keras.models.load_model(dash_model_path, custom_objects={"LayerWiseLR": LayerWiseLR})
+        # except:
+        #     pass
 
         # Cleanup temp artifacts
         try:

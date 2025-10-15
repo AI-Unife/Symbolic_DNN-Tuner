@@ -44,7 +44,7 @@ class tuning_rules_symbolic:
         self.space = params
         self.ss = ss
         self.controller = controller
-
+        self.count_no_probs = 0
 
     # --------------------------- Regularization ------------------------------
 
