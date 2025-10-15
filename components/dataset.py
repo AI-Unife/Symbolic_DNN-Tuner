@@ -35,7 +35,7 @@ def get_datasets(name):
 
     if name == "cifar10":
         (x_train, y_train), (x_test, y_test) = cifar10.load_data()
-        (x_train, y_train) = (x_test, y_test)
+        # (x_train, y_train) = (x_test, y_test)
         print(x_train.shape[0], 'train samples')
         print(x_test.shape[0], 'test samples')
         # Convert class vectors to binary class matrices.
