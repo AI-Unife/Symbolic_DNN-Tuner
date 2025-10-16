@@ -28,9 +28,7 @@ class flops_module(common_interface):
     def update_state(self, *args):
         self.model = args[0]
         self.flops = args[1]
-        trainableParams = np.sum([np.prod(v.shape)for v in self.model.trainable_weights])
-        nonTrainableParams = np.sum([np.prod(v.shape)for v in self.model.non_trainable_weights])
-        self.nparams = trainableParams + nonTrainableParams
+        self.nparams = args[2]
 
     def obtain_values(self):
         # has to match the list of facts
