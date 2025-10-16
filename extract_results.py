@@ -781,7 +781,7 @@ def print_mean_best_by_tuner(csv_path: str, out_csv: Optional[Path] = None) -> p
     # Crea un DataFrame con media ± std (formattato)
     formatted_df = pd.DataFrame()
     print(len(mean_fl))
-    if len(mean_fl) == 0:
+    if len(mean_fl) != 0:
         for col in mean_fl.columns:
             for tuner in mean_fl.index:
                 m = mean_fl.loc[tuner, col]
@@ -798,7 +798,7 @@ def print_mean_best_by_tuner(csv_path: str, out_csv: Optional[Path] = None) -> p
     std_acc = grouped_acc.std(numeric_only=True)
 
     # Crea un DataFrame con media ± std (formattato)
-    if len(mean_fl) == 0:
+    if len(mean_fl) != 0:
         for col in mean_acc.columns:
             for tuner in mean_acc.index:
                 m = mean_acc.loc[tuner, col]
@@ -813,7 +813,7 @@ def print_mean_best_by_tuner(csv_path: str, out_csv: Optional[Path] = None) -> p
     # Stampa leggibile
     for tuner in mean_acc.index:
         print(f"▶ Tuner: {tuner}")
-        if len(mean_fl) == 0:
+        if len(mean_fl) != 0:
             print(f"with Flops module")
             for col in mean_fl.columns:
                 m = mean_fl.loc[tuner, col]
