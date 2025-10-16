@@ -780,41 +780,44 @@ def print_mean_best_by_tuner(csv_path: str, out_csv: Optional[Path] = None) -> p
 
     # Crea un DataFrame con media ± std (formattato)
     formatted_df = pd.DataFrame()
-    for col in mean_fl.columns:
-        for tuner in mean_fl.index:
-            m = mean_fl.loc[tuner, col]
-            s = std_fl.loc[tuner, col]
-            if pd.isna(m):
-                formatted_df.loc[f"{tuner} flops", col] = "-"
-                formatted_df.loc[f"{tuner} flops", f"{col}_std"] = "-"
-            else:
-                formatted_df.loc[f"{tuner} flops", col] = m
-                formatted_df.loc[f"{tuner} flops", f"{col}_std"] = s
+    if mean_fl is not None:
+        for col in mean_fl.columns:
+            for tuner in mean_fl.index:
+                m = mean_fl.loc[tuner, col]
+                s = std_fl.loc[tuner, col]
+                if pd.isna(m):
+                    formatted_df.loc[f"{tuner} flops", col] = "-"
+                    formatted_df.loc[f"{tuner} flops", f"{col}_std"] = "-"
+                else:
+                    formatted_df.loc[f"{tuner} flops", col] = m
+                    formatted_df.loc[f"{tuner} flops", f"{col}_std"] = s
                 
     grouped_acc = work[work["flops_module"]==False].groupby("Tuner", dropna=False)
     mean_acc = grouped_acc.mean(numeric_only=True)
     std_acc = grouped_acc.std(numeric_only=True)
 
     # Crea un DataFrame con media ± std (formattato)
-    for col in mean_acc.columns:
-        for tuner in mean_acc.index:
-            m = mean_acc.loc[tuner, col]
-            s = std_acc.loc[tuner, col]
-            if pd.isna(m):
-                formatted_df.loc[f"{tuner} acc", col] = "-"
-                formatted_df.loc[f"{tuner} acc", f"{col}_std"] = "-"
-            else:
-                formatted_df.loc[f"{tuner} acc", col] = m
-                formatted_df.loc[f"{tuner} acc", f"{col}_std"] = s
+    if mean_fl is not None:
+        for col in mean_acc.columns:
+            for tuner in mean_acc.index:
+                m = mean_acc.loc[tuner, col]
+                s = std_acc.loc[tuner, col]
+                if pd.isna(m):
+                    formatted_df.loc[f"{tuner} acc", col] = "-"
+                    formatted_df.loc[f"{tuner} acc", f"{col}_std"] = "-"
+                else:
+                    formatted_df.loc[f"{tuner} acc", col] = m
+                    formatted_df.loc[f"{tuner} acc", f"{col}_std"] = s
 
     # Stampa leggibile
     for tuner in mean_acc.index:
         print(f"▶ Tuner: {tuner}")
-        print(f"with Flops module")
-        for col in mean_fl.columns:
-            m = mean_fl.loc[tuner, col]
-            s = std_fl.loc[tuner, col]
-            print(f"  - {col}: {m:.4f} (±{s:.4f})")
+        if mean_fl is not None:
+            print(f"with Flops module")
+            for col in mean_fl.columns:
+                m = mean_fl.loc[tuner, col]
+                s = std_fl.loc[tuner, col]
+                print(f"  - {col}: {m:.4f} (±{s:.4f})")
         print("Only Accuracy module")
         for col in mean_acc.columns:
             m = mean_acc.loc[tuner, col]
