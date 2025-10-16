@@ -780,6 +780,7 @@ def print_mean_best_by_tuner(csv_path: str, out_csv: Optional[Path] = None) -> p
 
     # Crea un DataFrame con media ± std (formattato)
     formatted_df = pd.DataFrame()
+    print(mean_fl)
     if mean_fl is not None:
         for col in mean_fl.columns:
             for tuner in mean_fl.index:
