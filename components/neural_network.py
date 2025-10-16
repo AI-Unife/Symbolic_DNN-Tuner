@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Tuple, Optional
 
 import numpy as np  # for type hints / array-like
 import tensorflow as tf
+from tensorflow.keras.optimizers import Optimizer
 from tensorflow.keras import backend as K
 from tensorflow.keras import Model
 from tensorflow.keras import regularizers as reg
@@ -68,18 +69,29 @@ def _optimizer_from_name(name: str, lr: float) -> Optimizer:
 
 # ----------------------- Layer-wise LR wrapper -------------------------------
 
-import tensorflow as tf
-from tensorflow.keras.optimizers import Optimizer
+
 
 class LayerWiseLR(Optimizer):
-    def __init__(self, optimizer: Optimizer, multiplier, learning_rate: float = 0.001, name: str = "LWLR", **kwargs):
-        # init base Optimizer (come già fai tu)...
-        super().__init__(name=name, **kwargs)
-        # self._learning_rate = tf.Variable(learning_rate, trainable=False, dtype=tf.float32)
-        self._optimizer = optimizer
-        self._multiplier = dict(multiplier or {})
+    def __init__(self, optimizer, multiplier, learning_rate=0.001, name="LWLR", **kwargs):
+        """
+        class wrapper used to add the functionality of the layer wise learning rate
+        """
+        # checks for the presence of the _HAS_AGGREGATE_GRAD attribute,
+        # present since version 2.11 with the introduction of the new optimizer APIs,
+        # to determine how to initialize the wrapper instance
+        if hasattr(Optimizer, "_HAS_AGGREGATE_GRAD"):
+            # wrapper initialization with new APIs, with learning rate stored in an internal slot
+            super().__init__(name, **kwargs)
+            self._set_hyper("learning_rate", learning_rate)
+        else:
+            # wrapper initialization with the old API, with the learning rate as an argument
+            super().__init__(learning_rate, name, **kwargs)
 
-        # 👉 Variabili non addestrabili per le metriche dei gradienti
+        # storage of the attributes in the wrapper instance
+        self._learning_rate = tf.Variable(learning_rate, trainable=False, dtype=tf.float32)
+        self._optimizer = optimizer
+        self._multiplier = multiplier
+
         self.last_grad_global_norm = tf.Variable(0.0, trainable=False, dtype=tf.float32)
         self.last_grad_max_norm    = tf.Variable(0.0, trainable=False, dtype=tf.float32)
         self.last_grad_mean_norm   = tf.Variable(0.0, trainable=False, dtype=tf.float32)
@@ -113,8 +125,7 @@ class LayerWiseLR(Optimizer):
             self.last_grad_max_norm.assign(0.0)
             self.last_grad_mean_norm.assign(0.0)
 
-        if hasattr(self._optimizer, "learning_rate"):
-            self._optimizer.learning_rate.assign(self._learning_rate)
+        self._optimizer.learning_rate.assign(self._learning_rate)
 
         return self._optimizer.apply_gradients(updated)
 
@@ -429,15 +440,15 @@ class neural_network:
         weights_tmp = f"{cfg.NAME_EXP}/Weights/weights-{model_name_id}.weights.h5"
         self.model.save_weights(weights_tmp)
 
-        # try:
-        dash_model_path = f"{cfg.NAME_EXP}/dashboard/model/model.keras"
-        self.model.save(dash_model_path)
+        try:
+            dash_model_path = f"{cfg.NAME_EXP}/dashboard/model/model.keras"
+            self.model.save(dash_model_path)
 
-        if not getattr(self.model, "built", False) or self.model.inputs is None:
-            print("\n\n\n\n\n\n rebuilding model\n\n\n\n\n")
-            self.model = tf.keras.models.load_model(dash_model_path, custom_objects={"LayerWiseLR": LayerWiseLR})
-        # except:
-        #     pass
+            if not getattr(self.model, "built", False) or self.model.inputs is None:
+                # print("\n\n\n\n\n\n rebuilding model\n\n\n\n\n")
+                self.model = tf.keras.models.load_model(dash_model_path, custom_objects={"LayerWiseLR": LayerWiseLR})
+        except:
+            pass
 
         # Cleanup temp artifacts
         try:

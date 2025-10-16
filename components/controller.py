@@ -248,7 +248,7 @@ class controller:
             self.scoreNN, self.history, self.model = self.nn.training(params)
             self.log()
             # Update external modules and log their state
-            self.modules.state(self.model, self.nn.flops)
+            self.modules.state(self.model, self.nn.flops, self.nn.nparams)
             self.modules.print()
             self.modules.log()
             
@@ -267,7 +267,7 @@ class controller:
     
             self.log()
             # Update external modules and log their state
-            self.modules.state(self.model, self.nn.flops)
+            self.modules.state(self.model, self.nn.flops, self.nn.nparams)
             self.modules.print()
             self.modules.log()
 

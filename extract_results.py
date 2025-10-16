@@ -405,6 +405,8 @@ def extract_metrics_from_out(file_path: Path) -> pd.DataFrame:
                     if current["iteration"] is None:
                         current["iteration"] = 0
 
+                    if current["accuracy"] is None:
+                        current["accuracy"] = 0
                     rows.append(current.copy())
                     # Start a fresh row for the next iteration block
                     current = {k: None for k in _METRIC_PATTERNS.keys()}
