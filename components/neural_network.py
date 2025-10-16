@@ -85,10 +85,10 @@ class LayerWiseLR(Optimizer):
             self._set_hyper("learning_rate", learning_rate)
         else:
             # wrapper initialization with the old API, with the learning rate as an argument
-            super().__init__(learning_rate, name, **kwargs)
+            super().__init__(name=name, **kwargs)
 
         # storage of the attributes in the wrapper instance
-        self._learning_rate = tf.Variable(learning_rate, trainable=False, dtype=tf.float32)
+        self._learning_rate = learning_rate #tf.Variable(learning_rate, trainable=False, dtype=tf.float32)
         self._optimizer = optimizer
         self._multiplier = multiplier
 
