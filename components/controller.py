@@ -408,7 +408,9 @@ class controller:
     def log(self) -> None:
         f = open(f"{cfg.NAME_EXP}/algorithm_logs/acc_report.txt", "a")
         if self.scoreNN is not None:
-            f.write(str(self.scoreNN[0]) + "\n")
+            print(f"\nACCURACY: {self.scoreNN[1]}\n")
+            f.write(str(self.scoreNN[1]) + "\n")
         else:
+            print(f"\nACCURACY: {0.0}\n")
             f.write("None \n")
         f.close()
