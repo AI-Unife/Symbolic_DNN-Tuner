@@ -240,6 +240,7 @@ class neural_network:
 
         inputs = Input(input_shape)
         x = Conv2D(params["unit_c1"], (3, 3), padding="same", kernel_regularizer=reg_layer)(inputs)
+        x = Activation(params["activation"])(x)
         for _ in range(1, layer_x_block):
             x = Conv2D(params["unit_c1"], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
             x = Activation(params["activation"])(x)
