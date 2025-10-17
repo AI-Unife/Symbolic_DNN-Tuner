@@ -693,7 +693,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--base-dir",
         type=Path,
-        default=Path("/Users/alicebizzarri/Desktop/Work/AIDA4Edge/tuner-insight-dashboard/public/experiments/resultsFLOPS"),
+        default=Path("./"),
         help="Folder that contains experiment subfolders.",
     )
     parser.add_argument(
