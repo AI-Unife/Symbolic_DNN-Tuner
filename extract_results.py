@@ -798,17 +798,16 @@ def print_mean_best_by_tuner(csv_path: str, out_csv: Optional[Path] = None) -> p
     std_acc = grouped_acc.std(numeric_only=True)
 
     # Crea un DataFrame con media ± std (formattato)
-    if len(mean_fl) != 0:
-        for col in mean_acc.columns:
-            for tuner in mean_acc.index:
-                m = mean_acc.loc[tuner, col]
-                s = std_acc.loc[tuner, col]
-                if pd.isna(m):
-                    formatted_df.loc[f"{tuner} acc", col] = "-"
-                    formatted_df.loc[f"{tuner} acc", f"{col}_std"] = "-"
-                else:
-                    formatted_df.loc[f"{tuner} acc", col] = m
-                    formatted_df.loc[f"{tuner} acc", f"{col}_std"] = s
+    for col in mean_acc.columns:
+        for tuner in mean_acc.index:
+            m = mean_acc.loc[tuner, col]
+            s = std_acc.loc[tuner, col]
+            if pd.isna(m):
+                formatted_df.loc[f"{tuner} acc", col] = "-"
+                formatted_df.loc[f"{tuner} acc", f"{col}_std"] = "-"
+            else:
+                formatted_df.loc[f"{tuner} acc", col] = m
+                formatted_df.loc[f"{tuner} acc", f"{col}_std"] = s
 
     # Stampa leggibile
     for tuner in mean_acc.index:
