@@ -291,11 +291,15 @@ class NeuralSymbolicBridge:
             if res[prob]:
                 # choose argmax action for this problem (with random tie-breaking)
 
-                # if regularization l2 is already applied, disable it
+                # if regularization l2 and resiudal connection are already applied, disable it
                 if controller.reg:
                     res[prob]["reg_l2"] = 0
+                else:
+                    res[prob]["no_reg_l2"] = 0
                 if controller.residual:
                     res[prob]["residual"] = 0
+                else:
+                    res[prob]["no_residual"] = 0
                 # apply architectural constraints
                 tot_conv = controller.start_conv + controller.count_new_cv * 2
                 if tot_conv > controller.max_conv:
