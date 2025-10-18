@@ -8,7 +8,7 @@ class module:
     """
     Class for creating and managing loss module instances
     """
-    def __init__(self, modules = []):
+    def __init__(self, backend, input_shape, n_classes, modules = []):
         """
         This method initialises the initial attributes in which the informations
         required to manage module instances will be stored:
@@ -27,9 +27,12 @@ class module:
         After the attributes have been initialised, the method to instantiate the modules 'load_modules()' is called 
         """ 
         self.modules_list = modules
+        self.backend = backend
         self.modules_obj = []
         self.modules_name = []
         self.modules_ready = []
+        self.input_shape = input_shape
+        self.n_classes = n_classes
         self.load_modules()
 
     def load_modules(self):
@@ -43,6 +46,10 @@ class module:
 
                 # with the help of importlib, i try to import the current module
                 # if this works, proceed to obtain the class with the same name as the module
+
+                print(base_dir)
+                print(importlib.import_module(base_dir))
+
                 module_class = getattr(importlib.import_module(base_dir), module)
 
                 # each module must use 'common interface' as interface
@@ -51,18 +58,18 @@ class module:
 
                     # if the module is instantiated, put the instance and the name in the dedicated lists.
                     # in addition, set the boolean for inclusion in the prolog model to 'True'
-                    self.modules_obj.append(module_class())
+                    self.modules_obj.append(module_class(self.backend, self.input_shape, self.n_classes))
                     self.modules_name.append(module)
                     self.modules_ready.append(True)
                 else:
                     print(colors.FAIL, f"|  --------- {module} DOESN'T IMPLEMENT INTERFACE  -------  |\n", colors.ENDC)
             except AttributeError:
                 print(colors.FAIL, f"|  ----------- {module} CLASS DOESN'T EXIST ----------  |\n", colors.ENDC)
-            except ModuleNotFoundError:
+            except ModuleNotFoundError as error:
                 print(colors.FAIL, f"|  ----------- FAILED TO INSTANCIATE {module} ----------  |\n", colors.ENDC)
+                print(error)
             except NotImplementedError:
                 print(colors.FAIL, f"|  -------------- ERROR IN {module} STRUCTURE -------------  |\n", colors.ENDC)
-
 
     def ready(self):
         """

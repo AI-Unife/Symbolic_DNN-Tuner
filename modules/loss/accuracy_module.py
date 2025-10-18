@@ -11,7 +11,7 @@ class accuracy_module(common_interface):
     #weight of the module for the final loss calculation
     weight = 0.5
 
-    def __init__(self):
+    def __init__(self, backend, input_shape, n_classes):
         pass
 
     def update_state(self, *args):

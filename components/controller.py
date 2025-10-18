@@ -1,10 +1,10 @@
 import os
-from tensorflow.keras import backend as K
+from typing import Callable, Optional
+
 import matplotlib.pyplot as plt
 
 from components.colors import colors
 from components.diagnosis import diagnosis
-from tensorflow_implementation.neural_network import TensorflowNeuralNetwork
 from components.search_space import search_space
 from components.tuning_rules import tuning_rules
 from components.tuning_rules_symbolic import tuning_rules_symbolic
@@ -23,7 +23,17 @@ class controller:
     interfacing with the underlying modules, identifying possible problems affecting
     the architecture and how to solve them during iterations.
     """
-    def __init__(self, neural_network_class, dynamic_net_class, X_train, Y_train, X_test, Y_test, n_classes):
+    def __init__(
+        self,
+        neural_network_class,
+        module_backend_class,
+        X_train,
+        Y_train,
+        X_test,
+        Y_test,
+        n_classes,
+        clear_session_callback: Optional[Callable[[], None]] = None,
+    ):
         """
         All attributes for managing the training of the neural network are initialized,
         as well as auxiliary classes such as the one for interfacing with the symbolic part
@@ -60,10 +70,10 @@ class controller:
         self.hloss = 1.2
         self.levels = [7, 10, 13]
         self.imp_checker = ImprovementChecker(self.db, self.lfi)
-        self.modules = module(["hardware_module", "accuracy_module"])
+        self.modules = module(module_backend_class(), self.X_train.shape[1:], self.n_classes, ["hardware_module", "accuracy_module"])
 
         self.neural_network_class = neural_network_class
-        self.dynamic_net_class = dynamic_net_class
+        self.clear_session_callback = clear_session_callback
 
     # The following methods are used to determine actions to be applied to the network structure,
     # for example addition or removal of convolutions and dense layers
@@ -146,8 +156,9 @@ class controller:
         self.params = params
 
         print(colors.OKBLUE, "|  --> START TRAINING\n", colors.ENDC)
-        K.clear_session()
-        self.nn = self.neural_network_class(self.dynamic_net_class, self.X_train, self.Y_train, self.X_test, self.Y_test, self.n_classes)
+        if self.clear_session_callback:
+            self.clear_session_callback()
+        self.nn = self.neural_network_class(self.X_train, self.Y_train, self.X_test, self.Y_test, self.n_classes)
         self.score, self.history, self.model = self.nn.training(params, self.new, self.new_fc, self.new_conv, self.rem_conv, self.rem_fc, self.da,
                                                                 self.space)
 

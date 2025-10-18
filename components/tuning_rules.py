@@ -17,8 +17,8 @@ class tuning_rules:
         if "overfitting" in diseases:
             self.count_br += 1
             if self.count_br <= 1:
-                tuning_logs.write("Applied regulatization and batch normalization after activation\n")
-                print("I've try to fix OVERFITTING by adding regularization and batch normalization\n")
+                tuning_logs.write("Applied regularization and batch normalization after activation\n")
+                print("I've tried to fix OVERFITTING by adding regularization and batch normalization\n")
                 model = 'batch'
                 controller.set_case(True)
                 new_p = {'reg': 1e-4}
@@ -32,7 +32,7 @@ class tuning_rules:
                     for hp in self.space:
                         if hp.name == 'learning_rate':
                             hp.high = params['learning_rate'] + (params['learning_rate'] / 2)
-                    tuning_logs.write("I've try to fix UNDERFITTING decreasing the learning_rate\n")
+                    tuning_logs.write("I've tried to fix UNDERFITTING decreasing the learning_rate\n")
             else:
                 for hp in self.space:
                     if 'unit_c1' in hp.name:
@@ -42,19 +42,19 @@ class tuning_rules:
                     if 'unit_d' in hp.name:
                         hp.low = params['unit_d'] - 1
 
-                tuning_logs.write("I've try to fix UNDERFITTING increasing the number of the node per layers\n")
+                tuning_logs.write("I've tried to fix UNDERFITTING increasing the number of the node per layers\n")
 
         if "increasing_loss" in diseases:
             for hp in self.space:
                 if hp.name == 'learning_rate':
                     hp.high = params['learning_rate'] + (params['learning_rate'] / 2)
 
-            tuning_logs.write("I've try to fix INCREASING LOSS decreasing the learning_rate\n")
+            tuning_logs.write("I've tried to fix INCREASING LOSS decreasing the learning_rate\n")
 
         if "floating_loss" in diseases:
             for hp in self.space:
                 if hp.name == 'batch_size':
                     hp.low = params['batch_size'] - 1
-            tuning_logs.write("I've try to fix FLOATING LOSS increasing the batch size\n")
+            tuning_logs.write("I've tried to fix FLOATING LOSS increasing the batch size\n")
 
         return self.space, model

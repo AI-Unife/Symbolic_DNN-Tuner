@@ -2,7 +2,7 @@ from tensorflow import keras
 import tensorflow as tf
 from tensorflow.python.framework.convert_to_constants import convert_variables_to_constants_v2_as_graph
 from tensorflow.keras.applications.vgg16 import VGG16
-import flops.node_manager as nm
+import tensorflow_implementation.flops.node_manager as nm
 import sys
 
 
@@ -74,9 +74,9 @@ def analyze_model(initial_model):
     model = initial_model
 
     # concrete function to apply to each layer to obtain inputs value
-    concrete = tf.function(lambda inputs: model(inputs))
+    concrete = tf.function(lambda inputs: model.model(inputs))
     concrete_func = concrete.get_concrete_function(
-        [tf.TensorSpec([1, *inputs.shape[1:]]) for inputs in initial_model.inputs])
+        [tf.TensorSpec([1, *inputs.shape[1:]]) for inputs in initial_model.model.inputs])
 
     # total_flops, graph_nodes = get_flops(concrete_func)
 

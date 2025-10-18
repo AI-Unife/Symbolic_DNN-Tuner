@@ -1,3 +1,5 @@
+from typing import List
+
 import tensorflow as tf
 from tensorflow.keras import Model
 from tensorflow.keras.layers import *
@@ -7,50 +9,65 @@ import importlib
 
 from keras.applications.vgg16 import VGG16
 
-from abc import ABC, abstractmethod
+from components.model_interface import TunerModel, LayerTypes, LayerSpec, InsertPosition
 
-class dynamic_net(ABC):
+class DynamicNet:
 
-    @abstractmethod
-    def remove_section(self, model, target, linked_layers, delimiter, first_found):
-        raise NotImplementedError
+    def remove_section(self, tuner_model: TunerModel, target: LayerSpec, linked_layers: List[LayerTypes], delimiter: bool, first_found: bool):
+        model.remove_layers(target, linked_layers, delimiter, first_found)
+        return model
 
-    @abstractmethod
-    def insert_section(self, model, n_section, new_section, position, target):
-        raise NotImplementedError
+    def insert_section(self, tuner_model: TunerModel, n_section: int, new_section: List[LayerSpec], position: InsertPosition,
+                       targets: List[LayerTypes]):
+        """
+        Insert a new section into the model.
 
-    @abstractmethod
-    def build_model(self, model, model_dict):
-        raise NotImplementedError
+        :param tuner_model: The original nn.Sequential model
+        :param n_section: Number of times to replicate the new_section
+        :param new_section: List of layers to insert
+        :param position: Where to insert the new section ('before', 'after', or 'replace')
+        :param targets: The name or class of the layer to target
+        :return: Modified nn.Sequential model
+        """
 
-    @abstractmethod
-    def model_from_dict(self, model, model_dict):
-        raise NotImplementedError
+        extended_new_section = []
+        for _ in range(n_section):
+            extended_new_section.extend(new_section)
 
-    @abstractmethod
-    def add_names(self, layer_list):
-        raise NotImplementedError
+        tuner_model.add_layers(extended_new_section, targets, position)
+        return tuner_model
 
-    @abstractmethod
-    def get_last_section(self, model, type_class):
-        raise NotImplementedError
+    def get_last_section(self, model: TunerModel, layer_type: LayerTypes):
+        """
+        Method to find the index of the first layer in the last section of a specific type.
+        :param model: PyTorch nn.Sequential model to search
+        :param type_class: Class of the layer type to search for (e.g., torch.nn.Conv2d)
+        :return: Index of the layer where the last section begins
+        """
+        target_spec = None
 
-    @abstractmethod
-    def all_layers(self, layer_list):
-        raise NotImplementedError
+        for layer_spec in reversed(model.layers.values()):
+            if layer_type == layer_spec.type:
+                target_spec = layer_spec
+            elif target_spec is not None:
+                break
 
-    @abstractmethod
-    def count_layer_type(self, model, type):
-        raise NotImplementedError
+        return target_spec
 
-    @abstractmethod
-    def any_batch(self, model):
-        raise NotImplementedError
+    def count_layer_type(self, model: TunerModel, layer_type: LayerTypes):
+        """
+        Count how many layers of a certain type are in the PyTorch model.
+        :param model: PyTorch model in which to count the number of 'layer_type' layers.
+        :param layer_type: The layer type (e.g., nn.Conv2d, nn.Linear) to count.
+        :return: Number of layers of the specified type.
+        """
+        return sum(1 for layer_spec in model.layers.values() if layer_spec.type == layer_type)
+
 
 if __name__ == '__main__':
 
     # instantiate the class
-    dynamicNet = dynamic_net()
+    dynamicNet = DynamicNet()
 
     # load VGG16
     model = VGG16(weights='imagenet')
