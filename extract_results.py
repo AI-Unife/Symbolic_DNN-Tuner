@@ -731,113 +731,105 @@ def parse_args() -> argparse.Namespace:
     )
     return parser.parse_args()
 
-def print_mean_best_by_tuner(csv_path: str, out_csv: Optional[Path] = None) -> pd.DataFrame:
+
+def summarize_by_tuner_dataset_modules(
+    csv_path: str | Path,
+    out_csv: Optional[Path] = None
+) -> pd.DataFrame:
     """
-    Legge `total_results.csv`, raggruppa per Tuner e calcola la media (± std)
-    delle colonne che iniziano con 'Best' e di 'Total Time (s)' (convertito in ore).
+    Legge un CSV di risultati, raggruppa per (Dataset, Tuner, Moduli) e calcola
+    media e deviazione standard per tutte le colonne che iniziano con 'Best'
+    e per 'Total Time (s)' (convertito in ore).
+
+    Regole:
+    - I "moduli" sono tutte le colonne il cui nome termina con '_module'.
+      La colonna 'Modules' viene costruita concatenando (con '+') i nomi dei moduli
+      attivi nella riga (es. 'flops+aug'); se nessun modulo è attivo -> 'none'.
+    - Richiede le colonne 'Tuner' e 'Dataset'.
+    - Se presente 'Total Time (s)', viene convertito in 'Total Time (h)' e valori
+      >= 24h vengono filtrati (come nel codice originale).
 
     Parametri
     ---------
-    csv_path : str
-        Path al total_results.csv.
-    out_csv : Optional[str]
-        Se fornito, salva il risultato anche su CSV.
+    csv_path : str | Path
+        Path del CSV (es. 'total_results.csv').
+    out_csv : Optional[Path]
+        Se fornito, salva un CSV (e un XLSX omonimo) del risultato.
 
     Ritorna
     -------
     pd.DataFrame
-        DataFrame indicizzato per Tuner con media e std per ogni metrica.
+        DataFrame indicizzato per (Dataset, Tuner, Modules) con colonne *_mean e *_std.
     """
     df = pd.read_csv(csv_path)
-    if "Tuner" not in df.columns:
-        raise ValueError("Nel CSV manca la colonna 'Tuner'.")
 
-    # Seleziona colonne Best + tempo
-    best_cols = [c for c in df.columns if c.lower().startswith("best")]
+    # Controlli minimi
+    for required in ("Tuner", "Dataset Name"):
+        if required not in df.columns:
+            raise ValueError(f"Nel CSV manca la colonna '{required}'.")
+
+    # Individua metriche e tempo
+    best_cols: List[str] = [c for c in df.columns if c.lower().startswith("best")]
     time_col = "Total Time (s)" if "Total Time (s)" in df.columns else None
 
     if not best_cols and not time_col:
         raise ValueError("Nessuna colonna 'Best*' o 'Total Time (s)' trovata nel CSV.")
 
+    # Individua moduli generici *_module (bool/int)
+    module_cols = [c for c in df.columns if c.endswith("_module")]
+
     # Prepara dataframe di lavoro
-    work = df[["Tuner"]].copy()
+    work = df[["Dataset Name", "Tuner"]].copy()
+
+    # Metriche numeriche (Best*)
     for c in best_cols:
         work[c] = pd.to_numeric(df[c], errors="coerce")
 
+    # Tempo in ore + filtro come nel codice originale
     if time_col:
-        # Converti secondi in ore
         work["Total Time (h)"] = pd.to_numeric(df[time_col], errors="coerce") / 3600.0
         work = work[work["Total Time (h)"] < 24.0]
-        
-    work["flops_module"] = pd.to_numeric(df["flops_module"])
 
+    # Costruisci etichetta 'Modules'
+    if module_cols:
+        # Coerce a booleano "truthy"
+        modules_bool = df[module_cols].apply(lambda s: pd.to_numeric(s, errors="coerce").fillna(0).astype(int))
+        names = [c.replace("_module", "") for c in module_cols]
 
-    # Calcola media e std per tuner
-    print("\n================  MEAN (±STD) OF 'Best*' METRICS BY TUNER  ================\n")
-    grouped_fl = work[work["flops_module"]==True].groupby("Tuner", dropna=False)
-    mean_fl = grouped_fl.mean(numeric_only=True)
-    std_fl = grouped_fl.std(numeric_only=True)
+        def _modules_label(row_vals: pd.Series) -> str:
+            active = [name for name, v in zip(names, row_vals) if v]
+            return "+".join(sorted(active)) if active else "none"
 
-    # Crea un DataFrame con media ± std (formattato)
-    formatted_df = pd.DataFrame()
-    print(len(mean_fl))
-    if len(mean_fl) != 0:
-        for col in mean_fl.columns:
-            for tuner in mean_fl.index:
-                m = mean_fl.loc[tuner, col]
-                s = std_fl.loc[tuner, col]
-                if pd.isna(m):
-                    formatted_df.loc[f"{tuner} flops", col] = "-"
-                    formatted_df.loc[f"{tuner} flops", f"{col}_std"] = "-"
-                else:
-                    formatted_df.loc[f"{tuner} flops", col] = m
-                    formatted_df.loc[f"{tuner} flops", f"{col}_std"] = s
-                
-    grouped_acc = work[work["flops_module"]==False].groupby("Tuner", dropna=False)
-    mean_acc = grouped_acc.mean(numeric_only=True)
-    std_acc = grouped_acc.std(numeric_only=True)
+        work["Modules"] = modules_bool.apply(_modules_label, axis=1)
+    else:
+        work["Modules"] = "none"
 
-    # Crea un DataFrame con media ± std (formattato)
-    for col in mean_acc.columns:
-        for tuner in mean_acc.index:
-            m = mean_acc.loc[tuner, col]
-            s = std_acc.loc[tuner, col]
-            if pd.isna(m):
-                formatted_df.loc[f"{tuner} acc", col] = "-"
-                formatted_df.loc[f"{tuner} acc", f"{col}_std"] = "-"
-            else:
-                formatted_df.loc[f"{tuner} acc", col] = m
-                formatted_df.loc[f"{tuner} acc", f"{col}_std"] = s
+    # Colonne da aggregare
+    metrics = best_cols.copy()
+    if "Total Time (h)" in work.columns:
+        metrics.append("Total Time (h)")
+    if not metrics:
+        raise ValueError("Nessuna metrica numerica valida dopo la pulizia dei dati.")
 
-    # Stampa leggibile
-    for tuner in mean_acc.index:
-        print(f"▶ Tuner: {tuner}")
-        if len(mean_fl) != 0:
-            print(f"with Flops module")
-            for col in mean_fl.columns:
-                m = mean_fl.loc[tuner, col]
-                s = std_fl.loc[tuner, col]
-                print(f"  - {col}: {m:.4f} (±{s:.4f})")
-        print("Only Accuracy module")
-        for col in mean_acc.columns:
-            m = mean_acc.loc[tuner, col]
-            s = std_acc.loc[tuner, col]
-            print(f"  - {col}: {m:.4f} (±{s:.4f})")
-        print()
+    # Raggruppa per Dataset, Tuner, Modules
+    group_keys = ["Dataset Name", "Tuner", "Modules"]
+    grouped = work.groupby(group_keys, dropna=False)
 
-    # Salva CSV opzionale con i valori numerici (non formattati)
+    # Calcola mean/std in un colpo solo
+    agg = grouped[metrics].agg(["mean", "std"])
+
+    # Appiattisci le colonne in formato "<metrica>_mean" e "<metrica>_std"
+    agg.columns = [f"{m}_{stat}" for (m, stat) in agg.columns]
+    agg = agg.sort_index()
+
+    # Salvataggi opzionali
     if out_csv:
-        # mean_out = pd.concat([mean_acc.copy(), mean_fl.copy()])
-        # std_out = pd.concat([std_acc.copy(), std_fl.copy()])
-        # if time_col:
-        #     mean_out.rename(columns={"Total Time (h)": "Mean Total Time (h)"}, inplace=True)
-        #     std_out.rename(columns={"Total Time (h)": "Std Total Time (h)"}, inplace=True)
-        # combined = mean_out.add_suffix("_mean")#.join(std_out.add_suffix("_std"))
-        formatted_df.to_csv(out_csv, index=True)
-        formatted_df.to_excel(out_csv.with_suffix('.xlsx'), index=True)
-        print(f"📁 Salvato file: {out_csv}")
+        out_csv = Path(out_csv)
+        agg.to_csv(out_csv, index=True)
+        agg.to_excel(out_csv.with_suffix(".xlsx"), index=True)
+        print(f"📁 Salvati: {out_csv} e {out_csv.with_suffix('.xlsx')}")
 
-    return formatted_df
+    return agg
 
 def main() -> None:
     args = parse_args()
@@ -851,7 +843,7 @@ def main() -> None:
             output_csv=args.output_csv,
         )
         print("✅ Created:", args.output_csv)
-    print_mean_best_by_tuner("total_results.csv", Path("mean_results.csv"))
+    summarize_by_tuner_dataset_modules("total_results.csv", Path("mean_results.csv"))
 
 
 if __name__ == "__main__":
