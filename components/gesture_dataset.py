@@ -382,4 +382,4 @@ def gesture_data(num_classes: int = 11, ROI: bool = False):
     print("shape of y_train:", y_train.shape)
     print("shape of x_test:", x_test.shape)
     print("shape of y_test:", y_test.shape)
-    return x_train, x_test, y_train, y_test
+    return x_train, y_train, x_test, y_test

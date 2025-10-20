@@ -104,15 +104,19 @@ def train_model(
         """
         time_steps = tf.shape(batch_x)[1]
 
+        out_dtype = tf.as_dtype(getattr(model, "compute_dtype", tf.float32))
+
         with tf.GradientTape() as tape:
-            # Collect per-frame outputs: list of [B, C], then stack -> [B, T, C]
-            outputs_t = []
-            # Unroll over time to support arbitrary per-frame model signatures
+            ta = tf.TensorArray(dtype=out_dtype, size=time_steps)
+
+            # Unroll temporale; usare tf.range dentro @tf.function crea un tf.while_loop ma con TensorArray è ok
             for t in tf.range(time_steps):
-                # batch_x[:, t] has shape [B, ...]
-                out_t = model(batch_x[:, t], training=True)
-                outputs_t.append(out_t)
-            outputs = tf.stack(outputs_t, axis=1)  # [B, T, C]
+                # batch_x[:, t] : [B, ...]
+                out_t = model(batch_x[:, t], training=True)  # [B, C]
+                ta = ta.write(t, out_t)
+
+            # ta.stack(): [T, B, C] -> permuta a [B, T, C]
+            outputs = tf.transpose(ta.stack(), perm=[1, 0, 2])
 
             loss = loss_fn(batch_y, outputs)
 

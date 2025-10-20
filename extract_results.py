@@ -788,7 +788,7 @@ def summarize_by_tuner_dataset_modules(
     # Tempo in ore + filtro come nel codice originale
     if time_col:
         work["Total Time (h)"] = pd.to_numeric(df[time_col], errors="coerce") / 3600.0
-        work = work[work["Total Time (h)"] < 24.0]
+        work = work[work["Total Time (h)"] <= 24.0]
 
     # Costruisci etichetta 'Modules'
     if module_cols:
@@ -814,7 +814,8 @@ def summarize_by_tuner_dataset_modules(
     # Raggruppa per Dataset, Tuner, Modules
     group_keys = ["Dataset Name", "Tuner", "Modules"]
     grouped = work.groupby(group_keys, dropna=False)
-
+    print(f"🔍 Raggruppando per {group_keys}, {len(grouped)} gruppi trovati.")
+    print(grouped)
     # Calcola mean/std in un colpo solo
     agg = grouped[metrics].agg(["mean", "std"])
 
