@@ -737,62 +737,62 @@ def summarize_by_tuner_dataset_modules(
     out_csv: Optional[Path] = None
 ) -> pd.DataFrame:
     """
-    Legge un CSV di risultati, raggruppa per (Dataset, Tuner, Moduli) e calcola
-    media e deviazione standard per tutte le colonne che iniziano con 'Best'
-    e per 'Total Time (s)' (convertito in ore).
+    Reads a CSV of results, groups by (Dataset, Tuner, Modules), and computes
+    the mean and standard deviation for all columns starting with 'Best'
+    and for 'Total Time (s)' (converted to hours).
 
-    Regole:
-    - I "moduli" sono tutte le colonne il cui nome termina con '_module'.
-      La colonna 'Modules' viene costruita concatenando (con '+') i nomi dei moduli
-      attivi nella riga (es. 'flops+aug'); se nessun modulo è attivo -> 'none'.
-    - Richiede le colonne 'Tuner' e 'Dataset'.
-    - Se presente 'Total Time (s)', viene convertito in 'Total Time (h)' e valori
-      >= 24h vengono filtrati (come nel codice originale).
+    Rules:
+    - "Modules" are all columns whose name ends with '_module'.
+      The 'Modules' column is built by concatenating (with '+') the names of
+      the active modules in each row (e.g., 'flops+aug'); if no module is active -> 'none'.
+    - Requires the columns 'Tuner' and 'Dataset'.
+    - If 'Total Time (s)' is present, it is converted to 'Total Time (h)', and
+      values >= 24h are filtered out (as in the original code).
 
-    Parametri
-    ---------
+    Parameters
+    ----------
     csv_path : str | Path
-        Path del CSV (es. 'total_results.csv').
+        Path to the CSV file (e.g., 'total_results.csv').
     out_csv : Optional[Path]
-        Se fornito, salva un CSV (e un XLSX omonimo) del risultato.
+        If provided, saves a CSV (and an XLSX with the same name) of the result.
 
-    Ritorna
+    Returns
     -------
     pd.DataFrame
-        DataFrame indicizzato per (Dataset, Tuner, Modules) con colonne *_mean e *_std.
+        DataFrame indexed by (Dataset, Tuner, Modules) with *_mean and *_std columns.
     """
     df = pd.read_csv(csv_path)
 
-    # Controlli minimi
+    # Basic checks
     for required in ("Tuner", "Dataset Name"):
         if required not in df.columns:
-            raise ValueError(f"Nel CSV manca la colonna '{required}'.")
+            raise ValueError(f"Column '{required}' is missing in the CSV.")
 
-    # Individua metriche e tempo
+    # Identify metrics and time
     best_cols: List[str] = [c for c in df.columns if c.lower().startswith("best")]
     time_col = "Total Time (s)" if "Total Time (s)" in df.columns else None
 
     if not best_cols and not time_col:
-        raise ValueError("Nessuna colonna 'Best*' o 'Total Time (s)' trovata nel CSV.")
+        raise ValueError("No 'Best*' or 'Total Time (s)' column found in the CSV.")
 
-    # Individua moduli generici *_module (bool/int)
+    # Identify generic *_module columns (bool/int)
     module_cols = [c for c in df.columns if c.endswith("_module")]
 
-    # Prepara dataframe di lavoro
+    # Prepare working DataFrame
     work = df[["Dataset Name", "Tuner"]].copy()
 
-    # Metriche numeriche (Best*)
+    # Numeric metrics (Best*)
     for c in best_cols:
         work[c] = pd.to_numeric(df[c], errors="coerce")
 
-    # Tempo in ore + filtro come nel codice originale
+    # Time in hours + filtering as in the original code
     if time_col:
         work["Total Time (h)"] = pd.to_numeric(df[time_col], errors="coerce") / 3600.0
         work = work[work["Total Time (h)"] <= 24.0]
 
-    # Costruisci etichetta 'Modules'
+    # Build the 'Modules' label
     if module_cols:
-        # Coerce a booleano "truthy"
+        # Coerce to boolean/truthy
         modules_bool = df[module_cols].apply(lambda s: pd.to_numeric(s, errors="coerce").fillna(0).astype(int))
         names = [c.replace("_module", "") for c in module_cols]
 
@@ -804,31 +804,31 @@ def summarize_by_tuner_dataset_modules(
     else:
         work["Modules"] = "none"
 
-    # Colonne da aggregare
+    # Columns to aggregate
     metrics = best_cols.copy()
     if "Total Time (h)" in work.columns:
         metrics.append("Total Time (h)")
     if not metrics:
-        raise ValueError("Nessuna metrica numerica valida dopo la pulizia dei dati.")
+        raise ValueError("No valid numeric metrics after data cleaning.")
 
-    # Raggruppa per Dataset, Tuner, Modules
+    # Group by Dataset, Tuner, Modules
     group_keys = ["Dataset Name", "Tuner", "Modules"]
     grouped = work.groupby(group_keys, dropna=False)
-    print(f"🔍 Raggruppando per {group_keys}, {len(grouped)} gruppi trovati.")
+    print(f"🔍 Grouping by {group_keys}, {len(grouped)} groups found.")
     print(grouped)
-    # Calcola mean/std in un colpo solo
+    # Compute mean/std all at once
     agg = grouped[metrics].agg(["mean", "std"])
 
-    # Appiattisci le colonne in formato "<metrica>_mean" e "<metrica>_std"
+    # Flatten columns to format "<metric>_mean" and "<metric>_std"
     agg.columns = [f"{m}_{stat}" for (m, stat) in agg.columns]
     agg = agg.sort_index()
 
-    # Salvataggi opzionali
+    # Optional saving
     if out_csv:
         out_csv = Path(out_csv)
         agg.to_csv(out_csv, index=True)
         agg.to_excel(out_csv.with_suffix(".xlsx"), index=True)
-        print(f"📁 Salvati: {out_csv} e {out_csv.with_suffix('.xlsx')}")
+        print(f"📁 Saved: {out_csv} and {out_csv.with_suffix('.xlsx')}")
 
     return agg
 
