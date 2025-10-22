@@ -378,8 +378,5 @@ def gesture_data(num_classes: int = 11, ROI: bool = False):
         y_train = tf.keras.utils.to_categorical(y_train, num_classes)
         y_test = tf.keras.utils.to_categorical(y_test, num_classes)
 
-    print("shape of x_train:", x_train.shape)
-    print("shape of y_train:", y_train.shape)
-    print("shape of x_test:", x_test.shape)
-    print("shape of y_test:", y_test.shape)
+
     return x_train, y_train, x_test, y_test

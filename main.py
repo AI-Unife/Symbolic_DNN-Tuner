@@ -37,7 +37,7 @@ def print_experiment_config() -> None:
     print("MAX NET EVAL: ", cfg.MAX_EVAL)
     print("EPOCHS FOR TRAINING: ", cfg.EPOCHS)
     print("MODULE LIST: ", cfg.MOD_LIST, flush=True)
-    if cfg.DATA_NAME == "gesture":
+    if "gesture" in cfg.DATA_NAME:
         print("MODE: ", cfg.MODE, flush=True)
         print("POLARITY: ", cfg.POLARITY, flush=True)
         print("CHANNELS: ", cfg.NUM_CHANNELS, flush=True)

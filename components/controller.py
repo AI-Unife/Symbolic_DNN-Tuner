@@ -102,8 +102,8 @@ class controller:
         self.lacc: float = 0.30
         self.hloss: float = 1.2
         self.acc_w = 0.5  # weight of accuracy in combined score
-        self.vanish_th = 1e-8
-        self.exploding_th = 100.0
+        self.vanish_th = 1.0 #1e-8
+        self.exploding_th = 1.1 #100.0
 
         # Improvement checker + modules
         self.imp_checker = ImprovementChecker(self.db, self.lfi)
@@ -291,7 +291,7 @@ class controller:
         return self.score
     # ------------------------------ Diagnosis --------------------------------
 
-    def diagnosis(self) -> Tuple[Any, float]:
+    def diagnosis(self) -> Tuple[Any]:
         """
         Diagnose potential issues (e.g., overfitting) and propose tuning actions.
 
@@ -382,7 +382,7 @@ class controller:
 
     # ------------------------------- Tuning ----------------------------------
 
-    def tuning(self) -> Tuple[Any, float, Any]:
+    def tuning(self) -> Tuple[Any]:
         """
         Apply symbolic tuning actions to the hyperparameter space and/or architecture.
 

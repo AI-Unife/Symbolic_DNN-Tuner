@@ -231,7 +231,7 @@ class neural_network:
         tf.keras.backend.clear_session()
         self.model = None
         # 2) Build a new CNN
-        if (cfg.MODE in ("fwdPass", "hybrid")) and cfg.DATA_NAME == "gesture":
+        if (cfg.MODE in ("fwdPass", "hybrid")) and "gesture" in cfg.DATA_NAME :
             input_shape = self.train_data.shape[2:]  # (H, W, C) for gesture pipeline
         else:
             input_shape = self.train_data.shape[1:]  # generic (H, W, C)
@@ -294,7 +294,7 @@ class neural_network:
 
         outputs = Dense(self.n_classes, activation="softmax")(x)
         self.model = Model(inputs=inputs, outputs=outputs)
-        # self.model.summary()
+        self.model.summary()
         if "flops_module" in cfg.MOD_LIST:
             # Compute FLOPs (approximate; counts MACs as 2 FLOPs)
             try:
@@ -391,7 +391,7 @@ class neural_network:
         self.model.compile(loss="categorical_crossentropy", optimizer=opt, metrics=["accuracy"])
 
         # --- Train ---
-        if (cfg.MODE in ("fwdPass", "hybrid")) and cfg.DATA_NAME == "gesture":
+        if (cfg.MODE in ("fwdPass", "hybrid")) and "gesture" in cfg.DATA_NAME :
             if "debug" in cfg.NAME_EXP:
                 # Simulated history for debug mode
                 history = {k: [] for k in ["loss", "accuracy", "val_loss", "val_accuracy"]}
@@ -426,7 +426,7 @@ class neural_network:
                     callbacks=[tensorboard, reduce_lr, es1, es2],
                 ).history
         # --- Evaluate ---
-        if (cfg.MODE in ("fwdPass", "hybrid")) and cfg.DATA_NAME == "gesture":
+        if (cfg.MODE in ("fwdPass", "hybrid")) and "gesture" in cfg.DATA_NAME :
             if "debug" in cfg.NAME_EXP:
                 score = [random.uniform(0.1, 0.5), random.uniform(0.1, 1.0)]
             else:

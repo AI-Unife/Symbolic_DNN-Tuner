@@ -38,8 +38,6 @@ def get_datasets(name):
         (x_train, y_train), (x_test, y_test) = cifar10.load_data()
         if cfg.NAME_EXP == "test":
             (x_train, y_train) = (x_test, y_test)
-        print(x_train.shape[0], 'train samples')
-        print(x_test.shape[0], 'test samples')
         # Convert class vectors to binary class matrices.
         y_train = tf.keras.utils.to_categorical(y_train, num_classes)
         y_test = tf.keras.utils.to_categorical(y_test, num_classes)
@@ -47,8 +45,6 @@ def get_datasets(name):
     elif name == "cifar100":
         # The data, split between train and test sets:
         (x_train, y_train), (x_test, y_test) = cifar100.load_data()
-        print(x_train.shape[0], 'train samples')
-        print(x_test.shape[0], 'test samples')
         # Convert class vectors to binary class matrices.
         y_train = tf.keras.utils.to_categorical(y_train, num_classes)
         y_test = tf.keras.utils.to_categorical(y_test, num_classes)
@@ -60,17 +56,30 @@ def get_datasets(name):
         x_train, y_train, x_test, y_test = gesture_data(num_classes, ROI=True)
     elif name == "imagenet16":
         x_train, y_train, x_test, y_test = load_imagenet16(root)
+        y_train = tf.keras.utils.to_categorical(y_train, num_classes)
+        y_test = tf.keras.utils.to_categorical(y_test, num_classes)
         assert len(x_train) == 1281167 and len(x_test) == 50000
     elif name == "imagenet16120":
         x_train, y_train, x_test, y_test = load_imagenet16(root, 120)
+        y_train = tf.keras.utils.to_categorical(y_train, num_classes)
+        y_test = tf.keras.utils.to_categorical(y_test, num_classes)
         assert len(x_train) == 151700 and len(x_test) == 6000
     elif name == "imagenet16150":
         x_train, y_train, x_test, y_test = load_imagenet16(root, 150)
+        y_train = tf.keras.utils.to_categorical(y_train, num_classes)
+        y_test = tf.keras.utils.to_categorical(y_test, num_classes)
         assert len(x_train) == 190272 and len(x_test) == 7500
     elif name == "imagenet16200":
         x_train, y_train, x_test, y_test = load_imagenet16(root, 200)
+        y_train = tf.keras.utils.to_categorical(y_train, num_classes)
+        y_test = tf.keras.utils.to_categorical(y_test, num_classes)
         assert len(x_train) == 254775 and len(x_test) == 10000
     else:
         raise TypeError("Unknow dataset : {:}".format(name))
 
+    print("shape of x_train:", x_train.shape)
+    print("shape of y_train:", y_train.shape)
+    print("shape of x_test:", x_test.shape)
+    print("shape of y_test:", y_test.shape)
+    print("num_classes:", num_classes)
     return x_train, y_train, x_test, y_test, num_classes
