@@ -102,8 +102,8 @@ class controller:
         self.lacc: float = 0.30
         self.hloss: float = 1.2
         self.acc_w = 0.5  # weight of accuracy in combined score
-        self.vanish_th = 1.0 #1e-8
-        self.exploding_th = 1.1 #100.0
+        self.vanish_th = 1e-8
+        self.exploding_th = 100.0
 
         # Improvement checker + modules
         self.imp_checker = ImprovementChecker(self.db, self.lfi)
