@@ -218,6 +218,16 @@ class neural_network:
         self.model = None
     # --------------------------- Build the model -----------------------------
 
+    def add_residual(self, shortcut, x, output_channels, activation, reg_layer):
+        # If input and output channel dimensions differ, align them via 1x1 conv
+        if shortcut.shape[-1] != output_channels:
+            shortcut = Conv2D(output_channels, (1, 1), padding="same", kernel_regularizer=reg_layer)(shortcut)
+        # Add skip connection
+        x = Add()([shortcut, x])
+        # Apply activation after addition (ResNet-style)
+        x = Activation(activation)(x)
+        return x
+
     def build_network(self, params: Dict[str, Any], layer_x_block) -> None:
         """
         Define (or reload) the network architecture from params.
@@ -241,23 +251,27 @@ class neural_network:
         inputs = Input(input_shape)
         x = Conv2D(params["unit_c1"], (3, 3), padding="same", kernel_regularizer=reg_layer)(inputs)
         x = Activation(params["activation"])(x)
-        for _ in range(1, layer_x_block):
+        for _ in range(1, layer_x_block-1):
+            x = Conv2D(params["unit_c1"], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
+            x = Activation(params["activation"])(x)
+        if self.residual:
+            x = Conv2D(params["unit_c1"], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
+            x = self.add_residual(inputs, x, params['unit_c1'], params['activation'], reg_layer)
+        else:
             x = Conv2D(params["unit_c1"], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
             x = Activation(params["activation"])(x)
         x = MaxPooling2D(pool_size=(2, 2))(x)
         x = Dropout(params["dr1_2"])(x)
 
         shortcut = x
-        for _ in range(layer_x_block):
+        for _ in range(layer_x_block-1):
             x = Conv2D(params["unit_c2"], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
             x = Activation(params["activation"])(x)
         if self.residual:
-            # If input and output channel dimensions differ, align them via 1x1 conv
-            if shortcut.shape[-1] != params["unit_c2"]:
-                shortcut = Conv2D(params["unit_c2"], (1, 1), padding="same", kernel_regularizer=reg_layer)(shortcut)
-            # Add skip connection
-            x = Add()([shortcut, x])
-            # Apply activation after addition (ResNet-style)
+            x = Conv2D(params["unit_c2"], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
+            x = self.add_residual(shortcut, x, params['unit_c2'], params['activation'], reg_layer)
+        else:
+            x = Conv2D(params["unit_c2"], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
             x = Activation(params["activation"])(x)
         x = MaxPooling2D(pool_size=(2, 2))(x)
         x = Dropout(params["dr1_2"])(x)
@@ -266,16 +280,14 @@ class neural_network:
         added_convs = [k for k in params if re.match(r"new_conv_\d+$", k)]
         for layer_key in sorted(added_convs, key=lambda s: int(s.split("_")[-1])):  # stable order
             shortcut = x
-            for _ in range(layer_x_block):
+            for _ in range(layer_x_block-1):
                 x = Conv2D(params[layer_key], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
                 x = Activation(params["activation"])(x)
             if self.residual:
-                # If input and output channel dimensions differ, align them via 1x1 conv
-                if shortcut.shape[-1] != params[layer_key]:
-                    shortcut = Conv2D(params[layer_key], (1, 1), padding="same", kernel_regularizer=reg_layer)(shortcut)
-                # Add skip connection
-                x = Add()([shortcut, x])
-                # Apply activation after addition (ResNet-style)
+                x = Conv2D(params[layer_key], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
+                x = self.add_residual(shortcut, x, params[layer_key], params['activation'], reg_layer)
+            else:
+                x = Conv2D(params[layer_key], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
                 x = Activation(params["activation"])(x)
             x = MaxPooling2D(pool_size=(2, 2))(x)
             x = Dropout(params["dr1_2"])(x)
@@ -293,6 +305,11 @@ class neural_network:
             x = Dropout(params["dr_f"])(x)
 
         outputs = Dense(self.n_classes, activation="softmax")(x)
+
+        if self.da:
+            outputs = tf.keras.layers.RandomFlip("horizontal")(outputs)
+            outputs = tf.keras.layers.RandomTranslation(height_factor=0.1, width_factor=0.1, fill_mode="nearest")(outputs)
+
         self.model = Model(inputs=inputs, outputs=outputs)
         self.model.summary()
         if "flops_module" in cfg.MOD_LIST:
@@ -378,12 +395,6 @@ class neural_network:
         # --- Optional data augmentation ---
         # We prepend a small augmentation pipeline. Wrapping with Sequential is fine here
         # since the base model is purely sequential in topology (functional API).
-        if self.da:
-            aug = tf.keras.Sequential([
-                tf.keras.layers.RandomFlip("horizontal"),
-                tf.keras.layers.RandomTranslation(height_factor=0.1, width_factor=0.1, fill_mode="nearest"),
-            ])
-            self.model = tf.keras.Sequential([aug, *self.model.layers])
 
         # Wrap it with MonitoredModel
         # self.model = MonitoredModel(inputs=self.model.inputs, outputs=self.model.outputs)
