@@ -1,7 +1,7 @@
 from modules.common_interface import common_interface
 from components.colors import colors
 import os
-import config as cfg
+import myconfig as cfg
 
 class accuracy_module(common_interface):
 

@@ -1,7 +1,7 @@
 import sqlite3 as db
 from sqlite3 import Error
 
-import config as cfg
+import myconfig as cfg
 import numpy as np
 
 

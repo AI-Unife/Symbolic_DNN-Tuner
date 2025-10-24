@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 import flops.flops_calculator as fc
-import config as cfg
+import myconfig as cfg
 
 class flops_module(common_interface):
 
@@ -61,6 +61,6 @@ class flops_module(common_interface):
     def log_function(self):
         # if os.path.exists("{}/graph_report.txt".format(cfg.NAME_EXP)):
         #     os.remove("{}/graph_report.txt".format(cfg.NAME_EXP))
-        f = open("{}/graph_report.txt".format(cfg.NAME_EXP), "a")
+        f = open("{}/flops_report.txt".format(cfg.NAME_EXP), "a")
         f.write(str(self.flops_th) + " " + str(self.flops) + "\n")
         f.close()

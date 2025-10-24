@@ -10,7 +10,7 @@ from problog.program import PrologString
 from problog import get_evaluatable
 from problog.tasks import sample  # kept for compatibility if you use it elsewhere
 
-import config as cfg
+import myconfig as cfg
 
 
 class NeuralSymbolicBridge:

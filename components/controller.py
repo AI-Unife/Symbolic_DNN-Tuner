@@ -27,7 +27,7 @@ from shutil import copyfile
 
 from modules.module import module
 
-import config as cfg
+import myconfig as cfg
 import logging
 
 
@@ -100,7 +100,7 @@ class controller:
 
         # Dynamic thresholds (updated at given epochs)
         self.lacc: float = 0.30
-        self.hloss: float = 1.2
+        self.hloss: float = np.log(n_classes)
         self.acc_w = 0.5  # weight of accuracy in combined score
         self.vanish_th = 1e-8
         self.exploding_th = 100.0

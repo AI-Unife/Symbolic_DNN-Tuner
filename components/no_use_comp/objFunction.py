@@ -1,4 +1,4 @@
-import config as cfg
+import myconfig as cfg
 
 class objFunction:
     def __init__(self, search, controller):

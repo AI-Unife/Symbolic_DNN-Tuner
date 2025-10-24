@@ -18,7 +18,8 @@ from tensorflow.keras.layers import (
     Activation,
     Conv2D,
     Dense,
-    Flatten,
+    GlobalAveragePooling2D,
+    BatchNormalization,
     MaxPooling2D,
     Dropout,
     Input,
@@ -39,7 +40,7 @@ from components.custom_train import train_model, eval_model
 from flops.flops_calculator import analyze_model
 # from components.monitor_model import MonitoredModel, GradientMonitor
 
-import config as cfg
+import myconfig as cfg
 
 
 # ----------------------------- Utilities -------------------------------------
@@ -225,6 +226,7 @@ class neural_network:
         # Add skip connection
         x = Add()([shortcut, x])
         # Apply activation after addition (ResNet-style)
+    
         x = Activation(activation)(x)
         return x
 
@@ -249,17 +251,24 @@ class neural_network:
         reg_layer = reg.l2() if self.reg else None
 
         inputs = Input(input_shape)
-        x = Conv2D(params["unit_c1"], (3, 3), padding="same", kernel_regularizer=reg_layer)(inputs)
+        if self.da:
+            inputs = tf.keras.layers.RandomFlip("horizontal")(inputs)
+            inputs = tf.keras.layers.RandomTranslation(height_factor=0.1, width_factor=0.1, fill_mode="nearest")(inputs)
+
+        x = Conv2D(params["unit_c1"], (3, 3), padding="same")(inputs)
         x = Activation(params["activation"])(x)
+        x = BatchNormalization()(x)
         for _ in range(1, layer_x_block-1):
-            x = Conv2D(params["unit_c1"], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
+            x = Conv2D(params["unit_c1"], (3, 3), padding="same")(x)
             x = Activation(params["activation"])(x)
+            x = BatchNormalization()(x)
         if self.residual:
-            x = Conv2D(params["unit_c1"], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
+            x = Conv2D(params["unit_c1"], (3, 3), padding="same")(x)
             x = self.add_residual(inputs, x, params['unit_c1'], params['activation'], reg_layer)
         else:
             x = Conv2D(params["unit_c1"], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
             x = Activation(params["activation"])(x)
+            x = BatchNormalization()(x)
         x = MaxPooling2D(pool_size=(2, 2))(x)
         x = Dropout(params["dr1_2"])(x)
 
@@ -267,14 +276,16 @@ class neural_network:
         for _ in range(layer_x_block-1):
             x = Conv2D(params["unit_c2"], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
             x = Activation(params["activation"])(x)
+            x = BatchNormalization()(x)
         if self.residual:
             x = Conv2D(params["unit_c2"], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
             x = self.add_residual(shortcut, x, params['unit_c2'], params['activation'], reg_layer)
         else:
             x = Conv2D(params["unit_c2"], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
             x = Activation(params["activation"])(x)
+            x = BatchNormalization()(x)
         x = MaxPooling2D(pool_size=(2, 2))(x)
-        x = Dropout(params["dr1_2"])(x)
+
 
         # Dynamically added conv blocks (conv -> act -> conv -> act -> pool -> dropout)
         added_convs = [k for k in params if re.match(r"new_conv_\d+$", k)]
@@ -283,32 +294,29 @@ class neural_network:
             for _ in range(layer_x_block-1):
                 x = Conv2D(params[layer_key], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
                 x = Activation(params["activation"])(x)
+                x = BatchNormalization()(x)
             if self.residual:
                 x = Conv2D(params[layer_key], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
                 x = self.add_residual(shortcut, x, params[layer_key], params['activation'], reg_layer)
             else:
                 x = Conv2D(params[layer_key], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
                 x = Activation(params["activation"])(x)
+                x = BatchNormalization()(x)
             x = MaxPooling2D(pool_size=(2, 2))(x)
-            x = Dropout(params["dr1_2"])(x)
 
-        x = Flatten()(x)
-        x = Dense(params["unit_d"])(x)
+        x = GlobalAveragePooling2D()(x)
+        x = Dense(params["unit_d"], kernel_regularizer=reg_layer)(x)
         x = Activation(params["activation"])(x)
         x = Dropout(params["dr_f"])(x)
 
         # Dynamically added FC layers
         added_fcs = [k for k in params if re.match(r"new_fc_\d+$", k)]
         for layer_key in sorted(added_fcs, key=lambda s: int(s.split("_")[-1])):  # stable order
-            x = Dense(params[layer_key])(x)
+            x = Dense(params[layer_key], kernel_regularizer=reg_layer)(x)
             x = Activation(params["activation"])(x)
             x = Dropout(params["dr_f"])(x)
 
-        outputs = Dense(self.n_classes, activation="softmax")(x)
-
-        if self.da:
-            outputs = tf.keras.layers.RandomFlip("horizontal")(outputs)
-            outputs = tf.keras.layers.RandomTranslation(height_factor=0.1, width_factor=0.1, fill_mode="nearest")(outputs)
+        outputs = Dense(self.n_classes, kernel_regularizer=reg_layer, activation="softmax")(x)
 
         self.model = Model(inputs=inputs, outputs=outputs)
         self.model.summary()

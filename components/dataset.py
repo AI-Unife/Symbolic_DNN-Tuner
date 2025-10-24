@@ -12,7 +12,7 @@ from tensorflow.keras.datasets import cifar10, cifar100
 
 from .DownsampledImageNet import load_imagenet16
 from .gesture_dataset import gesture_data
-import config as cfg
+import myconfig as cfg
 
 Dataset2Class = {
     "cifar10": 10,

@@ -21,7 +21,7 @@ from components.dataset import get_datasets
 from components.search_space import search_space
 from components.random_search import RandomSearch
 
-import config as cfg
+import myconfig as cfg
 
 
 # --------------------------- pretty printing ---------------------------------

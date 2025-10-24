@@ -2,109 +2,280 @@
 # -*- coding: utf-8 -*-
 
 """
-Aggregate experiment metrics from .out logs into per-experiment CSVs
-and a single summary CSV. Designed for directory trees where each
-experiment folder contains an output log (`output.log` or .out files)
-and metrics lines to extract.
+extract_results.py
 
-Example:
-    python collect_results.py \
-        --base-dir /hpc/home/bzzlca/Symbolic_DNN-Tuner/results \
-        --exp-prefix 25_
+- Scansiona tutte le cartelle esperimento che iniziano con '25_'.
+- Estrae SOLO dai log in algorithm_logs/:
+    * acc_report.txt -> Acc_Best, Acc_Last, Acc_Mean
+    * <module>_report.txt (es. flops_report.txt, hardware_report.txt, ...) :
+        ogni riga può contenere 1+ numeri separati da virgola;
+        per OGNI colonna calcola: <module>_col{i}_{last,mean,best}
+- Per lo "search space" usa il file .out (dentro la cartella esperimento),
+  costruendo search_space_evolution.(csv/xlsx) e search_space_pct_changes.(csv/xlsx).
+- Salvataggi con pandas: CSV + Excel (.xlsx).
 
-Notes:
-- The script walks subfolders under --base-dir and selects those whose
-  folder name starts with --exp-prefix (default: "25_").
-- For each experiment folder:
-  * Collects metrics from all `.out` files into `<exp>/results.csv`
-    (one row per iteration hit).
-  * Copies a representative log to `<exp>/output/output.log`.
-  * Extracts experiment metadata from that log.
-  * Summarizes best metrics into a global `total_results.csv`.
+Output globali:
+  - total_results.(csv/xlsx)
+  - mean_results.(csv/xlsx)
+Output per-esperimento:
+  - search_space_evolution.(csv/xlsx)
+  - search_space_pct_changes.(csv/xlsx)
 """
-
 from __future__ import annotations
+
+# --- anti-shadowing di 'config' ---
+import sys, types
+if "config" not in sys.modules:
+    sys.modules["config"] = types.ModuleType("config")
+    # opzionale: evita che il tuo vero myconfig venga pescato più tardi
+    sys.modules["config"].__file__ = "<stubbed>"
+    
 
 import argparse
 import logging
+import math
 import re
-import shutil
-from dataclasses import dataclass, field
+from dataclasses import dataclass, asdict, field
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
-import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-# ---------------------------
-# Logging setup
-# ---------------------------
+import tensorflow as tf
+import ast
+# ------------------------------------------------------------------------------
+# Logging
+# ------------------------------------------------------------------------------
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)-8s | %(message)s",
+    datefmt="%H:%M:%S",
+)
 
-def setup_logging(verbosity: int) -> None:
-    """Configure logging level and format."""
-    level = logging.WARNING
-    if verbosity == 1:
-        level = logging.INFO
-    elif verbosity >= 2:
-        level = logging.DEBUG
-
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s | %(levelname)-8s | %(message)s",
-        datefmt="%H:%M:%S",
-    )
-
-
-# ---------------------------
-# Regex patterns (precompiled)
-# ---------------------------
-
-_METRIC_PATTERNS: Dict[str, re.Pattern] = {
-    # Accept both ":" and "=" separators; ignore case where it makes sense.
-    "iteration": re.compile(r"ITERATION\s*[:=]?\s*(\d+)"),
-    "accuracy": re.compile(r"ACCURACY\s*[:=]?\s*([0-9]*\.?[0-9]+)"),
-    "flops": re.compile(r"FLOPS\s*[:=]?\s*([0-9]*\.?[0-9]+)"),
-    "params": re.compile(r"PARAMS\s*[:=]?\s*([0-9]*\.?[0-9]+)"),
-    "latency": re.compile(r"LATENCY\s*[:=]?\s*([0-9]*\.?[0-9]+)"),
-    "total_cost": re.compile(r"TOTAL\s*COST\s*[:=]?\s*([0-9]*\.?[0-9]+)"),
-    "score": re.compile(r"Score\s*[:=]?\s*(-?[0-9]*\.?[0-9]+)"),
-}
-
-# Metadata patterns from `output.log`
-_META_PATTERNS: Dict[str, re.Pattern] = {
-    "dataset": re.compile(r"DATASET NAME:\s+(.+)", re.IGNORECASE),
-    "max_eval": re.compile(r"MAX NET EVAL:\s+(\d+)", re.IGNORECASE),
-    "epochs": re.compile(r"EPOCHS FOR TRAINING:\s+(\d+)", re.IGNORECASE),
-    "modules": re.compile(r"MODULE LIST:\s+(\[.+\])", re.IGNORECASE),
-    "seed": re.compile(r"SEED:\s+(\d+)", re.IGNORECASE),
-    "total_time": re.compile(r"TOTAL TIME -------->\s*([0-9]*\.?[0-9]+)", re.IGNORECASE),
-}
-
-# ---------------------------
-# Search space evolution (per-iteration snapshot + diffs)
-# ---------------------------
-
-_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+# ------------------------------------------------------------------------------
+# Helpers comuni
+# ------------------------------------------------------------------------------
+ANSI_RE = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
 
 def _strip_ansi(s: str) -> str:
-    """Remove ANSI color codes from a log line."""
-    return _ANSI_RE.sub("", s)
+    return ANSI_RE.sub("", s)
 
-def _iter_search_space_blocks(lines: List[str]):
+def _find_out_file(exp_dir: Path) -> Optional[Path]:
+    """Restituisce il primo file .out trovato nella cartella esperimento."""
+    cands = sorted(exp_dir.glob("*.out"))
+    return cands[0] if cands else None
+
+def _parse_csv_numbers_line(line: str) -> List[float]:
+    parts = [p.strip() for p in line.strip().split(",")]
+    vals: List[float] = []
+    for p in parts:
+        if not p:
+            continue
+        try:
+            vals.append(float(p))
+        except ValueError:
+            # ignora token non numerici
+            pass
+    return vals
+
+def _extract_tuner(exp_name: str) -> Optional[str]:
+    # euristica semplice; adatta ai tuoi nomi
+    known = ["filtered", "basic", "standard", "RS_ruled", "RS"]
+    for k in known:
+        if k in exp_name:
+            return k
+    # fallback euristico
+    parts = exp_name.split("_")
+    return parts[6] if len(parts) > 6 else None
+
+def _extract_dataset(exp_name: str) -> Optional[str]:
+    # euristica semplice; adatta ai tuoi nomi
+    known = ["cifar10", "cifar100", "gesture", "roigesture", "imagenet16120"]
+    exp_name = exp_name.lower().replace("-", "").split("_")
+    for k in known:
+        for part in exp_name:
+            if k == part:
+                return k
+    # fallback euristico
+    parts = exp_name.split("_")
+    return parts[5] if len(parts) > 5 else None
+
+def get_best_iteration_from_acc(aldir: Path) -> Optional[int]:
+    """Restituisce l'indice (1-based) della riga con accuracy massima in acc_report.txt."""
+    acc_path = aldir / "acc_report.txt"
+    if not acc_path.exists():
+        return None
+    vals = []
+    for ln in acc_path.read_text().splitlines():
+        ln = ln.strip()
+        if not ln:
+            continue
+        try:
+            vals.append(float(ln))
+        except ValueError:
+            pass
+    if not vals:
+        return None
+    best_idx = int(pd.Series(vals).idxmax())  # 0-based posizione
+    # Converte in 1-based per coerenza con "iteration" dei report
+    return best_idx + 1
+
+# ------------------------------------------------------------------------------
+# Retrain Network best-model.keras 
+# ------------------------------------------------------------------------------
+
+def parse_batch_opt_lr_from_hyper_neural(aldir: Path, iteration: int) -> Optional[str]:
     """
-    Generator over (iteration, block_lines) where block_lines are the lines
-    immediately following 'Actual search space:' for that iteration.
+    Fallback: prendi la riga 'iteration' da hyper-neural.txt (1-based) e leggi il campo 'optimizer'.
     """
-    iter_no = None
-    i = 0
-    n = len(lines)
+    f = aldir / "hyper-neural.txt"
+    if not f.exists():
+        return None
+    rows = []
+    for ln in f.read_text().splitlines():
+        ln = ln.strip()
+        if not ln:
+            continue
+        try:
+            d = ast.literal_eval(ln)
+            if isinstance(d, dict):
+                rows.append(d)
+        except Exception:
+            continue
+    if not rows:
+        return None
+    idx = max(0, min(iteration - 1, len(rows) - 1))
+    batch = rows[idx].get("batch_size")
+    opt = rows[idx].get("optimizer")
+    lr = rows[idx].get("learning_rate")
+    return (batch, opt, lr)
+
+def load_dataset(dataset_name: str):
+    """
+    load_dataset(dataset_name) -> (train_ds, val_ds).
+    """
+    # ds = get_datasets(dataset_name)
+
+    # # Heuristics: molti loader restituiscono tuple (train, val) o 4-tuple
+    # if isinstance(ds, tuple):
+    #     if len(ds) == 2:
+    #         train_ds, val_ds = ds
+    #         return train_ds, val_ds
+    #     elif len(ds) == 4:
+    #         x_tr, y_tr, x_va, y_va = ds
+    #         return (x_tr, y_tr), (x_va, y_va)
+    # # altrimenti assumiamo sia già un tf.data.Dataset con split nel dict
+    # if isinstance(ds, dict) and "train" in ds and "val" in ds:
+    #     return ds["train"], ds["val"]
+    # raise RuntimeError("Formato dataset non riconosciuto")
+    (x_train, y_train), (x_test, y_test) = tf.keras.datasets.cifar10.load_data()
+    # Convert class vectors to binary class matrices.
+    y_train = tf.keras.utils.to_categorical(y_train, 10)
+    y_test = tf.keras.utils.to_categorical(y_test, 10)
+    return (x_train, y_train), (x_test, y_test)
+
+def make_optimizer_by_name(name: str, lr: float = 1e-3):
+    name_low = (name or "").lower()
+    if name_low in ("adamw",):
+        try:
+            return tf.keras.optimizers.AdamW(learning_rate=lr, weight_decay=0.0)
+        except Exception:
+            # fallback su Adam
+            return tf.keras.optimizers.Adam(learning_rate=lr)
+    if name_low in ("adamax",):
+        return tf.keras.optimizers.Adamax(learning_rate=lr)
+    if name_low in ("adam",):
+        return tf.keras.optimizers.Adam(learning_rate=lr)
+    if name_low in ("sgd",):
+        return tf.keras.optimizers.SGD(learning_rate=lr, momentum=0.9, nesterov=True)
+    if name_low in ("rmsprop",):
+        return tf.keras.optimizers.RMSprop(learning_rate=lr, momentum=0.9)
+    # default
+    return tf.keras.optimizers.Adam(learning_rate=lr)
+
+    
+    
+def train_best_model_if_required(exp_dir: Path, dataset_name: str, aldir: Path):
+    model_path = exp_dir / "Model" / "best-model.keras"
+    if not model_path.exists():
+        logging.warning("best-model.keras non trovato in %s", model_path)
+        return
+    model = tf.keras.models.load_model(model_path)
+    # 1) Iterazione migliore
+    best_it = get_best_iteration_from_acc(aldir)
+    if not best_it:
+        logging.warning("Impossibile determinare l'iterazione migliore da acc_report.txt")
+        return None, None
+
+    # 2) Optimizer lr and batch size dalla riga best_it di hyper-neural.txt
+    opt_name = None
+    lr = None
+    batch = None
+    (batch, opt_name, lr) = parse_batch_opt_lr_from_hyper_neural(aldir, best_it) or (None, None, None)
+    if not opt_name:
+        opt_name = "Adam"  # fallback sicuro
+    if lr is None:
+        lr = 1e-3  # default
+    if batch is None:
+        batch = 32  # default
+    # 3) Load Dataset 
+    train_split, val_split = load_dataset(dataset_name)
+
+    # 4) Carica e compila
+    optimizer = make_optimizer_by_name(opt_name, lr=lr)
+    loss = tf.keras.losses.CategoricalCrossentropy(label_smoothing=0.0)
+    metrics = [tf.keras.metrics.CategoricalAccuracy(name="acc")]
+
+    model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
+
+    # 5) Allenamento breve di “refit” (configurabile se vuoi aggiungere argomenti CLI)
+    callbacks = [
+        tf.keras.callbacks.EarlyStopping(monitor="val_acc", mode="max", patience=100, restore_best_weights=True)
+    ]
+
+    history = None
+    if isinstance(train_split, tuple):
+        (x_tr, y_tr) = train_split
+        (x_va, y_va) = val_split
+        history = model.fit(x_tr, y_tr, validation_data=(x_va, y_va), epochs=1000, batch_size=batch, callbacks=callbacks, verbose=2)
+    else:
+        # tf.data
+        history = model.fit(train_split, validation_data=val_split, epochs=1000, callbacks=callbacks, verbose=2)
+
+    # 6) Salva modello e storia
+    finetuned_path = exp_dir / "Model" / "best-model-finetuned.keras"
+    try:
+        model.save(finetuned_path)
+    except Exception as e:
+        logging.warning("Salvataggio modello finetuned fallito: %s", e)
+
+    # storia su CSV
+    if history is not None:
+        hist_df = pd.DataFrame(history.history)
+        hist_csv = exp_dir / "best_model_finetune_history.csv"
+        hist_df.to_csv(hist_csv, index=False)
+        
+    logging.info("Training best model completato. Optimizer=%s, LR=%.3g", opt_name, lr)
+    # 7) Valutazione su test set (se disponibile)
+    acc_test, loss_test = model.evaluate(val_split, verbose=2) if not isinstance(val_split, tuple) else model.evaluate(x_va, y_va, verbose=2)
+    return acc_test, loss_test
+# ------------------------------------------------------------------------------
+# Search space: parser .out  -> evolution + pct changes
+# ------------------------------------------------------------------------------
+def _iter_search_space_blocks(out_path: Path):
+    """
+    Genera blocchi 'Search space exploration report (iteration X)'
+    Restituisce (iterazione:int, [righe "Dimension ..."])
+    """
+    try:
+        lines = out_path.read_text(errors="ignore").splitlines()
+    except FileNotFoundError:
+        return
+    i, n = 0, len(lines)
     while i < n:
-        line = _strip_ansi(lines[i])
-        m_iter = re.search(r"\bITERATION\s+(\d+)\b", line)
-        if m_iter:
-            iter_no = int(m_iter.group(1))
-        if "Actual search space:" in line and iter_no is not None:
-            # collect subsequent 'Dimension ...' lines until a non-dimension line
+        line = _strip_ansi(lines[i]).strip()
+        m = re.match(r"Search space exploration report\s*\(iteration\s*(\d+)\)", line, re.I)
+        if m:
+            iter_no = int(m.group(1))
             block = []
             j = i + 1
             while j < n:
@@ -120,12 +291,9 @@ def _iter_search_space_blocks(lines: List[str]):
 
 def _parse_dimension_line(line: str):
     """
-    Parse a single 'Dimension k: name - TYPE(low=..., high=..., ...)' line.
-    Returns (index:int, name:str, kind:str, low:float|None, high:float|None, raw:str)
-    Works for Integer/Real; for Categorical falls back with None bounds.
+    Parse: 'Dimension k: name - TYPE(low=..., high=..., ...)'
+    Ritorna dict con iteration (dummy, sovrascritta), param, kind, low, high, width.
     """
-    # Example:
-    # Dimension 0: unit_c1 - Integer(low=32, high=64, prior='uniform', transform='identity')
     m = re.match(r"Dimension\s+(\d+):\s*([^-\s]+)\s*-\s*([A-Za-z]+)\((.*)\)$", line)
     if not m:
         return None
@@ -133,719 +301,306 @@ def _parse_dimension_line(line: str):
     name = m.group(2)
     kind = m.group(3)
     inner = m.group(4)
-
     low = high = None
-    if kind.lower() in ("integer", "real"):
-        m2 = re.search(r"low\s*=\s*([0-9]*\.?[0-9]+)", inner)
-        m3 = re.search(r"high\s*=\s*([0-9]*\.?[0-9]+)", inner)
-        if m2:
-            low = float(m2.group(1))
-        if m3:
-            high = float(m3.group(1))
-    return idx, name, kind, low, high
+    mlow = re.search(r"low\s*=\s*([-\d\.eE]+)", inner)
+    mhigh = re.search(r"high\s*=\s*([-\d\.eE]+)", inner)
+    if mlow:
+        try:
+            low = float(mlow.group(1))
+        except Exception:
+            pass
+    if mhigh:
+        try:
+            high = float(mhigh.group(1))
+        except Exception:
+            pass
+    width = None
+    if low is not None and high is not None:
+        width = abs(high - low)
+    return {"iteration": idx, "param": name, "kind": kind, "low": low, "high": high, "width": width}
 
-def extract_search_space_evolution(log_file: Path) -> pd.DataFrame:
-    """
-    Build a per-iteration table of the search space and how it changes over time.
-    Columns:
-        iteration, dim_index, param, kind, low, high,
-        prev_low, prev_high, status, delta_low, delta_high, raw
-    - status ∈ {'initial','unchanged','changed'}
-    """
-    try:
-        with log_file.open("r", encoding="utf-8", errors="ignore") as fh:
-            lines = fh.readlines()
-    except FileNotFoundError:
-        logging.warning("Log file not found for search space evolution: %s", log_file)
-        return pd.DataFrame()
-
-    snapshots: List[Dict[str, object]] = []
-    for it, block in _iter_search_space_blocks(lines):
+def write_search_space_evolution_from_out(exp_dir: Path, out_path: Path) -> Optional[Path]:
+    rows = []
+    for it, block in _iter_search_space_blocks(out_path):
         for ln in block:
-            parsed = _parse_dimension_line(ln)
-            if not parsed:
-                continue
-            dim_idx, name, kind, low, high = parsed
-            snapshots.append({
-                "iteration": it,
-                "dim_index": dim_idx,
-                "param": name,
-                "kind": kind,
-                "low": low,
-                "high": high
-            })
-
-    if not snapshots:
-        logging.warning("No 'Actual search space' blocks found in %s", log_file)
-        return pd.DataFrame()
-
-    df = pd.DataFrame(snapshots)
-    # Normalize dtypes
-    df = df.sort_values(["iteration", "dim_index"]).reset_index(drop=True)
-
-    for idx, row in df.iterrows():
-        if row.kind in ['Real', 'Integer']:
-            df.at[idx, 'width'] = df.at[idx, 'high'] - df.at[idx,'low']
-        elif row.kind in ['Categorical']:
-            df.at[idx, 'width'] = np.nan
-    return df
-
-
-def write_search_space_evolution(exp_dir: Path, log_file: Optional[Path]) -> Optional[Path]:
-    """
-    Create `<exp_dir>/search_space_evolution.csv` by parsing the representative log.
-    Returns the CSV path if written, else None.
-    """
-    if not log_file or not log_file.is_file():
-        logging.warning("No representative log available to build search space evolution for %s", exp_dir)
+            d = _parse_dimension_line(ln)
+            if d is not None:
+                d["iteration"] = it
+                rows.append(d)
+    if not rows:
         return None
-    df = extract_search_space_evolution(log_file)
-    if df.empty:
-        return None
-    out_path = exp_dir / "search_space_evolution.csv"
-    df.to_csv(out_path, index=False)
-    logging.info("Wrote search space evolution CSV: %s", out_path)
-    return out_path
+    df = pd.DataFrame(rows).sort_values(["iteration", "param"])
+    csv_path = exp_dir / "search_space_evolution.csv"
+    xlsx_path = exp_dir / "search_space_evolution.xlsx"
+    df.to_csv(csv_path, index=False)
+    try:
+        df.to_excel(xlsx_path, index=False)
+    except Exception as e:
+        logging.warning("Excel write failed for %s: %s", xlsx_path, e)
+    return csv_path
 
-def build_stacked_fractional_change_plot(csv_path: Path,
-                                         out_png: Path,
-                                         out_csv: Path | None = None) -> Path:
-    """
-    From a CSV (iteration,param,low,high), compute fractional deltas per iteration:
-      - New dimension at iteration t  -> delta = 1.0
-      - Existing: (w_t - w_{t-1}) / w_{t-1}
-      - If w_{t-1} == 0 and w_t > 0   -> delta = 1.0
-      - If w_{t-1} == 0 and w_t == 0  -> delta = 0.0
-      - Missing/disappeared param     -> delta = 0.0
-    Then, plot a stacked bar chart (one bar per iteration; segments=dimensions).
-    Optionally save the deltas table to out_csv.
-    """
+def build_fractional_changes(csv_path: Path, out_csv: Path, out_xlsx: Path) -> pd.DataFrame:
     df = pd.read_csv(csv_path)
-
-    def _resolve(colname: str) -> str:
-        low = colname.lower()
+    # risolvi i nomi ignorando maiuscole/minuscole
+    def _resolve(col: str) -> str:
+        low = col.lower()
         for c in df.columns:
             if c.lower() == low:
                 return c
-        raise ValueError(f"Missing column '{colname}' in {list(df.columns)}")
-
+        raise KeyError(col)
     col_iter = _resolve("iteration")
-    try:
-        col_param = _resolve("param")
-    except ValueError:
-        try:
-            col_param = _resolve("name")
-        except ValueError:
-            col_param = _resolve("dimension")
+    col_param = _resolve("param")
     col_width = _resolve("width")
 
-    work = df[[col_iter, col_param, col_width]].copy()
-    work[col_iter] = pd.to_numeric(work[col_iter], errors="coerce")
-    work[col_width] = pd.to_numeric(work[col_width], errors="coerce")
-    work = work.dropna(subset=[col_iter, col_width])
+    piv = (
+        df[[col_iter, col_param, col_width]]
+        .pivot_table(index=col_iter, columns=col_param, values=col_width, aggfunc="last")
+        .sort_index()
+        .fillna(0.0)
+    )
 
-    widths = work.pivot_table(index=col_iter, columns=col_param, values="width", aggfunc="first").sort_index()
-    iters = widths.index.tolist()
-    params = sorted(set(widths.columns))
-
-    deltas = pd.DataFrame(0.0, index=iters, columns=params)
-    prev_row = None
-    for i, it in enumerate(iters):
-        row = widths.loc[it]
-        if i == 0:
-            for p in params:
-                deltas.at[it, p] = 1.0 if pd.notna(row.get(p)) else 0.0
+    deltas = []
+    prev = None
+    for idx, row in piv.iterrows():
+        if prev is None:
+            deltas.append(pd.Series(1.0, index=piv.columns, name=idx))
         else:
-            for p in params:
-                cur = row.get(p) if p in row.index else np.nan
-                prev_exists = prev_row is not None and (p in prev_row.index) and pd.notna(prev_row[p])
-                if pd.isna(cur) and not prev_exists:
-                    deltas.at[it, p] = 0.0
-                elif pd.isna(cur) and prev_exists:
-                    deltas.at[it, p] = -1.0
-                elif not prev_exists:
-                    deltas.at[it, p] = 1.0
+            r = []
+            for c in piv.columns:
+                a, b = float(prev[c]), float(row[c])
+                if a == 0.0 and b > 0.0:
+                    r.append(1.0)
+                elif a == 0.0 and b == 0.0:
+                    r.append(0.0)
                 else:
-                    prev_w = prev_row[p]
-                    cur_w = cur
-                    if prev_w == 0:
-                        deltas.at[it, p] = 1.0 if cur_w > 0 else 0.0
-                    else:
-                        deltas.at[it, p] = (cur_w - prev_w) / prev_w
-                        # if p == 'dr_f':
-                        #     print("iter {} - delta {} - cur_w {} - prev_w {}".format(it, deltas.at[it, p], cur_w, prev_w))
-        prev_row = row
+                    r.append((b - a) / a)
+            deltas.append(pd.Series(r, index=piv.columns, name=idx))
+        prev = row
 
-    if out_csv:
-        deltas.to_csv(out_csv)
-
-    # Plot (one figure, default colors, stacked)
-    deltas = deltas[1:]
-    x = np.arange(len(deltas.index))
-    bottom = np.zeros(len(deltas), dtype=float)
-    plt.figure(figsize=(12, 6))
-    ax = plt.gca()
-    for p in deltas.columns:
-        vals = deltas[p].fillna(0.0).values
-        ax.bar(x, vals, bottom=bottom, label=str(p))
-        bottom = bottom + vals
-    ax.set_xticks(x)
+    delta_df = pd.DataFrame(deltas)
+    delta_df.to_csv(out_csv, index=True)
     try:
-        ax.set_xticklabels([int(v) for v in deltas.index], rotation=0)
-    except Exception:
-        ax.set_xticklabels(list(deltas.index), rotation=0)
-    ax.set_xlabel("Iteration")
-    ax.set_ylabel("Fractional Δ of width (1 = +100%)")
-    ax.set_title("Stacked fractional change of search-space dimensions per iteration")
-    ax.legend(loc="best", ncols=2)
-    plt.tight_layout()
-    plt.savefig(out_png, dpi=200, bbox_inches="tight")
-    plt.close()
-    return out_png
+        delta_df.to_excel(out_xlsx, index=True)
+    except Exception as e:
+        logging.warning("Excel write failed for %s: %s", out_xlsx, e)
+    return delta_df
 
-# ---------------------------
-# Data structures
-# ---------------------------
-
+# ------------------------------------------------------------------------------
+# Parser algorithm_logs
+# ------------------------------------------------------------------------------
 @dataclass
-class ExperimentInfo:
-    """Container for experiment-level metadata and best metrics."""
-    name: str
-    tuner: Optional[str] = None
-    dataset_name: str = ""
-    max_net_eval: float = np.nan
-    epochs_for_training: float = np.nan
-    seed: float = np.nan
-    total_time_s: float = 86400000  # default to 1 day if absent
-    modules_flags: Dict[str, bool] = field(default_factory=dict)
-    best_iteration: Optional[int] = None
-    eval_count: int = 0
-    # Best numeric metrics (e.g., accuracy, flops, ...)
-    best_metrics: Dict[str, float] = field(default_factory=dict)
+class ExperimentRow:
+    Run: str
+    Path: str
+    Tuner: str = ""
+    Dataset: str = ""  # valorizzala se la ricavi dal nome / struttura
+    Acc_Best: float = math.nan
+    Acc_Last: float = math.nan
+    Acc_Mean: float = math.nan
+    Extra: Dict[str, float] = field(default_factory=dict)
 
+    def to_series(self) -> pd.Series:
+        base = asdict(self)
+        extra = base.pop("Extra", {})
+        base.update(extra)
+        return pd.Series(base)
 
-# ---------------------------
-# Parsing utils
-# ---------------------------
-
-def extract_tuner(exp_name: str) -> Optional[str]:
-    """
-    Heuristically infer the tuner name from the experiment folder string.
-    Expand this list if you add more tuners.
-    """
-    tuner_names = ["filtered", "basic", "standard", "RS_ruled", "RS"]
-    for t in tuner_names:
-        if t in exp_name:
-            return t
-    # Additional heuristic: look for tokens after position 6 like original code
-    parts = exp_name.split("_")
-    if len(parts) > 7:
-        cand = parts[6]
-        if parts[7] == "ruled":
-            cand += "_ruled"
-        return cand
-    return None
-
-
-def parse_modules_list(raw: Optional[str], all_modules: Iterable[str]) -> Dict[str, bool]:
-    """
-    Robustly detect which modules are present, even if the meta line is malformed.
-    """
-    flags = {m: False for m in all_modules}
-    if not raw:
-        return flags
-    # Lower both sides and do substring inclusion
-    raw_low = raw.lower()
-    for m in all_modules:
-        flags[m] = m.lower() in raw_low
-    return flags
-
-
-def parse_experiment_meta(log_text: str, all_modules: Iterable[str]) -> Tuple[str, Dict[str, float | str], Dict[str, bool]]:
-    """
-    Extract metadata fields from a full log text using precompiled regexes.
-    Returns (dataset_name, numeric_fields, modules_flags).
-    """
-    dataset = _META_PATTERNS["dataset"].search(log_text)
-    max_eval = _META_PATTERNS["max_eval"].search(log_text)
-    epochs = _META_PATTERNS["epochs"].search(log_text)
-    modules = _META_PATTERNS["modules"].search(log_text)
-    seed = _META_PATTERNS["seed"].search(log_text)
-    total_time = _META_PATTERNS["total_time"].search(log_text)
-
-    numeric_fields: Dict[str, float | str] = {
-        "Max Net Eval": float(max_eval.group(1)) if max_eval else np.nan,
-        "Epochs for Training": float(epochs.group(1)) if epochs else np.nan,
-        "seed": float(seed.group(1)) if seed else np.nan,
-        "Total Time (s)": float(total_time.group(1)) if total_time else 86400.0,
-    }
-    modules_flags = parse_modules_list(modules.group(1).strip() if modules else "", all_modules)
-    dataset_name = dataset.group(1).strip() if dataset else ""
-    return dataset_name, numeric_fields, modules_flags
-
-
-# ---------------------------
-# Metrics extraction from .out
-# ---------------------------
-
-def extract_metrics_from_out(file_path: Path) -> pd.DataFrame:
-    """
-    Parse a single `.out` file and return a DataFrame of metric rows.
-    A row is finalized when we see an iteration boundary (a new "ITERATION" line).
-    """
-    rows: List[Dict[str, float | int | None]] = []
-    current = {k: None for k in _METRIC_PATTERNS.keys()}
-
-    try:
-        with file_path.open("r", encoding="utf-8", errors="ignore") as fh:
-            for line in fh:
-                # Accumulate known metrics from the current line
-                if _METRIC_PATTERNS["iteration"].search(line):
-                    # Only append if we have iteration and at least one other metric (e.g., score)
-                    if current["iteration"] is None:
-                        current["iteration"] = 0
-
-                    if current["accuracy"] is None:
-                        current["accuracy"] = 0
-                    rows.append(current.copy())
-                    # Start a fresh row for the next iteration block
-                    current = {k: None for k in _METRIC_PATTERNS.keys()}
-                for key, pat in _METRIC_PATTERNS.items():
-                    m = pat.search(line)
-                    if m:
-                        if key == "iteration":
-                            current[key] = int(m.group(1))
-                        else:
-                            current[key] = float(m.group(1))
-                # Use the *appearance* of ITERATION as a boundary to finalize a row
-
-    except FileNotFoundError:
-        logging.warning("File not found: %s", file_path)
-        return pd.DataFrame()
-    except Exception as e:
-        logging.exception("Failed to parse %s: %s", file_path, e)
-        return pd.DataFrame()
-
-    df = pd.DataFrame(rows)
-    # Drop rows with no iteration number (shouldn't happen, but be safe)
-    if "iteration" in df.columns:
-        df = df.dropna(subset=["iteration"]).reset_index(drop=True)
-        # Ensure dtypes are correct
-        df["iteration"] = df["iteration"].astype(int)
-    return df
-
-
-def process_out_files_in_dir(exp_dir: Path) -> Optional[Path]:
-    """
-    Walk an experiment directory and parse *all* `.out` files found.
-    Concatenate their metric rows and write to `<exp_dir>/results.csv`.
-    Returns the path to the CSV, or None if nothing was written.
-    """
-    all_rows: List[pd.DataFrame] = []
-    for path in exp_dir.rglob("*.out"):
-        logging.info("Parsing: %s", path.name)
-        df = extract_metrics_from_out(path)
-        if not df.empty:
-            all_rows.append(df)
-
-    if not all_rows:
-        logging.warning("No .out metrics found under: %s", exp_dir)
-        return None
-
-    results = pd.concat(all_rows, ignore_index=True).sort_values("iteration").reset_index(drop=True)
-    csv_path = exp_dir / "results.csv"
-    results.to_csv(csv_path, index=False)
-    plt.figure(figsize=(24, 8))
-    x = results["iteration"]
-    y1 = results["score"]
-    plt.plot(x, y1, label="Total Score")
-    plt.savefig("{}/objective_funct.png".format(exp_dir))
-    plt.close()
-    logging.info("Wrote metrics CSV: %s", csv_path)
-    return csv_path
-
-
-# ---------------------------
-# Log file management
-# ---------------------------
-
-def copy_log_to_output(log_src: Path, exp_dir: Path) -> Optional[Path]:
-    """
-    Copy a representative log (e.g., the largest .out or an explicit file)
-    to `<exp_dir>/output/output.log` for easy inspection.
-    Returns destination path or None if operation failed.
-    """
-    dest_dir = exp_dir / "output"
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    dest = dest_dir / "output.log"
-
-    try:
-        shutil.copy2(log_src, dest)
-        logging.info("Copied log: %s -> %s", log_src, dest)
-        return dest
-    except Exception as e:
-        logging.warning("Failed to copy %s to %s: %s", log_src, dest, e)
-        return None
-
-
-def pick_representative_log(exp_dir: Path) -> Optional[Path]:
-    """
-    Choose a representative log to copy:
-    - Prefer 'output.log' if it already exists.
-    - Else pick the largest `.out` file (often the most complete).
-    """
-    explicit = exp_dir / "output.log"
-    if explicit.is_file():
-        return explicit
-
-    outs = list(exp_dir.rglob("*.out"))
-    if not outs:
-        return None
-    # Pick the largest by size
-    outs.sort(key=lambda p: p.stat().st_size if p.exists() else 0, reverse=True)
-    return outs[0]
-
-
-# ---------------------------
-# Experiment scanning
-# ---------------------------
-
-def should_select_experiment_dir(dir_name: str, prefix: str) -> bool:
-    """Return True if the folder should be considered an experiment."""
-    return dir_name.startswith(prefix)
-
-
-def summarize_experiment(exp_dir: Path, all_modules: Iterable[str]) -> Optional[ExperimentInfo]:
-    """
-    Create an ExperimentInfo from <exp_dir>:
-    - Ensure metrics CSV exists (process .out files as needed)
-    - Copy representative log to output/output.log
-    - Parse metadata and best metrics
-    """
-    exp_name = exp_dir.name
-    logging.info("Processing experiment: %s", exp_name)
-
-    # 1) Ensure results.csv exists (aggregate from .out files)
-    results_csv = exp_dir / "results.csv"
-    # if not results_csv.is_file():
-    results_csv = process_out_files_in_dir(exp_dir)  # may be None
-
-    # 2) Ensure we have a representative log saved at output/output.log
-    rep_log = pick_representative_log(exp_dir)
-    output_log = None
-    if rep_log:
-        output_log = copy_log_to_output(rep_log, exp_dir)
-
-    # If both are missing, there's nothing to summarize
-    if not results_csv or not results_csv.is_file():
-        logging.warning("Missing results.csv for %s; skipping.", exp_name)
-        return None
-
-    # 3) Initialize experiment info
-    info = ExperimentInfo(name=exp_name)
-    info.tuner = extract_tuner(exp_name)
-
-    # 4) Parse log metadata if we have a log
-    if output_log and output_log.is_file():
-        # Build per-iteration search space evolution CSV
+def parse_acc_report(path: Path) -> Tuple[float, float, float]:
+    if not path.exists():
+        return (math.nan, math.nan, math.nan)
+    vals: List[float] = []
+    for ln in path.read_text().splitlines():
+        ln = ln.strip()
+        if not ln:
+            continue
         try:
-            write_search_space_evolution(exp_dir, output_log)
-        except Exception as e:
-            logging.warning("Failed to write search space evolution for %s: %s", exp_name, e)
-        csv_evo = exp_dir / "search_space_evolution.csv"
-        if csv_evo.exists():
-            try:
-                build_stacked_fractional_change_plot(
-                    csv_path=csv_evo,
-                    out_png=exp_dir / "search_space_pct_changes.png",
-                    out_csv=exp_dir / "search_space_pct_changes.csv"
+            vals.append(float(ln))
+        except ValueError:
+            pass
+    if not vals:
+        return (math.nan, math.nan, math.nan)
+    return max(vals)
+
+def parse_module_report(module_name: str, path: Path) -> Dict[str, float]:
+    """
+    <module>_report.txt: N numeri separati da ',' per riga.
+    Costruisce colonne: <module>_col{i}_{last,mean,best} per i=1..N
+    """
+    out: Dict[str, float] = {}
+    if not path.exists():
+        return out
+    rows: List[List[float]] = []
+    for ln in path.read_text().splitlines():
+        if not ln.strip():
+            continue
+        vals = _parse_csv_numbers_line(ln)
+        if vals:
+            rows.append(vals)
+    if not rows:
+        return out
+    width = max(len(r) for r in rows)
+    # pad con NaN per righe corte
+    for r in rows:
+        if len(r) < width:
+            r += [math.nan] * (width - len(r))
+    cols = list(zip(*rows))  # col 0..width-1
+    for i, col in enumerate(cols, start=1):
+        s = pd.to_numeric(pd.Series(col, dtype=float), errors="coerce")
+        s_no_nan = s.dropna()
+        last = float(s_no_nan.iloc[-1]) if not s_no_nan.empty else math.nan
+        out[f"{module_name}_col{i}_last"] = last
+        out[f"{module_name}_col{i}_mean"] = float(s.mean())
+        out[f"{module_name}_col{i}_best"] = float(s.max())
+    return out
+
+def summarize_experiment(exp_dir: Path) -> ExperimentRow:
+    row = ExperimentRow(Run=exp_dir.name, Path=str(exp_dir))
+    row.Tuner = _extract_tuner(exp_dir.name) or ""
+    row.Dataset = _extract_dataset(exp_dir.name) or ""
+
+    # --- algorithm_logs
+    aldir = exp_dir / "algorithm_logs"
+    if not aldir.exists():
+        logging.warning("Missing algorithm_logs in %s", exp_dir)
+        return row
+
+    # acc_report
+    best = parse_acc_report(aldir / "acc_report.txt")
+    row.Acc_Best = best
+
+    # altri moduli: *_report.txt (tranne acc_report.txt)
+    for p in sorted(aldir.glob("*_report.txt")):
+        if p.name == "acc_report.txt":
+            continue
+        if not p.stem.endswith("_report"):
+            continue
+        module = p.stem[:-len("_report")]
+        row.Extra.update(parse_module_report(module, p))
+
+    # --- Search space dallo .out
+    out_file = _find_out_file(exp_dir)
+    if out_file:
+        try:
+            evo_csv = write_search_space_evolution_from_out(exp_dir, out_file)
+            if evo_csv:
+                build_fractional_changes(
+                    csv_path=evo_csv,
+                    out_csv=exp_dir / "search_space_pct_changes.csv",
+                    out_xlsx=exp_dir / "search_space_pct_changes.xlsx",
                 )
-            except Exception as e:
-                logging.warning("Unable to plot stacked %% changes for %s: %s", exp_dir.name, e)
-        try:
-            text = output_log.read_text(encoding="utf-8", errors="ignore")
-            dataset_name, numeric_fields, modules_flags = parse_experiment_meta(text, all_modules)
-            info.dataset_name = dataset_name
-            info.max_net_eval = numeric_fields["Max Net Eval"]
-            info.epochs_for_training = numeric_fields["Epochs for Training"]
-            info.seed = numeric_fields["seed"]
-            info.total_time_s = numeric_fields["Total Time (s)"]
-            info.modules_flags = modules_flags
         except Exception as e:
-            logging.warning("Failed to parse metadata for %s: %s", exp_name, e)
+            logging.warning("Search space parsing failed for %s: %s", exp_dir.name, e)
 
-    # 5) Load results and compute best metrics
-    try:
-        df = pd.read_csv(results_csv)
-        if df.empty:
-            logging.warning("Empty results for %s; skipping.", exp_name)
-            return None
+    return row
 
-        # Ensure we have numeric columns identified
-        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-
-        # Best iteration by highest score (if available)
-        if "score" in df.columns and not df["score"].dropna().empty:
-            best_idx = int(df["score"].idxmin())
-            info.best_iteration = int(df.loc[best_idx, "iteration"]) if "iteration" in df.columns else None
-            idx_acc = int(df["accuracy"].idxmin())
-        else:
-            info.best_iteration = None
-
-        # For each numeric column, select the max (typical for accuracy/score).
-        # If you need min for "latency" or "total_cost", adjust as needed.
-        for col in numeric_cols:
-            if col == "iteration":
-                continue
-            series = df[col].dropna()
-            if col in ["latency", "total_cost", "flops", "score"]:
-                info.best_metrics[f"Best {col}"] = float(series.min()) if not series.empty else np.nan
-                info.best_metrics[f"{col} @ best acc"] = float(df.at[idx_acc, col]) if not series.empty else np.nan
-            else:
-                info.best_metrics[f"Best {col}"] = float(series.max()) if not series.empty else np.nan
-                
-
-        info.eval_count = int(len(df))
-    except pd.errors.EmptyDataError:
-        logging.warning("Empty CSV for %s; skipping.", exp_name)
-        return None
-    except Exception as e:
-        logging.exception("Failed summarizing results for %s: %s", exp_name, e)
-        return None
-
-    return info
-
-
-# ---------------------------
-# Main pipeline
-# ---------------------------
-
-def run(
-    base_dir: Path,
-    exp_prefix: str = "25_",
-    all_modules: Optional[List[str]] = None,
-    output_csv: Path = Path("total_results.csv"),
-) -> Path:
-    """
-    Walk the base directory, summarize each experiment, and write a global CSV.
-    """
-    if all_modules is None:
-        all_modules = ["flops_module", "hardware_module"]
-
-    exp_infos: List[ExperimentInfo] = []
-
-    # Only consider immediate children of base_dir (as in original code),
-    # but you can switch to rglob if you want deeper scanning.
+# ------------------------------------------------------------------------------
+# Aggregazioni / salvataggi
+# ------------------------------------------------------------------------------
+def build_total_results(base_dir: Path, exp_prefix: str, out_csv: Path, out_xlsx: Path, train_best: bool) -> pd.DataFrame:
+    rows: List[pd.Series] = []
     for child in sorted(base_dir.iterdir()):
         if not child.is_dir():
             continue
-        if not should_select_experiment_dir(child.name, exp_prefix):
+        if not child.name.startswith(exp_prefix):
             continue
+        logging.info("Scanning %s", child.name)
+        try:
+            s = summarize_experiment(child).to_series()
+            s = s.drop("Path")
+            if train_best:
+            # allena il best per ogni esperimento scoperto
+                aldir = child / "algorithm_logs"
+                dataset_name = _extract_dataset(child.name) or "cifar10"  # fallback
+                acc_test, loss_test = train_best_model_if_required(child, dataset_name, aldir)
+                s["Acc_Test_Finetuned"] = acc_test
+                s["Loss_Test_Finetuned"] = loss_test
+            rows.append(s)
+        except Exception as e:
+            logging.exception("Failed on %s: %s", child, e)
 
-        logging.info("Selected experiment folder: %s", child.name)
-        info = summarize_experiment(child, all_modules)
-        if info:
-            exp_infos.append(info)
-
-    if not exp_infos:
-        logging.warning("No experiments summarized. Nothing to write.")
-        # Still create an empty CSV for consistency
-        pd.DataFrame().to_csv(output_csv, index=False)
-        pd.DataFrame().to_excel(output_csv.with_suffix('.xlsx'), index=False)
-        return output_csv
-
-    # Convert to a flat DataFrame
-    rows: List[Dict[str, object]] = []
-    for info in exp_infos:
-        base_row: Dict[str, object] = {
-            "Experiment Name": info.name,
-            "Tuner": info.tuner or "",
-            "Dataset Name": info.dataset_name,
-            "Max Net Eval": info.max_net_eval,
-            "Epochs for Training": info.epochs_for_training,
-            "seed": info.seed,
-            "Total Time (s)": info.total_time_s,
-            "Best Iteration": info.best_iteration if info.best_iteration is not None else np.nan,
-            "Eval": info.eval_count,
-        }
-        # Module flags
-        for m in (all_modules or []):
-            base_row[m] = bool(info.modules_flags.get(m, False))
-        # Best metrics
-        base_row.update(info.best_metrics)
-        rows.append(base_row)
-
-    df_total = pd.DataFrame(rows)
-    df_total.to_csv(output_csv, index=False)
-    df_total.to_excel(output_csv.with_suffix('.xlsx'), index=False)
-    logging.info("Wrote summary CSV: %s", output_csv)
-    return output_csv
-
-
-# ---------------------------
-# CLI
-# ---------------------------
-
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Collect and summarize metrics from experiment .out logs."
-    )
-    parser.add_argument(
-        "--base-dir",
-        type=Path,
-        default=Path("./"),
-        help="Folder that contains experiment subfolders.",
-    )
-    parser.add_argument(
-        "--exp-prefix",
-        type=str,
-        default="25_",
-        help="Only process experiment folders whose names start with this prefix.",
-    )
-    parser.add_argument(
-        "--output-csv",
-        type=Path,
-        default=Path("total_results.csv"),
-        help="Path to write the global summary CSV.",
-    )
-    parser.add_argument(
-        "--modules",
-        type=str,
-        nargs="*",
-        default=["accuracy_module", "flops_module", "hardware_module"],
-        help="Module names to detect in the logs.",
-    )
-    parser.add_argument(
-        "-v",
-        "--verbose",
-        action="count",
-        default=0,
-        help="Increase verbosity (-v for INFO, -vv for DEBUG).",
-    )
-    parser.add_argument(
-        "--only-metrics",
-        type=bool,
-        default=False,
-        action=argparse.BooleanOptionalAction,
-        help="Only print mean best metrics by tuner from total_results.csv and exit.",
-    )
-    return parser.parse_args()
-
-
-def summarize_by_tuner_dataset_modules(
-    csv_path: str | Path,
-    out_csv: Optional[Path] = None
-) -> pd.DataFrame:
-    """
-    Reads a CSV of results, groups by (Dataset, Tuner, Modules), and computes
-    the mean and standard deviation for all columns starting with 'Best'
-    and for 'Total Time (s)' (converted to hours).
-
-    Rules:
-    - "Modules" are all columns whose name ends with '_module'.
-      The 'Modules' column is built by concatenating (with '+') the names of
-      the active modules in each row (e.g., 'flops+aug'); if no module is active -> 'none'.
-    - Requires the columns 'Tuner' and 'Dataset'.
-    - If 'Total Time (s)' is present, it is converted to 'Total Time (h)', and
-      values >= 24h are filtered out (as in the original code).
-
-    Parameters
-    ----------
-    csv_path : str | Path
-        Path to the CSV file (e.g., 'total_results.csv').
-    out_csv : Optional[Path]
-        If provided, saves a CSV (and an XLSX with the same name) of the result.
-
-    Returns
-    -------
-    pd.DataFrame
-        DataFrame indexed by (Dataset, Tuner, Modules) with *_mean and *_std columns.
-    """
-    df = pd.read_csv(csv_path)
-
-    # Basic checks
-    for required in ("Tuner", "Dataset Name"):
-        if required not in df.columns:
-            raise ValueError(f"Column '{required}' is missing in the CSV.")
-
-    # Identify metrics and time
-    best_cols: List[str] = [c for c in df.columns if c.lower().startswith("best")]
-    time_col = "Total Time (s)" if "Total Time (s)" in df.columns else None
-
-    if not best_cols and not time_col:
-        raise ValueError("No 'Best*' or 'Total Time (s)' column found in the CSV.")
-
-    # Identify generic *_module columns (bool/int)
-    module_cols = [c for c in df.columns if c.endswith("_module")]
-
-    # Prepare working DataFrame
-    work = df[["Dataset Name", "Tuner"]].copy()
-
-    # Numeric metrics (Best*)
-    for c in best_cols:
-        work[c] = pd.to_numeric(df[c], errors="coerce")
-
-    # Time in hours + filtering as in the original code
-    if time_col:
-        work["Total Time (h)"] = pd.to_numeric(df[time_col], errors="coerce") / 3600.0
-        work = work[work["Total Time (h)"] <= 24.0]
-
-    # Build the 'Modules' label
-    if module_cols:
-        # Coerce to boolean/truthy
-        modules_bool = df[module_cols].apply(lambda s: pd.to_numeric(s, errors="coerce").fillna(0).astype(int))
-        names = [c.replace("_module", "") for c in module_cols]
-
-        def _modules_label(row_vals: pd.Series) -> str:
-            active = [name for name, v in zip(names, row_vals) if v]
-            return "+".join(sorted(active)) if active else "none"
-
-        work["Modules"] = modules_bool.apply(_modules_label, axis=1)
+    if not rows:
+        df = pd.DataFrame(columns=["Run", "Path", "Tuner", "Dataset", "Acc_Best", "Acc_Last", "Acc_Mean"])
     else:
-        work["Modules"] = "none"
+        df = pd.DataFrame(rows).fillna(value=pd.NA)
 
-    # Columns to aggregate
-    metrics = best_cols.copy()
-    if "Total Time (h)" in work.columns:
-        metrics.append("Total Time (h)")
-    if not metrics:
-        raise ValueError("No valid numeric metrics after data cleaning.")
+    # Salva CSV + Excel
+    df.to_csv(out_csv, index=False)
+    try:
+        df.to_excel(out_xlsx, index=False)
+    except Exception as e:
+        logging.warning("Excel write failed for %s: %s", out_xlsx, e)
 
-    # Group by Dataset, Tuner, Modules
-    group_keys = ["Dataset Name", "Tuner", "Modules"]
-    grouped = work.groupby(group_keys, dropna=False)
-    print(f"🔍 Grouping by {group_keys}, {len(grouped)} groups found.")
-    print(grouped)
-    # Compute mean/std all at once
-    agg = grouped[metrics].agg(["mean", "std"])
+    return df
 
-    # Flatten columns to format "<metric>_mean" and "<metric>_std"
-    agg.columns = [f"{m}_{stat}" for (m, stat) in agg.columns]
-    agg = agg.sort_index()
+def build_mean_results(total_df: pd.DataFrame, out_csv: Path, out_xlsx: Path) -> pd.DataFrame:
+    df = total_df.copy()
 
-    # Optional saving
-    if out_csv:
-        out_csv = Path(out_csv)
-        agg.to_csv(out_csv, index=True)
-        agg.to_excel(out_csv.with_suffix(".xlsx"), index=True)
-        print(f"📁 Saved: {out_csv} and {out_csv.with_suffix('.xlsx')}")
+    # (Opzionale) costruisci 'Modules' se in futuro tornano colonne *_module
+    if "Modules" not in df.columns:
+        df["Modules"] = "none"
 
-    return agg
+    group_keys = ["Tuner", "Dataset", "Modules"]
+    for k in group_keys:
+        if k not in df.columns:
+            df[k] = "unknown"
 
-def main() -> None:
-    args = parse_args()
-    setup_logging(args.verbose)
-    logging.info("Base dir: %s", args.base_dir)
-    if not args.only_metrics:
-        run(
-            base_dir=args.base_dir,
-            exp_prefix=args.exp_prefix,
-            all_modules=args.modules,
-            output_csv=args.output_csv,
-        )
-        print("✅ Created:", args.output_csv)
-    summarize_by_tuner_dataset_modules("total_results.csv", Path("mean_results.csv"))
+    # metriche numeriche
+    num_cols = [c for c in df.columns if pd.api.types.is_numeric_dtype(df[c])]
+    if not num_cols:
+        # crea un placeholder per evitare errori
+        num_cols = ["Acc_Best", "Acc_Last", "Acc_Mean"]
+        for c in num_cols:
+            if c not in df.columns:
+                df[c] = pd.NA
 
+    grouped = df.groupby(group_keys, dropna=False)
+    agg_mean = grouped[num_cols].mean()
+    agg_std  = grouped[num_cols].std(ddof=0)
+
+    # combiniamo mean/std in una sola tabella con colonne "metric_mean" e "metric_std"
+    out = agg_mean.copy()
+    out.columns = [f"{c}_mean" for c in out.columns]
+    std_ren = agg_std.copy()
+    std_ren.columns = [f"{c}_std" for c in std_ren.columns]
+    out = out.join(std_ren, how="outer")
+
+    out = out.reset_index().sort_values(group_keys)
+
+    # Salva CSV + Excel
+    out.to_csv(out_csv, index=False)
+    try:
+        out.to_excel(out_xlsx, index=False)
+    except Exception as e:
+        logging.warning("Excel write failed for %s: %s", out_xlsx, e)
+
+    return out
+
+# ------------------------------------------------------------------------------
+# CLI
+# ------------------------------------------------------------------------------
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--base-dir", type=Path, default="./", help="Directory con esperimenti (25_*)")
+    ap.add_argument("--exp-prefix", type=str, default="25_", help="Prefisso cartelle esperimento")
+    ap.add_argument("--total-csv", type=Path, default=Path("total_results.csv"))
+    ap.add_argument("--mean-csv", type=Path, default=Path("mean_results.csv"))
+    ap.add_argument("--train-best", action="store_true", help="Se impostato, carica Model/best-model.keras e lo allena con optimizer/reg ottenuti dai log")
+    args, _ = ap.parse_known_args()
+    # impedisci ad altri parse_args() di vedere i tuoi flag
+    import sys
+    sys.argv = [sys.argv[0]]
+
+    total_xlsx = args.total_csv.with_suffix(".xlsx")
+    mean_xlsx  = args.mean_csv.with_suffix(".xlsx")
+
+
+    # 1) total_results
+    total_df = build_total_results(args.base_dir, args.exp_prefix, args.total_csv, total_xlsx, args.train_best)
+    print(f"✅ Created: {args.total_csv} and {total_xlsx}")
+
+    # 2) mean_results
+    mean_df = build_mean_results(total_df, args.mean_csv, mean_xlsx)
+    print(f"✅ Created: {args.mean_csv} and {mean_xlsx}")
 
 if __name__ == "__main__":
     main()

@@ -7,7 +7,7 @@ from problog.learning import lfi
 import os
 from typing import Any, Iterable, List, Sequence, Tuple
 
-import config as cfg
+import myconfig as cfg
 
 
 class LfiIntegration:

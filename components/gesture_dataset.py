@@ -10,7 +10,7 @@ import tonic
 import tonic.transforms as transforms
 from sklearn.model_selection import train_test_split  # kept for compatibility if needed elsewhere
 
-import config as cfg
+import myconfig as cfg
 
 
 # ------------------------------- Targets -------------------------------------
