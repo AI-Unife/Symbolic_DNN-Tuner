@@ -88,7 +88,7 @@ class controller:
         self.weight: float = 0.6
 
         # Action flags (reset each training call)
-        self.da: Optional[bool] = True
+        self.da: Optional[bool] = None
         self.reg: Optional[bool] = None
         self.residual: Optional[bool] = None
 
@@ -242,6 +242,10 @@ class controller:
         K.clear_session()
 
         # Build and train model
+        print("Action flags for this training: ")
+        print(f"  Data Augmentation: {self.da}")
+        print(f"  L2 Regularization: {self.reg}")
+        print(f"  Residual Connections: {self.residual}")
         self.nn = neural_network(self.X_train, self.Y_train, self.X_test, self.Y_test, self.n_classes, self.reg, self.da, self.residual)
         self.nn.build_network(params, self.layer_x_block)
         if self.nn.flops is None or self.nn.flops <= self.flops_th:
@@ -285,7 +289,7 @@ class controller:
                 logger.warning("Failed to save best model: %s", e)
 
         # if we have no improv in 10 iter end tuner evaluations
-        if self.iter > self.best_iter + 20:
+        if self.iter > self.best_iter + 50:
             self.convergence = True
 
         return self.score

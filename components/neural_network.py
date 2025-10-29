@@ -393,11 +393,11 @@ class neural_network:
         opt = LayerWiseLR(base_opt, multiplier, learning_rate=float(params["learning_rate"]))
 
         # --- Callbacks ---
-        es1 = EarlyStopping(monitor="val_loss", min_delta=0.005, patience=30, verbose=1,
+        es1 = EarlyStopping(monitor="val_loss", min_delta=0.005, patience=10, verbose=1,
                             mode="min", restore_best_weights=True)
-        es2 = EarlyStopping(monitor="val_accuracy", min_delta=0.005, patience=30, verbose=1,
+        es2 = EarlyStopping(monitor="val_accuracy", min_delta=0.005, patience=10, verbose=1,
                             mode="max", restore_best_weights=True)
-        reduce_lr = ReduceLROnPlateau(monitor="val_loss", factor=0.2, patience=50,
+        reduce_lr = ReduceLROnPlateau(monitor="val_loss", factor=0.2, patience=30,
                                       verbose=1, min_lr=1e-4)
         # gm = GradientMonitor()
         # --- Optional data augmentation ---

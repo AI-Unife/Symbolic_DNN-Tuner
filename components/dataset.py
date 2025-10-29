@@ -11,8 +11,8 @@ import tensorflow as tf
 from tensorflow.keras.datasets import cifar10, cifar100
 
 from .DownsampledImageNet import load_imagenet16
-from .gesture_dataset import gesture_data
-import myconfig as cfg
+# from .gesture_dataset import gesture_data
+# import myconfig as cfg
 
 Dataset2Class = {
     "cifar10": 10,
@@ -36,8 +36,8 @@ def get_datasets(name):
 
     if name == "cifar10":
         (x_train, y_train), (x_test, y_test) = cifar10.load_data()
-        if cfg.NAME_EXP == "test":
-            (x_train, y_train) = (x_test, y_test)
+        # if cfg.NAME_EXP == "test":
+        #     (x_train, y_train) = (x_test, y_test)
         # Convert class vectors to binary class matrices.
         y_train = tf.keras.utils.to_categorical(y_train, num_classes)
         y_test = tf.keras.utils.to_categorical(y_test, num_classes)
@@ -49,11 +49,11 @@ def get_datasets(name):
         y_train = tf.keras.utils.to_categorical(y_train, num_classes)
         y_test = tf.keras.utils.to_categorical(y_test, num_classes)
 
-    elif name == "gesture":
-        x_train, y_train, x_test, y_test = gesture_data(num_classes, ROI=False)
+    # elif name == "gesture":
+    #     x_train, y_train, x_test, y_test = gesture_data(num_classes, ROI=False)
 
-    elif name == "roigesture":
-        x_train, y_train, x_test, y_test = gesture_data(num_classes, ROI=True)
+    # elif name == "roigesture":
+    #     x_train, y_train, x_test, y_test = gesture_data(num_classes, ROI=True)
     elif name == "imagenet16":
         x_train, y_train, x_test, y_test = load_imagenet16(root)
         y_train = tf.keras.utils.to_categorical(y_train, num_classes)
