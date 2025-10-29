@@ -134,7 +134,7 @@ class tuning_rules_symbolic:
         if not self.controller.max_conv:
             return
 
-        tot_conv = self.controller.start_conv + self.controller.count_new_cv * 2
+        tot_conv = self.controller.count_new_cv
         if tot_conv > self.controller.max_conv:
             print(colors.FAIL, "Max number of convolutional layers reached", colors.ENDC)
             print(

@@ -297,25 +297,31 @@ class NeuralSymbolicBridge:
                 else:
                     res[prob]["remove_reg_l2"] = 0
                 if controller.residual:
-                    res[prob]["residual"] = 0
+                    res[prob]["add_residual"] = 0
                 else:
-                    res[prob]["no_residual"] = 0
+                    res[prob]["remove_residual"] = 0
                 if controller.da:
                     res[prob]["data_augmentation"] = 0
                 # apply architectural constraints
-                tot_conv = controller.start_conv + controller.count_new_cv * 2
+                tot_conv = controller.count_new_cv
                 if tot_conv > controller.max_conv:
                     res[prob]["new_conv_block"] = 0
+                    print("Reached max conv blocks")
                 if controller.count_new_cv <= 0:
                     res[prob]["dec_conv_block"] = 0
+                    print("Reached min conv blocks")
                 if controller.layer_x_block > controller.max_layer_x_block:
                     res[prob]["inc_conv_layer"] = 0
+                    print("Reached max layers per block")
                 if controller.layer_x_block < 2:
                     res[prob]["dec_conv_layer"] = 0
+                    print("Reached min layers per block")
                 if controller.count_new_fc + controller.start_fc > controller.max_fc:
                     res[prob]["new_fc_layer"] = 0
+                    print("Reached max fc layers")
                 if controller.count_new_fc <= 0:
                     res[prob]["dec_fc_layer"] = 0
+                    print("Reached min fc layers")
 
                 # get all actions with the maximum value
                 vals = res[prob]

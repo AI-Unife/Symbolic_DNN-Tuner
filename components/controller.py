@@ -123,8 +123,8 @@ class controller:
         self.count_new_fc = 0
         self.count_new_cv = 0
         self.max_fc = 3
-        self.max_conv = self.count_max_conv()
         self.start_conv, self.start_fc = self.ss.count_initial_layers(self.space)
+        self.max_conv = self.count_max_conv(base_blocks=self.start_conv)
         self.count_no_probs = 0
         self.layer_x_block = 2
         self.max_layer_x_block = 6
@@ -145,51 +145,58 @@ class controller:
 
     # ----------------------------- Utilities ---------------------------------
 
-    def count_max_conv(self) -> int:
+    def count_max_conv(self, base_blocks: int = 2) -> int:
         """
-        Heuristic upper bound for how many conv+pool blocks fit given the input size.
+        Compute how many additional (Conv... -> MaxPool(2x2)) blocks can fit
+        given the current input spatial size.
 
-        The estimate assumes a pattern:
-            Conv2D(kernel=3x3, stride=1, valid padding) -> MaxPool2D(2x2)
-        and stops before spatial dims drop below 3x3.
+        Assumptions (matching `build_network`):
+        - Convs use `padding="same"` → do NOT change H/W.
+        - Each conv block ends with MaxPooling2D(2,2) → halves H and W.
+        - After all conv stacks you use GlobalAveragePooling2D → only need H,W >= 1.
+        - We exclude the initial 2 pools (c1 & c2 blocks) via `base_blocks`.
+
+        Args:
+            base_blocks: number of pool operations already used by the fixed stem
+                        (default 2 for the c1 and c2 sections).
 
         Returns:
-            int: Maximum number of stacked (conv+pool) sections that can fit.
+            int: maximum number of *additional* conv+pool blocks that can be appended.
         """
-        # Expecting X_train to be an image-like array with shape [H, W, ...] or [N, H, W, ...].
-        shape = self.X_train
-        if shape is None or not hasattr(shape, "shape"):
-            logger.warning("controller.X_train not found or missing shape; defaulting max_conv to 0")
-            return 0
+        # Extract (H, W) robustly from train_data:
+        # - gesture fwdPass/hybrid: (N, T, H, W, C)  -> H=shape[2], W=shape[3]
+        # - generic images:         (N, H, W, C)     -> H=shape[1], W=shape[2]
+        # - single sample:          (H, W, C)        -> H=shape[0], W=shape[1]
+        td = getattr(self, "train_data", None)
+        if td is None or not hasattr(td, "shape"):
+            # Fallback to controller.X_train if presente nel tuo progetto
+            td = getattr(self, "X_train", None)
+            if td is None or not hasattr(td, "shape"):
+                # ultimo fallback
+                return 0
 
-        # Support either (H, W, C) or (N, H, W, C)
-        dims = shape.shape
-        if len(dims) >= 2 and len(dims) <= 3:
-            h, w = dims[0], dims[1]
-        elif len(dims) >= 4:
-            h, w = dims[1], dims[2]
+        dims = td.shape
+        if len(dims) >= 5:
+            # (N, T, H, W, C)
+            h, w = int(dims[2]), int(dims[3])
+        elif len(dims) == 4:
+            # (N, H, W, C)
+            h, w = int(dims[1]), int(dims[2])
+        elif len(dims) == 3:
+            # (H, W, C)
+            h, w = int(dims[0]), int(dims[1])
         else:
-            logger.warning("Unexpected X_train shape %s; defaulting max_conv to 0", dims)
             return 0
 
-        max_layers = 0
-        while h >= 3 and w >= 3:
-            # After a valid 3x3 conv: size shrinks by 2 each dim
-            h -= 2
-            w -= 2
-            if h < 1 or w < 1:
-                break
+        # Number of MaxPool(2,2) steps possible until min(H,W) would drop below 1:
+        # after k pools: floor(min(h,w) / 2^k) >= 1  ->  k <= floor(log2(min(h,w)))
+        from math import log2, floor
+        min_side = max(1, min(h, w))
+        max_pools_total = floor(log2(min_side))  # e.g., 32→5, 28→4, 3→1, 2→1, 1→0
 
-            # Then a 2x2 maxpool (floor division by 2)
-            h //= 2
-            w //= 2
-
-            if h < 3 or w < 3:
-                break
-
-            max_layers += 1
-
-        return max_layers
+        # Additional blocks available beyond the fixed stem (base_blocks):
+        extra_blocks = max(0, max_pools_total - max(0, int(base_blocks)))
+        return extra_blocks
 
     def smooth(self, scalars: List[float]) -> List[float]:
         """
