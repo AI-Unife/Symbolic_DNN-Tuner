@@ -21,28 +21,8 @@ from components.dataset import get_datasets
 from components.search_space import search_space
 from components.random_search import RandomSearch
 
-import myconfig as cfg
-
-
-# --------------------------- pretty printing ---------------------------------
-
-def print_experiment_config() -> None:
-    """
-    Print a summary of the user-provided configuration.
-    """
-    print(colors.MAGENTA, "|  ----------- USER PARAMS CONFIGURATION ----------  |\n", colors.ENDC)
-    print("EXPERIMENT NAME: ", cfg.NAME_EXP)
-    print("OPTIMIZATION METHOD: ", cfg.OPT, flush=True)
-    print("DATASET NAME: ", cfg.DATA_NAME)
-    print("MAX NET EVAL: ", cfg.MAX_EVAL)
-    print("EPOCHS FOR TRAINING: ", cfg.EPOCHS)
-    print("MODULE LIST: ", cfg.MOD_LIST, flush=True)
-    if "gesture" in cfg.DATA_NAME:
-        print("MODE: ", cfg.MODE, flush=True)
-        print("POLARITY: ", cfg.POLARITY, flush=True)
-        print("CHANNELS: ", cfg.NUM_CHANNELS, flush=True)
-    print("SEED: ", cfg.SEED, flush=True)
-
+from pathlib import Path
+from exp_config import create_config_file, set_active_config, load_cfg
 
 # ------------------------------ filesystem -----------------------------------
 
@@ -55,9 +35,9 @@ def create_experiment_folders() -> None:
         "algorithm_logs", "dashboard/model", "symbolic"
     ]
     try:
-        os.makedirs(cfg.NAME_EXP, exist_ok=True)
+        os.makedirs(cfg.name, exist_ok=True)
         for folder in required_dirs:
-            os.makedirs(f"{cfg.NAME_EXP}/{folder}", exist_ok=True)
+            os.makedirs(f"{cfg.name}/{folder}", exist_ok=True)
     except OSError as e:
         print(colors.FAIL, f"Failed to create folder: {e}", colors.ENDC)
         sys.exit(1)
@@ -68,7 +48,7 @@ def copy_symbolic_files() -> None:
     Copy the base symbolic files into this experiment's symbolic folder.
     """
     src = "./symbolic_base"
-    dst = f"{cfg.NAME_EXP}/symbolic"
+    dst = f"{cfg.name}/symbolic"
     if not os.path.isdir(src):
         print(colors.WARNING, f"Symbolic base folder not found at '{src}'. Skipping copy.", colors.ENDC)
         return
@@ -103,7 +83,7 @@ class ObjectiveWrapper:
         print("Actual search space:")
         print_space(self.search_space)
 
-        log_path = f"{cfg.NAME_EXP}/algorithm_logs/hyper-neural.txt"
+        log_path = f"{cfg.name}/algorithm_logs/hyper-neural.txt"
         try:
             with open(log_path, "a") as f:
                 f.write(str(space_dict) + "\n")
@@ -141,7 +121,7 @@ def apply_constraints(space: Space, params: List) -> bool:
 
     When running RS variants we skip constraints (returns True).
     """
-    if "RS" in cfg.OPT:
+    if "RS" in cfg.opt:
         return True
 
     for i, dim in enumerate(space.dimensions):
@@ -169,17 +149,17 @@ def run_optimization(search_space: Space, controller: controller, max_iter: int)
       - checkpoint after each evaluation.
     """
     all_x, all_y = [], []
-    ckpt_path = f"{cfg.NAME_EXP}/checkpoints/checkpoint.pkl"
+    ckpt_path = f"{cfg.name}/checkpoints/checkpoint.pkl"
     callback = None # CheckpointSaver(ckpt_path, compress=9)
 
     obj_fn = ObjectiveWrapper(search_space, controller)
     no_rules = ["RS", "standard"]
     with_rules = ["filtered", "RS_ruled", "basic"]
-    use_filter = (cfg.OPT == "filtered") 
+    use_filter = (cfg.opt == "filtered")
 
     # Initialize the chosen optimizer for the very first evaluation
-    if "RS" in cfg.OPT:
-        random_search = RandomSearch(random_state=cfg.SEED, total_iter=max_iter)
+    if "RS" in cfg.opt:
+        random_search = RandomSearch(random_state=cfg.seed, total_iter=max_iter)
         res = random_search(obj_fn.objective, search_space,
                             callback=callback
                             )
@@ -188,7 +168,7 @@ def run_optimization(search_space: Space, controller: controller, max_iter: int)
             obj_fn.objective,
             search_space,
             acq_func="EI",
-            random_state=cfg.SEED,
+            random_state=cfg.seed,
             n_calls=1,
             n_random_starts=1,
             callback=callback,
@@ -199,7 +179,7 @@ def run_optimization(search_space: Space, controller: controller, max_iter: int)
     all_y.extend(res.func_vals)
 
     # Decide initial new_space (rule-driven or fixed)
-    new_space = copy.deepcopy(search_space) if cfg.OPT in no_rules else controller.diagnosis()
+    new_space = copy.deepcopy(search_space) if cfg.opt in no_rules else controller.diagnosis()
 
     while controller.iter <= max_iter and not controller.convergence:
         print(colors.MAGENTA, f"--- ITERATION {controller.iter} ---", colors.ENDC)
@@ -217,7 +197,7 @@ def run_optimization(search_space: Space, controller: controller, max_iter: int)
             obj_fn = ObjectiveWrapper(new_space, controller)
 
             try:
-                if "RS" in cfg.OPT:
+                if "RS" in cfg.opt:
                     # Random search: keep drawing one more sample/eval
                     res = random_search(obj_fn.objective, search_space,
                                         callback=callback
@@ -232,12 +212,12 @@ def run_optimization(search_space: Space, controller: controller, max_iter: int)
                         acq_func="EI",
                         n_calls=1,
                         n_random_starts=0,
-                        random_state=cfg.SEED,
+                        random_state=cfg.seed,
                         callback=callback,
                     )
             except Exception as e:
                 print(colors.FAIL, f"Optimization error: {e}", colors.ENDC)
-                if "RS" in cfg.OPT:
+                if "RS" in cfg.opt:
                     res = random_search(obj_fn.objective, search_space,
                                         callback=callback
                                         )
@@ -248,11 +228,11 @@ def run_optimization(search_space: Space, controller: controller, max_iter: int)
                         acq_func="EI",
                         n_calls=1,
                         n_random_starts=1,
-                        random_state=cfg.SEED,
+                        random_state=cfg.seed,
                         callback=callback,
                     )
 
-            if cfg.OPT in with_rules:
+            if cfg.opt in with_rules:
                 # Accumulate unique x's and all y's
                 all_x.extend(x for x in res.x_iters if x not in all_x)
                 all_y.extend(res.func_vals)
@@ -263,7 +243,7 @@ def run_optimization(search_space: Space, controller: controller, max_iter: int)
             print(colors.WARNING, "Search space changed. Restarting BO...", colors.ENDC)
 
             obj_fn = ObjectiveWrapper(search_space, controller)
-            if "RS" in cfg.OPT:
+            if "RS" in cfg.opt:
                 # Reset RS history so it doesn't bias sampling with stale configs
                 random_search.Xi, random_search.Yi = [], []
                 res = random_search(obj_fn.objective, search_space,
@@ -276,18 +256,70 @@ def run_optimization(search_space: Space, controller: controller, max_iter: int)
                     acq_func="EI",
                     n_calls=1,
                     n_random_starts=1,
-                    random_state=cfg.SEED,
+                    random_state=cfg.seed,
                     callback=callback,
                 )
 
-            if cfg.OPT in with_rules:
+            if cfg.opt in with_rules:
                 all_x, all_y = list(res.x_iters), list(res.func_vals)
 
         # Ask controller again: either keep the same space (no_rules) or update by diagnosis (with_rules)
-        new_space = copy.deepcopy(search_space) if cfg.OPT in no_rules else controller.diagnosis()
+        new_space = copy.deepcopy(search_space) if cfg.opt in no_rules else controller.diagnosis()
 
     return res
 
+def parse_args() -> argparse.Namespace:
+    """
+    Parse command-line arguments for the Symbolic DNN Tuner configuration.
+
+    Returns:
+        argparse.Namespace containing all configuration values.
+    """
+    parser = argparse.ArgumentParser(
+        description="Symbolic DNN Tuner Configuration"
+    )
+
+    parser.add_argument("--eval", type=int, default=30,
+                        help="Max number of evaluations")
+    parser.add_argument("--epochs", type=int, default=2,
+                        help="Epochs for training")
+    parser.add_argument(
+        "--mod_list", nargs="+", default=[],
+        help="List of active modules (e.g., hardware_module flops_module)"
+    )
+    parser.add_argument("--dataset", type=str, default="cifar-10",
+                        help="Dataset name")
+    parser.add_argument("--name", type=str, default="debug",
+                        help="Experiment name")
+    parser.add_argument("--frames", type=int, default=16,
+                        help="Number of frames for gesture dataset")
+    parser.add_argument("--mode", type=str, default="fwdPass",
+                        choices=["fwdPass", "depth", "hybrid"],
+                        help="Experiment mode (fwdPass, depth, hybrid)")
+    parser.add_argument("--channels", type=int, default=2,
+                        help="Number of channels for the dataset")
+    parser.add_argument("--polarity", type=str, default="both",
+                        choices=["both", "sum", "sub", "drop"],
+                        help="Polarity for event-based datasets")
+    parser.add_argument("--seed", type=int, default=42,
+                        help="Random seed for reproducibility")
+    parser.add_argument(
+        "--opt", type=str, default="RS_ruled",
+        choices=["standard", "filtered", "basic", "RS", "RS_ruled"],
+        help="Optimizer type for the analysis"
+    )
+
+    args = parser.parse_args()
+
+    # Validate module list
+    valid_modules = {"hardware_module", "flops_module"}
+    for mod in args.mod_list:
+        if mod not in valid_modules:
+            parser.error(
+                f"Invalid module '{mod}'. Choose from: {', '.join(valid_modules)}"
+            )
+
+    return args
 
 # ---------------------------------- main -------------------------------------
 
@@ -299,12 +331,22 @@ if __name__ == "__main__":
     os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
     os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
-    print_experiment_config()
+    args = parse_args()
+    exp_dir = Path(args.name)
+    exp_dir.mkdir(parents=True, exist_ok=True)
+
+    # 1️⃣ genera il config.yaml
+    cfg_path = create_config_file(exp_dir, overrides=args.__dict__)
+
+    # 2️⃣ imposta come attivo e carica
+    set_active_config(cfg_path)
+    cfg = load_cfg(force=True)
+
     create_experiment_folders()
     copy_symbolic_files()
 
     # Load dataset by normalized key (e.g., "imagenet16-120" -> "imagenet16120")
-    X_train, Y_train, X_test, Y_test, n_classes = get_datasets(cfg.DATA_NAME.strip().lower().replace("-", ""))
+    X_train, Y_train, X_test, Y_test, n_classes = get_datasets(cfg.dataset.strip().lower().replace("-", ""))
 
 
     # Base search space
@@ -318,6 +360,6 @@ if __name__ == "__main__":
 
     start_time = time.time()
     print(colors.OKGREEN, "\nSTARTING ALGORITHM \n", colors.ENDC)
-    res = run_optimization(first_space, ctrl, cfg.MAX_EVAL)
+    res = run_optimization(first_space, ctrl, cfg.eval)
     print(colors.OKGREEN, "\nALGORITHM FINISHED \n", colors.ENDC)
     print(colors.CYAN, "\nTOTAL TIME --------> \n", time.time() - start_time, colors.ENDC)

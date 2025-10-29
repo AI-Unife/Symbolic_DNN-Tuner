@@ -3,7 +3,6 @@ from components.colors import colors
 import os
 import numpy as np
 from modules.common_interface import common_interface
-import myconfig as cfg
 
 class module:
     """

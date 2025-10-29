@@ -1,7 +1,7 @@
 import sqlite3 as db
 from sqlite3 import Error
 
-import myconfig as cfg
+from exp_config import load_cfg
 import numpy as np
 
 
@@ -13,7 +13,8 @@ class StoringExperience:
         """
         initialise attributes in which to store into the db operations of creation and cleaning of tables
         """
-        self.db_name = "{}/database/experience.db".format(cfg.NAME_EXP)
+        cfg = load_cfg()
+        self.db_name = "{}/database/experience.db".format(cfg.name)
         self.destroy1 = """
             DROP TABLE IF EXISTS ranking
         """

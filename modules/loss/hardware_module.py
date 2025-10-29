@@ -7,7 +7,7 @@ from pathlib import Path
 from tensorflow.keras import layers, models
 
 import nvdla.profiler as profiler
-import myconfig as cfg
+from exp_config import load_cfg
 
 class hardware_module(common_interface):
 
@@ -27,7 +27,7 @@ class hardware_module(common_interface):
         self.max_latency = 0.033 #30FPS
         # max manifacturing cost value
         self.max_cost = 40000
-        
+        self.cfg = load_cfg()
         nvdla_list = [{'name': "nv_small", 'path': "nv_small64_fp32.yaml", 'area': 2.824},
                       {'name': "nv_small256", 'path': "nv_small256_fp32.yaml", 'area': 3.091},
                       {'name': "nv_large", 'path': "nv_large2048_fp32.yaml", 'area': 3.809}]
@@ -102,7 +102,7 @@ class hardware_module(common_interface):
         pass
 
     def log_function(self):
-        f = open("{}/algorithm_logs/hardware_report.txt".format(cfg.NAME_EXP), "a")
+        f = open("{}/algorithm_logs/hardware_report.txt".format(self.cfg.name), "a")
         f.write(str(self.latency) + "," + str(self.cost) + "," + str(self.total_cost) + "," + str(
             self.current_config) + "\n")
         f.close()

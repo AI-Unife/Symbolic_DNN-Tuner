@@ -10,7 +10,7 @@ import tonic
 import tonic.transforms as transforms
 from sklearn.model_selection import train_test_split  # kept for compatibility if needed elsewhere
 
-import myconfig as cfg
+from exp_config import load_cfg
 
 
 # ------------------------------- Targets -------------------------------------
@@ -102,7 +102,7 @@ def select_polarity_transform(polarity: str):
         "both": BothPolarity(),
     }
     if polarity not in mapping:
-        raise ValueError("Invalid polarity option! Choose from ['sum', 'sub', 'drop', 'both'].")
+        raise ValueError(f"Invalid polarity {polarity} option! Choose from ['sum', 'sub', 'drop', 'both'].")
     return mapping[polarity]
 
 
@@ -165,7 +165,7 @@ class ROIDataset(tonic.dataset.Dataset):
 
 # ----------------------------- Numpy adapters --------------------------------
 
-def dataset_to_numpy(dataset) -> Tuple[np.ndarray, np.ndarray]:
+def dataset_to_numpy(dataset, cfg) -> Tuple[np.ndarray, np.ndarray]:
     """
     Convert a (cached) tonic dataset into NumPy arrays with the layout expected by the model.
 
@@ -182,11 +182,11 @@ def dataset_to_numpy(dataset) -> Tuple[np.ndarray, np.ndarray]:
         # x is typically [T, 2, H, W] after ToFrame(sensor_size=(H, W, 2), ...)
         arr = np.array(x)
 
-        if cfg.MODE == "fwdPass":
+        if cfg.mode == "fwdPass":
             # [T, 2, H, W] -> [T, H, W, 2]
             x_list.append(np.transpose(arr, (0, 2, 3, 1)))
 
-        elif cfg.MODE == "hybrid":
+        elif cfg.mode == "hybrid":
             # Expect BothPolarity OR a prior framing such that arr has shape [T, 2, H, W]
             # We reshape into groups of NUM_CHANNELS along time and stack polarities as channels.
             T, C, H, W = arr.shape  # C should be 2
@@ -247,7 +247,7 @@ def _ensure_cache_dir(cache_dir: str) -> None:
     Path(cache_dir, "train").mkdir(parents=True, exist_ok=True)
     Path(cache_dir, "test").mkdir(parents=True, exist_ok=True)
 
-def get_datasets_numpy():
+def get_datasets_numpy(cfg):
     """
     Load DVSGesture through Tonic, apply transforms, and return NumPy arrays.
 
@@ -255,7 +255,7 @@ def get_datasets_numpy():
         ((x_train, y_train), (x_test, y_test))
     """
     dataset_path = "/hpc/home/bzzlca/AIDA4Edge/data/"
-    polarity = cfg.POLARITY
+    polarity = cfg.polarity
     n_pol = 2 if polarity == "both" else 1
     cache_dir = f"/hpc/home/bzzlca/AIDA4Edge/tf/cache/DVSGesture_{cfg.MODE}_{polarity}_{cfg.FRAMES}_{cfg.NUM_CHANNELS}_{n_pol}/"
     # resolve with fallback
@@ -293,13 +293,13 @@ def get_datasets_numpy():
     cached_train = tonic.DiskCachedDataset(train, cache_path=os.path.join(cache_dir, "train"))
     cached_test = tonic.DiskCachedDataset(test, cache_path=os.path.join(cache_dir, "test"))
 
-    x_train, y_train = dataset_to_numpy(cached_train)
-    x_test, y_test = dataset_to_numpy(cached_test)
+    x_train, y_train = dataset_to_numpy(cached_train, cfg)
+    x_test, y_test = dataset_to_numpy(cached_test, cfg)
 
     return (x_train, y_train), (x_test, y_test)
 
 
-def get_ROI_numpy():
+def get_ROI_numpy(cfg):
     """
     Load a folder-structured ROI dataset via ROIDataset and return NumPy arrays.
 
@@ -337,8 +337,8 @@ def get_ROI_numpy():
     cached_train = tonic.DiskCachedDataset(train, cache_path=os.path.join(cache_dir, "train"))
     cached_test = tonic.DiskCachedDataset(test, cache_path=os.path.join(cache_dir, "test"))
 
-    x_train, y_train = dataset_to_numpy(cached_train)
-    x_test, y_test = dataset_to_numpy(cached_test)
+    x_train, y_train = dataset_to_numpy(cached_train, cfg)
+    x_test, y_test = dataset_to_numpy(cached_test, cfg)
 
     return (x_train, y_train), (x_test, y_test)
 
@@ -368,10 +368,11 @@ def gesture_data(num_classes: int = 11, ROI: bool = False):
     Returns:
         x_train, x_test, y_train, y_test
     """
+    cfg = load_cfg()
     if ROI:
-        (x_train, y_train), (x_test, y_test) = get_ROI_numpy()
+        (x_train, y_train), (x_test, y_test) = get_ROI_numpy(cfg=cfg)
     else:
-        (x_train, y_train), (x_test, y_test) = get_datasets_numpy()
+        (x_train, y_train), (x_test, y_test) = get_datasets_numpy(cfg=cfg)
 
     # Convert labels to one-hot for single-frame modes
     if cfg.MODE == "depth":

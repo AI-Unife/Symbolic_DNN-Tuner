@@ -7,7 +7,7 @@ from problog.learning import lfi
 import os
 from typing import Any, Iterable, List, Sequence, Tuple
 
-import myconfig as cfg
+from exp_config import load_cfg
 
 
 class LfiIntegration:
@@ -31,6 +31,7 @@ class LfiIntegration:
         # Experience is a list of evidence-sets; each element corresponds to one call to `evidence(...)`
         # Format expected by ProbLog LFI: a list of lists of tuples [(atom, truth_value), ...]
         self.experience: List[List[Tuple[Any, bool]]] = []
+        self.cfg = load_cfg()
 
     # ------------------------------ Helpers ----------------------------------
 
@@ -98,7 +99,7 @@ class LfiIntegration:
             # evidence.append(e2)
 
         # Ensure log directory exists
-        log_dir = os.path.join(cfg.NAME_EXP, "algorithm_logs")
+        log_dir = os.path.join(self.cfg.name, "algorithm_logs")
         os.makedirs(log_dir, exist_ok=True)
 
         # Append to evidence log and DB (only first item, as per original)
@@ -138,7 +139,7 @@ class LfiIntegration:
             self.experience.append(current)
 
         # 2) Load the base program from disk and append dynamic actions
-        sym_dir = os.path.join(cfg.NAME_EXP, "symbolic")
+        sym_dir = os.path.join(self.cfg.name, "symbolic")
         os.makedirs(sym_dir, exist_ok=True)
         base_path = os.path.join(sym_dir, "lfi.pl")
 

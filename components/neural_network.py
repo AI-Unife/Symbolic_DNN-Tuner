@@ -40,15 +40,11 @@ from components.custom_train import train_model, eval_model
 from flops.flops_calculator import analyze_model
 # from components.monitor_model import MonitoredModel, GradientMonitor
 
-import myconfig as cfg
+from exp_config import load_cfg
 
 
 # ----------------------------- Utilities -------------------------------------
 
-def _ensure_dirs() -> None:
-    """Create expected experiment folders if they don't exist."""
-    for sub in ("Model", "Weights", "log_folder/logs", "dashboard/model"):
-        os.makedirs(os.path.join(cfg.NAME_EXP, sub), exist_ok=True)
 
 
 def _optimizer_from_name(name: str, lr: float) -> Optimizer:
@@ -197,8 +193,9 @@ class neural_network:
         self.test_data = X_test.astype("float32")
         self.test_labels = Y_test
 
+        self.cfg = load_cfg()
         self.n_classes = n_classes
-        self.epochs = cfg.EPOCHS
+        self.epochs = self.cfg.epochs
 
         # Legacy flags (kept for API compatibility)
         self.last_dense = 0
@@ -238,12 +235,11 @@ class neural_network:
           1) Try to resume from latest dashboard model if present.
           2) Otherwise build a new model based on `params`.
         """
-        _ensure_dirs()
         # 1) clear session
         tf.keras.backend.clear_session()
         self.model = None
         # 2) Build a new CNN
-        if (cfg.MODE in ("fwdPass", "hybrid")) and "gesture" in cfg.DATA_NAME :
+        if (self.cfg.mode in ("fwdPass", "hybrid")) and "gesture" in self.cfg.dataset :
             input_shape = self.train_data.shape[2:]  # (H, W, C) for gesture pipeline
         else:
             input_shape = self.train_data.shape[1:]  # generic (H, W, C)
@@ -320,7 +316,7 @@ class neural_network:
 
         self.model = Model(inputs=inputs, outputs=outputs)
         self.model.summary()
-        if "flops_module" in cfg.MOD_LIST:
+        if "flops_module" in self.cfg.mod_list:
             # Compute FLOPs (approximate; counts MACs as 2 FLOPs)
             try:
                 self.flops = analyze_model(self.model)[0].total_float_ops
@@ -347,7 +343,6 @@ class neural_network:
               - history: Keras-like history dict
               - model: trained (and reloaded) Keras model
         """
-        _ensure_dirs()
         if self.model is None:
             print("Error: Model is not built.")
             exit(1)
@@ -356,20 +351,20 @@ class neural_network:
         self.last_model_id = model_name_id
 
         # Persist the (fresh) architecture JSON for later reloading
-        model_json_path = f"{cfg.NAME_EXP}/Model/model-{model_name_id}.json"
+        model_json_path = f"{self.cfg.name}/Model/model-{model_name_id}.json"
         with open(model_json_path, "w") as json_file:
             json_file.write(self.model.to_json())
 
         # Try loading previous weights if available (fine-tune / warm start)
         try:
-            prev_weights = f"{cfg.NAME_EXP}/Weights/weights.h5"
+            prev_weights = f"{self.cfg.name}/Weights/weights.h5"
             if os.path.exists(prev_weights):
                 self.model.load_weights(prev_weights)
         except Exception:
             pass  # ignore if incompatible
 
         # TensorBoard callback
-        tb_log_dir = f"{cfg.NAME_EXP}/log_folder/logs/{model_name_id}"
+        tb_log_dir = f"{self.cfg.name}/log_folder/logs/{model_name_id}"
         tensorboard = TensorBoard(log_dir=tb_log_dir)
 
         # --- Optimizer (safe construction, then wrap with LayerWiseLR) ---
@@ -410,11 +405,11 @@ class neural_network:
         self.model.compile(loss="categorical_crossentropy", optimizer=opt, metrics=["accuracy"])
 
         # --- Train ---
-        if (cfg.MODE in ("fwdPass", "hybrid")) and "gesture" in cfg.DATA_NAME :
-            if "debug" in cfg.NAME_EXP:
+        if (self.cfg.mode in ("fwdPass", "hybrid")) and "gesture" in self.cfg.dataset :
+            if "debug" in self.cfg.name:
                 # Simulated history for debug mode
                 history = {k: [] for k in ["loss", "accuracy", "val_loss", "val_accuracy"]}
-                for _ in range(cfg.EPOCHS):
+                for _ in range(self.cfg.epochs):
                     history["val_loss"].append(random.uniform(0.1, 0.5))
                     history["val_accuracy"].append(random.uniform(0.1, 1.0))
                     history["loss"].append(random.uniform(0.1, 0.5))
@@ -428,9 +423,9 @@ class neural_network:
                     [tensorboard, reduce_lr, es1, es2]
                 )
         else:
-            if "debug" in cfg.NAME_EXP:
+            if "debug" in self.cfg.name:
                 history = {k: [] for k in ["loss", "accuracy", "val_loss", "val_accuracy"]}
-                for _ in range(cfg.EPOCHS):
+                for _ in range(self.cfg.epochs):
                     history["val_loss"].append(random.uniform(0.1, 0.5))
                     history["val_accuracy"].append(random.uniform(0.1, 1.0))
                     history["loss"].append(random.uniform(0.1, 0.5))
@@ -445,23 +440,23 @@ class neural_network:
                     callbacks=[tensorboard, reduce_lr, es1, es2],
                 ).history
         # --- Evaluate ---
-        if (cfg.MODE in ("fwdPass", "hybrid")) and "gesture" in cfg.DATA_NAME :
-            if "debug" in cfg.NAME_EXP:
+        if (self.cfg.name in ("fwdPass", "hybrid")) and "gesture" in self.cfg.dataset:
+            if "debug" in self.cfg.name:
                 score = [random.uniform(0.1, 0.5), random.uniform(0.1, 1.0)]
             else:
                 score = eval_model(self.model, self.test_data, self.test_labels)
         else:
-            if "debug" in cfg.NAME_EXP:
+            if "debug" in self.cfg.name:
                 score = [random.uniform(0.1, 0.5), random.uniform(0.1, 1.0)]
             else:
                 score = self.model.evaluate(self.test_data, self.test_labels, verbose=2)
 
         # --- Save weights and canonical dashboard model ---
-        weights_tmp = f"{cfg.NAME_EXP}/Weights/weights-{model_name_id}.weights.h5"
+        weights_tmp = f"{self.cfg.name}/Weights/weights-{model_name_id}.weights.h5"
         self.model.save_weights(weights_tmp)
 
         try:
-            dash_model_path = f"{cfg.NAME_EXP}/dashboard/model/model.keras"
+            dash_model_path = f"{self.cfg.name}/dashboard/model/model.keras"
             self.model.save(dash_model_path)
 
             if not getattr(self.model, "built", False) or self.model.inputs is None:

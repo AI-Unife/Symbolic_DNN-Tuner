@@ -10,7 +10,7 @@ from problog.program import PrologString
 from problog import get_evaluatable
 from problog.tasks import sample  # kept for compatibility if you use it elsewhere
 
-import myconfig as cfg
+from exp_config import load_cfg
 
 
 class NeuralSymbolicBridge:
@@ -33,7 +33,7 @@ class NeuralSymbolicBridge:
         self.problems: List[str] = [
             "overfitting", "underfitting", "inc_loss", "floating_loss", "high_lr", "low_lr", "gradient"
         ]
-
+        self.cfg = load_cfg()
     # -------------------------------------------------------------------------
     # Program assembly
     # -------------------------------------------------------------------------
@@ -53,7 +53,7 @@ class NeuralSymbolicBridge:
         Returns:
             PrologString containing the full model ready for evaluation.
         """
-        sym_dir = os.path.join(cfg.NAME_EXP, "symbolic")
+        sym_dir = os.path.join(self.cfg.name, "symbolic")
         os.makedirs(sym_dir, exist_ok=True)
 
         out_path = os.path.join(sym_dir, "final.pl")
@@ -160,7 +160,7 @@ class NeuralSymbolicBridge:
           - Deterministic atoms / comments are ignored here (kept in base file).
           - This function *overwrites* sym_prob.pl with the merged rules only.
         """
-        sym_dir = os.path.join(cfg.NAME_EXP, "symbolic")
+        sym_dir = os.path.join(self.cfg.name, "symbolic")
         os.makedirs(sym_dir, exist_ok=True)
 
         base_path = os.path.join(sym_dir, "sym_prob_base.pl")
@@ -221,7 +221,7 @@ class NeuralSymbolicBridge:
         """
         Update probabilities in `sym_prob.pl` using the learned probabilities in `sym_model`.
         """
-        sym_dir = os.path.join(cfg.NAME_EXP, "symbolic")
+        sym_dir = os.path.join(self.cfg.name, "symbolic")
         prev_path = os.path.join(sym_dir, "sym_prob.pl")
 
         try:

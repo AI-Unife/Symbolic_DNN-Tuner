@@ -27,7 +27,7 @@ from shutil import copyfile
 
 from modules.module import module
 
-import myconfig as cfg
+from exp_config import load_cfg
 import logging
 
 
@@ -68,6 +68,9 @@ class controller:
         self.Y_test = Y_test
         self.n_classes = n_classes
 
+
+        self.cfg = load_cfg()
+
         # Search space + tuning rules
         self.ss = search_space()
         self.space = self.ss.search_sp()
@@ -107,8 +110,8 @@ class controller:
 
         # Improvement checker + modules
         self.imp_checker = ImprovementChecker(self.db, self.lfi)
-        self.modules = module(cfg.MOD_LIST)
-        if "flops_module" in cfg.MOD_LIST:
+        self.modules = module(self.cfg.mod_list)
+        if "flops_module" in self.cfg.mod_list:
             self.flops_th = self.modules.get_module("flops_module").flops_th
 
         # Optimization objective bookkeeping
@@ -279,8 +282,8 @@ class controller:
             self.best_score = self.score
             self.best_iter = self.iter
             try:
-                os.makedirs(os.path.join(cfg.NAME_EXP, "Model"), exist_ok=True)
-                self.model.save(f"{cfg.NAME_EXP}/Model/best-model.keras")
+                os.makedirs(os.path.join(self.cfg.name, "Model"), exist_ok=True)
+                self.model.save(f"{self.cfg.name}/Model/best-model.keras")
             except Exception as e:
                 logger.warning("Failed to save best model: %s", e)
 
@@ -302,9 +305,9 @@ class controller:
         print(colors.CYAN, "| START SYMBOLIC DIAGNOSIS ----------------------------------  |\n", colors.ENDC)
 
         # Open logs with context managers to guarantee closure
-        os.makedirs(f"{cfg.NAME_EXP}/algorithm_logs", exist_ok=True)
-        diag_path = f"{cfg.NAME_EXP}/algorithm_logs/diagnosis_symbolic_logs.txt"
-        tune_path = f"{cfg.NAME_EXP}/algorithm_logs/tuning_symbolic_logs.txt"
+        os.makedirs(f"{self.cfg.name}/algorithm_logs", exist_ok=True)
+        diag_path = f"{self.cfg.name}/algorithm_logs/diagnosis_symbolic_logs.txt"
+        tune_path = f"{self.cfg.name}/algorithm_logs/tuning_symbolic_logs.txt"
 
         with open(diag_path, "a") as diagnosis_logs, open(tune_path, "a") as tuning_logs:
             # Check last-iteration improvement; persist scores (score and loss) to DB
@@ -406,7 +409,7 @@ class controller:
         return new_space
 
     def log(self) -> None:
-        f = open(f"{cfg.NAME_EXP}/algorithm_logs/acc_report.txt", "a")
+        f = open(f"{self.cfg.name}/algorithm_logs/acc_report.txt", "a")
         if self.scoreNN is not None:
             print(f"\nACCURACY: {self.scoreNN[1]}\n")
             f.write(str(self.scoreNN[1]) + "\n")
