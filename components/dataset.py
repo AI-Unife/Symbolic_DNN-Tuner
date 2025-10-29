@@ -1,14 +1,12 @@
 ##################################################
 # Copyright (c) Xuanyi Dong [GitHub D-X-Y], 2019 #
 ##################################################
-import os, sys, torch
-import os.path as osp
-import numpy as np
-# import torchvision.datasets as dset
-# import torchvision.transforms as transforms
-from PIL import Image
-import tensorflow as tf
 from tensorflow.keras.datasets import cifar10, cifar100
+import pandas as pd
+import numpy as np
+import tensorflow as tf
+from PIL import Image
+from io import BytesIO
 
 from .DownsampledImageNet import load_imagenet16
 from .gesture_dataset import gesture_data
@@ -16,9 +14,7 @@ from .gesture_dataset import gesture_data
 Dataset2Class = {
     "cifar10": 10,
     "cifar100": 100,
-    "imagenet1ks": 1000,
-    "imagenet1k": 1000,
-    "imagenet16": 1000,
+    "tinyimagenet": 1000,
     "imagenet16150": 150,
     "imagenet16120": 120,
     "imagenet16200": 200,
@@ -71,6 +67,60 @@ def get_datasets(name):
         y_train = tf.keras.utils.to_categorical(y_train, num_classes)
         y_test = tf.keras.utils.to_categorical(y_test, num_classes)
         assert len(x_train) == 254775 and len(x_test) == 10000
+    elif name == "tinyimagenet":
+        splits = {
+            'train': 'data/train-00000-of-00001-1359597a978bc4fa.parquet',
+            'valid': 'data/valid-00000-of-00001-70d52db3c749a935.parquet'
+        }
+
+        # Carica i parquet dal dataset Hugging Face
+        df_train = pd.read_parquet("hf://datasets/zh-plus/tiny-imagenet/" + splits["train"])
+        df_test = pd.read_parquet("hf://datasets/zh-plus/tiny-imagenet/" + splits["valid"])
+
+        # Helper per estrarre l'immagine indipendentemente dal formato della colonna
+        def open_image_from_row(img_field):
+            # img_field può essere bytes/bytearray o un dict con chiave "bytes"
+            if isinstance(img_field, (bytes, bytearray)):
+                data = img_field
+            elif isinstance(img_field, dict) and "bytes" in img_field:
+                data = img_field["bytes"]
+            else:
+                # In alcuni dataset l'immagine è già un oggetto PIL (raro con parquet)
+                # oppure un path (non nel tuo caso). Gestiamo anche questi.
+                if isinstance(img_field, Image.Image):
+                    return img_field.convert("RGB")
+                raise TypeError(f"Formato immagine non riconosciuto: {type(img_field)}")
+            img = Image.open(BytesIO(data)).convert("RGB")
+            # Tiny-ImageNet è 64x64; assicuriamolo nel caso sia necessario
+            if img.size != (64, 64):
+                img = img.resize((64, 64))
+            return img
+
+        # Carica in liste (più veloce di np.concatenate in loop)
+        x_train_list, y_train_list = [], []
+        for _, row in df_train.iterrows():
+            img = open_image_from_row(row["image"])
+            x_train_list.append(np.array(img))  # (64, 64, 3), dtype uint8
+            y_train_list.append(int(row["label"]))
+
+        x_test_list, y_test_list = [], []
+        for _, row in df_test.iterrows():
+            img = open_image_from_row(row["image"])
+            x_test_list.append(np.array(img))
+            y_test_list.append(int(row["label"]))
+
+        # Converte in array; opzionale: normalizzazione in [0,1]
+        x_train = np.stack(x_train_list).astype("float32") / 255.0
+        x_test = np.stack(x_test_list).astype("float32") / 255.0
+        y_train = np.array(y_train_list, dtype=np.int64)
+        y_test = np.array(y_test_list, dtype=np.int64)
+
+        # One-hot
+        y_train = tf.keras.utils.to_categorical(y_train, num_classes=num_classes)
+        y_test = tf.keras.utils.to_categorical(y_test, num_classes=num_classes)
+
+        print(x_train.shape, y_train.shape, x_test.shape, y_test.shape)
+
     else:
         raise TypeError("Unknow dataset : {:}".format(name))
 
