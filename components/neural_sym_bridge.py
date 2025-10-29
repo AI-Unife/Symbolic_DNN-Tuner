@@ -295,11 +295,13 @@ class NeuralSymbolicBridge:
                 if controller.reg:
                     res[prob]["reg_l2"] = 0
                 else:
-                    res[prob]["no_reg_l2"] = 0
+                    res[prob]["remove_reg_l2"] = 0
                 if controller.residual:
                     res[prob]["residual"] = 0
                 else:
                     res[prob]["no_residual"] = 0
+                if controller.da:
+                    res[prob]["data_augmentation"] = 0
                 # apply architectural constraints
                 tot_conv = controller.start_conv + controller.count_new_cv * 2
                 if tot_conv > controller.max_conv:
