@@ -289,48 +289,59 @@ class NeuralSymbolicBridge:
         for prob in res.keys():
             diagnosis.append(prob)
             if res[prob]:
-                # choose argmax action for this problem (with random tie-breaking)
+                # Choose argmax action for this problem (with random tie-breaking)
 
-                # if regularization l2 and resiudal connection are already applied, disable it
-                if controller.reg:
+                # --- Regularization, residual, and DA controls ---
+                if controller.reg and "reg_l2" in res[prob]:
                     res[prob]["reg_l2"] = 0
-                else:
+                elif not controller.reg and "remove_reg_l2" in res[prob]:
                     res[prob]["remove_reg_l2"] = 0
-                if controller.residual:
+
+                if controller.residual and "add_residual" in res[prob]:
                     res[prob]["add_residual"] = 0
-                else:
+                elif not controller.residual and "remove_residual" in res[prob]:
                     res[prob]["remove_residual"] = 0
-                if controller.da:
+
+                if controller.da and "data_augmentation" in res[prob]:
                     res[prob]["data_augmentation"] = 0
-                # apply architectural constraints
+
+                # --- Architectural constraints ---
                 tot_conv = controller.count_new_cv
-                if tot_conv > controller.max_conv:
+
+                if tot_conv > controller.max_conv and "new_conv_block" in res[prob]:
                     res[prob]["new_conv_block"] = 0
                     print("Reached max conv blocks")
-                if controller.count_new_cv <= 0:
+
+                if controller.count_new_cv <= 0 and "dec_conv_block" in res[prob]:
                     res[prob]["dec_conv_block"] = 0
                     print("Reached min conv blocks")
-                if controller.layer_x_block > controller.max_layer_x_block:
+
+                if controller.layer_x_block > controller.max_layer_x_block and "inc_conv_layer" in res[prob]:
                     res[prob]["inc_conv_layer"] = 0
                     print("Reached max layers per block")
-                if controller.layer_x_block < 2:
+
+                if controller.layer_x_block < 2 and "dec_conv_layer" in res[prob]:
                     res[prob]["dec_conv_layer"] = 0
                     print("Reached min layers per block")
-                if controller.count_new_fc + controller.start_fc > controller.max_fc:
+
+                if controller.count_new_fc + controller.start_fc > controller.max_fc and "new_fc_layer" in res[prob]:
                     res[prob]["new_fc_layer"] = 0
                     print("Reached max fc layers")
-                if controller.count_new_fc <= 0:
+
+                if controller.count_new_fc <= 0 and "dec_fc_layer" in res[prob]:
                     res[prob]["dec_fc_layer"] = 0
                     print("Reached min fc layers")
 
-                # get all actions with the maximum value
+                # --- Skip if all actions are zero ---
                 vals = res[prob]
+                if all(v == 0 for v in vals.values()):
+                    print(f"Skipping '{prob}' — all actions are zero.")
+                    continue
+
+                # --- Select best action ---
                 max_val = max(vals.values())
                 max_keys = [k for k, v in vals.items() if v == max_val]
-
-                # choose one action randomly among the top ones
                 chosen_action = random.choice(max_keys)
-
                 tuning.append(chosen_action)
 
         # Log unique sets, but return the raw (possibly duplicated) sequences to preserve behavior

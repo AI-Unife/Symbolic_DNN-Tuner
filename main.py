@@ -281,13 +281,13 @@ def parse_args() -> argparse.Namespace:
 
     parser.add_argument("--eval", type=int, default=30,
                         help="Max number of evaluations")
-    parser.add_argument("--epochs", type=int, default=2,
+    parser.add_argument("--epochs", type=int, default=20,
                         help="Epochs for training")
     parser.add_argument(
         "--mod_list", nargs="+", default=[],
         help="List of active modules (e.g., hardware_module flops_module)"
     )
-    parser.add_argument("--dataset", type=str, default="cifar-10",
+    parser.add_argument("--dataset", type=str, default="tinyimagenet",
                         help="Dataset name")
     parser.add_argument("--name", type=str, default="debug",
                         help="Experiment name")
@@ -335,10 +335,8 @@ if __name__ == "__main__":
     exp_dir = Path(args.name)
     exp_dir.mkdir(parents=True, exist_ok=True)
 
-    # 1️⃣ genera il config.yaml
     cfg_path = create_config_file(exp_dir, overrides=args.__dict__)
 
-    # 2️⃣ imposta come attivo e carica
     set_active_config(cfg_path)
     cfg = load_cfg(force=True)
 
