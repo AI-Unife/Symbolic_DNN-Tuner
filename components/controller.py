@@ -381,11 +381,8 @@ class controller:
                 _, lfi_problem = self.lfi.learning(
                     improv, self.symbolic_tuning, self.symbolic_diagnosis, self.actions
                 )
-                if lfi_problem is not None:
-                    sy_model = lfi_problem.get_model()
-                    self.nsb.edit_probs(sy_model)
-                else:
-                    print("LFI returned no problem; skipping symbolic model update.")
+                sy_model = lfi_problem.get_model()
+                self.nsb.edit_probs(sy_model)
 
             # Run rule-based reasoning to produce candidate repairs and diagnoses
             self.symbolic_tuning, self.symbolic_diagnosis = self.nsb.symbolic_reasoning(
