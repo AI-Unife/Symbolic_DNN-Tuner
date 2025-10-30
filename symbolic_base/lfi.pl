@@ -5,7 +5,7 @@ t(0.70)::action(dec_conv_block,overfitting).
 t(0.70)::action(dec_fc_layer,overfitting).
 t(0.40)::action(dec_neurons,overfitting).
 t(0.99)::action(data_augmentation,underfitting).
-t(0.99)::action(remove_reg_l2,underfitting).
+t(0.30)::action(remove_reg_l2,underfitting).
 t(0.50)::action(dec_dropout,underfitting).
 t(0.50)::action(decr_lr,underfitting).
 t(0.40)::action(inc_neurons,underfitting).

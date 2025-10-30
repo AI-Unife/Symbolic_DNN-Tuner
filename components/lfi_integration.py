@@ -137,6 +137,8 @@ class LfiIntegration:
         current = self.evidence(improve, tuning, diagnosis)
         if "X" not in current:
             self.experience.append(current)
+        else:
+            print("Skipping evidence with 'X' action.")
 
         # 2) Load the base program from disk and append dynamic actions
         sym_dir = os.path.join(self.cfg.name, "symbolic")
@@ -154,6 +156,10 @@ class LfiIntegration:
             to_learn += actions
 
         # 3) Run LFI. `self.experience` must be a list of interpretations (lists of (atom, bool)).
+        if self.evidence == []:
+            # No evidence collected yet; return empty weights and None problem
+            return {}, None
+        
         try:
             # print("\n".join(map(str, self.experience)))
             # print(to_learn)

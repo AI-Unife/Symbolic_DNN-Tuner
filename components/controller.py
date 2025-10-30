@@ -70,10 +70,20 @@ class controller:
 
 
         self.cfg = load_cfg()
+        
+        # Internal counters
+        self.count_new_fc = 0
+        self.count_new_cv = 0
+        self.max_fc = 3
+        self.start_conv = 2
+        self.max_conv = self.count_max_conv(base_blocks=self.start_conv)
+        self.count_no_probs = 0
+        self.layer_x_block = 2
+        self.max_layer_x_block = 6
 
         # Search space + tuning rules
         self.ss = search_space()
-        self.space = self.ss.search_sp()
+        self.space = self.ss.search_sp(max_block=self.max_conv, max_dense=self.max_fc)
         self.tr = tuning_rules_symbolic(self.space, self.ss, self)
 
         # Symbolic reasoning & learning-from-interpretations
@@ -119,17 +129,9 @@ class controller:
         self.convergence: bool = False
         self.best_iter: int = -1
 
-        # Internal counters
-        self.count_new_fc = 0
-        self.count_new_cv = 0
-        self.max_fc = 3
-        self.start_conv, self.start_fc = self.ss.count_initial_layers(self.space)
-        self.max_conv = self.count_max_conv(base_blocks=self.start_conv)
-        self.count_no_probs = 0
-        self.layer_x_block = 2
-        self.max_layer_x_block = 6
+        
 
-    # ------------------- Signals from tuning_rules_symbolic -------------------
+    # # ------------------- Signals from tuning_rules_symbolic -------------------
 
     def set_data_augmentation(self, da: bool) -> None:
         """Enable/disable data augmentation for the next training call."""
@@ -252,6 +254,9 @@ class controller:
         K.clear_session()
 
         # Build and train model
+        self.set_data_augmentation(params.get("data_augmentation", False))
+        self.set_reg_l2(params.get("reg_l2", False))
+        self.set_residual(params.get("skip_connection", False))
         print("Action flags for this training: ")
         print(f"  Data Augmentation: {self.da}")
         print(f"  L2 Regularization: {self.reg}")
@@ -299,7 +304,7 @@ class controller:
                 logger.warning("Failed to save best model: %s", e)
 
         # if we have no improv in 10 iter end tuner evaluations
-        if self.iter > self.best_iter + 50:
+        if self.iter > self.best_iter + 20:
             self.convergence = True
 
         return self.score
@@ -376,8 +381,11 @@ class controller:
                 _, lfi_problem = self.lfi.learning(
                     improv, self.symbolic_tuning, self.symbolic_diagnosis, self.actions
                 )
-                sy_model = lfi_problem.get_model()
-                self.nsb.edit_probs(sy_model)
+                if lfi_problem is not None:
+                    sy_model = lfi_problem.get_model()
+                    self.nsb.edit_probs(sy_model)
+                else:
+                    print("LFI returned no problem; skipping symbolic model update.")
 
             # Run rule-based reasoning to produce candidate repairs and diagnoses
             self.symbolic_tuning, self.symbolic_diagnosis = self.nsb.symbolic_reasoning(
