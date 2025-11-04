@@ -30,131 +30,119 @@ class search_space:
 
     # ------------------------------------------------------------------ base --
 
-    def search_sp(self, max_block=6, max_dense=4) -> Space:
+    def search_sp(self) -> Space:
         """
         Define the base search space reflecting the backbone of the neural network.
         Returns the created `skopt.space.Space`.
         """
-    
         self.search_space = Space([
-            Categorical(name='num_neurons', categories=[8, 16, 32, 64]),
-            Integer(1, 4,  name='unit_c1'),
-            Integer(1, 8, name='unit_c2'),
+            Integer(16, 64,  name='unit_c1'),
+            Real(0.002, 0.3, name='dr1_2'),
+            Integer(64, 128, name='unit_c2'),
+            Integer(0, 2048, name='unit_d'),
             Real(0.03, 0.5,  name='dr_f'),
             Real(1e-4, 1e-3, name='learning_rate'),
-            Categorical(categories=[8, 16, 32, 64],  name='batch_size'),
-            Categorical(['Adam', 'Adamax', 'SGD', 'Adagrad', 'Adadelta'], name='optimizer'), 
+            Integer(16, 64,  name='batch_size'),
+            Categorical(['Adam', 'Adamax'], name='optimizer'),  # kept your reduced set
             Categorical(['relu', 'elu', 'selu', 'swish'], name='activation'),
-            Categorical(name='data_augmentation', categories=[False]),
-            Categorical(name="reg_l2", categories=[False]),
-            Categorical(name="skip_connection", categories=[False])
-            
         ])
-        
-        for b in range(1, max_block + 1):
-            conv_name = f'new_conv_{b}'
-            self.search_space.dimensions.append(Integer(-1, 0, name=conv_name))
-        
-        for d in range(1, max_dense + 1):
-            dense_name = f'new_fc_{d}'
-            self.search_space.dimensions.append(Integer(-1, 0, name=dense_name))        
-        
         return self.search_space
+
+    # -------------------------------------------------------------- counters --
+
+    def count_initial_layers(self, params: Iterable[Any]) -> Tuple[int, int]:
+        """
+        Count the number of convolutional and dense layers implied by the *current* space.
+
+        Args:
+            params: any iterable of existing hyperparameter dimensions (kept for API;
+                    we iterate their `.name` fields like your original code).
+
+        Returns:
+            (tot_conv, tot_fc) where:
+                tot_conv counts conv sections inferred from 'unit_c*' (×2 as in your code),
+                tot_fc counts dense layers inferred from 'unit_d'.
+        """
+        tot_conv = 0
+        tot_fc = 0
+        for p in params:
+            # p may be a skopt Dimension; we only rely on `name`
+            name = getattr(p, "name", str(p))
+            if 'unit_c' in name:
+                tot_conv += 2
+            elif 'unit_d' in name:
+                tot_fc += 1
+
+        print("tot_conv: ", tot_conv)
+        print("tot_fc: ", tot_fc)
+        return tot_conv, tot_fc
 
     # --------------------------------------------------------- add / remove --
 
     def add_params(self, params: Dict[str, Any]) -> Space:
         """
-        Reactivate existing "disabled" dimensions (low=high=0) in the search space
-        using the value provided in `params` as the new `high` bound.
+        Add new hyperparameters to the search space.
 
-        Rules:
-        - The dimension must ALREADY exist in the search space, otherwise a ValueError is raised.
-        - A dimension is updated only if low=high=0 and params[name] > 0.
-        - If the dimension is Integer -> replace with Integer(1, int(high_new))
-            If the dimension is Real    -> replace with Real(1.0, float(high_new))
-        - All other dimensions remain unchanged.
+        Args:
+            params: dict of {param_name: exemplar_value}. The exemplar defines the type.
+
+        Returns:
+            Updated `skopt.space.Space` with appended dimensions.
+
+        Behavior:
+            - float exemplar -> Real(0, 0.1)
+            - int exemplar:
+                * name contains 'new_fc'  -> Integer(0, 2048)
+                * name contains 'new_conv'-> Integer(0, 512)
+                * otherwise               -> Integer(0, exemplar + epsilon_i)
+            - If a param already exists by name, it won't be duplicated.
         """
-        # Map name -> (index, dimension) for easy in-place replacement
-        idx_by_name = {dim.name: (i, dim) for i, dim in enumerate(self.search_space.dimensions)}
-        dims = list(self.search_space.dimensions)
+        # Existing names to avoid duplicates
+        existing = {dim.name for dim in self.search_space.dimensions}
+        new_dims: List = []
 
         for name, value in params.items():
-            if name not in idx_by_name:
-                raise ValueError(f"Dimension '{name}' must already exist in the search space.")
-
-            # Try to parse the passed value as numeric
-            try:
-                high_new_float = float(value)
-            except Exception:
-                # Non-numeric exemplar: skip silently to keep API stable
+            if name in existing:
+                # Skip silently to preserve original behavior (no duplicate dims)
                 continue
 
-            if high_new_float <= 0:
-                # Do not activate if the provided high value is not positive
-                continue
-
-            idx, dim = idx_by_name[name]
-            low = getattr(dim, "low", None)
-            high = getattr(dim, "high", None)
-
-            # Activate only if the dimension is currently "off" (low=high=0)
-            if low == -1 and high == 0:
-                if isinstance(dim, Integer):
-                    dims[idx] = Integer(-1, int(high_new_float), name=name)
-                elif isinstance(dim, Real):
-                    dims[idx] = Real(-1.0, float(high_new_float), name=name)
+            if isinstance(value, float):
+                new_dim = Real(0, 0.1, name=name)
+            elif isinstance(value, int):
+                if 'new_fc' in name:
+                    new_dim = Integer(0, 2048, name=name)
+                elif 'new_conv' in name:
+                    new_dim = Integer(0, 512, name=name)
                 else:
-                    # Skip non-numeric dimensions (e.g., Categorical)
+                    new_dim = Integer(0, int(value) + int(self.epsilon_i), name=name)
+            else:
+                # Fallback: try to coerce numeric strings; otherwise skip
+                try:
+                    as_float = float(value)
+                    new_dim = Real(0, 0.1, name=name) if (as_float % 1) else Integer(0, int(as_float) + int(self.epsilon_i), name=name)
+                except Exception:
+                    # Unsupported exemplar type; ignore to keep API non-breaking
                     continue
 
-        
-        self.search_space = Space(dims)
+            new_dims.append(new_dim)
 
+        if new_dims:
+            self.search_space = Space(self.search_space.dimensions + new_dims)
         return self.search_space
 
     def remove_params(self, params: Dict[str, Any]) -> Space:
         """
-        Deactivate existing dimensions in the search space when a value of 0 is provided.
+        Remove hyperparameters from the search space by name.
 
-        Behavior:
-        - The dimension must ALREADY exist in the search space, otherwise a ValueError is raised.
-        - If params[name] == 0, the dimension is replaced by:
-            Integer(0, 0) if it was Integer
-            Real(0.0, 0.0) if it was Real
-        - All other dimensions remain unchanged.
+        Args:
+            params: dict where keys are the names to remove (values are ignored).
+
+        Returns:
+            Updated `skopt.space.Space` with the specified dimensions removed.
         """
-        # Map name -> (index, dimension) for in-place replacement
-        idx_by_name = {dim.name: (i, dim) for i, dim in enumerate(self.search_space.dimensions)}
-        dims = list(self.search_space.dimensions)
-
-        for name, value in params.items():
-            if name not in idx_by_name:
-                raise ValueError(f"Dimension '{name}' must already exist in the search space.")
-
-            # Skip if the provided value is not 0 (no deactivation needed)
-            try:
-                numeric_value = float(value)
-            except Exception:
-                # Ignore non-numeric values to keep API stable
-                continue
-
-            if numeric_value != 0:
-                continue
-
-            idx, dim = idx_by_name[name]
-
-            # Replace the dimension with a "disabled" version
-            if isinstance(dim, Integer):
-                dims[idx] = Integer(-1, 0, name=name)
-            elif isinstance(dim, Real):
-                dims[idx] = Real(-1.0, 0.0, name=name)
-            else:
-                # Non-numeric dimensions (e.g., Categorical) are skipped
-                continue
-
-        self.search_space = Space(dims)
-
+        target_names = set(params.keys())
+        kept_dims = [dim for dim in self.search_space.dimensions if dim.name not in target_names]
+        self.search_space = Space(kept_dims)
         return self.search_space
 
     # ----------------------------------------------------------- inspectors --

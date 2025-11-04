@@ -76,7 +76,7 @@ class controller:
         self.count_new_fc = 0
         self.count_new_cv = 0
         self.max_fc = 3
-        self.start_conv = 2
+        self.start_conv, self.start_fc = self.ss.count_initial_layers(self.space)
         self.max_conv = self.count_max_conv(base_blocks=self.start_conv)
         self.count_no_probs = 0
         self.layer_x_block = 2
@@ -84,7 +84,7 @@ class controller:
 
         # Search space + tuning rules
         self.ss = search_space()
-        self.space = self.ss.search_sp(max_block=self.max_conv, max_dense=self.max_fc)
+        self.space = self.ss.search_sp()
         self.tr = tuning_rules_symbolic(self.space, self.ss, self)
 
         # Symbolic reasoning & learning-from-interpretations
@@ -308,8 +308,6 @@ class controller:
         if self.iter > self.best_iter + 20:
             self.convergence = True
         try:
-            del self.model
-            del self.history
             del self.nn.model
             K.clear_session()
             gc.collect()

@@ -301,9 +301,9 @@ class neural_network:
 
         # x = GlobalAveragePooling2D()(x)
         x = tf.keras.layers.Flatten()(x)
-        x = Dense(params["unit_d"], kernel_regularizer=reg_layer)(x)
-        x = Activation(params["activation"])(x)
-        x = Dropout(params["dr_f"])(x)
+        # x = Dense(params["unit_d"], kernel_regularizer=reg_layer)(x)
+        # x = Activation(params["activation"])(x)
+        # x = Dropout(params["dr_f"])(x)
 
         # Dynamically added FC layers
         added_fcs = [k for k in params if re.match(r"new_fc_\d+$", k) and params[k] > 0]
