@@ -1,6 +1,6 @@
 0.99::action(reg_l2,overfitting):- problem(overfitting).
 0.50::action(inc_dropout,overfitting):- problem(overfitting).
-0.70::action(dec_conv_layers,overfitting):- problem(overfitting).
+0.70::action(dec_conv_layer,overfitting):- problem(overfitting).
 0.70::action(dec_conv_block,overfitting):- problem(overfitting).
 0.70::action(dec_fc_layer,overfitting):- problem(overfitting).
 0.40::action(dec_neurons,overfitting):- problem(overfitting).

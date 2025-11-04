@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, Dict, Iterable, Tuple
+from skopt.space import Categorical
 import logging
 
 try:
@@ -52,35 +53,50 @@ class tuning_rules_symbolic:
         """
         Enable L2 regularization once.
         """
-        self.controller.set_reg_l2(True)
+        for i, hp in enumerate(self.space):
+            if hp.name == "reg_l2":
+                new_categories = [True, False]
+                self.space.dimensions[i] = Categorical(new_categories, name='reg_l2')
         logger.info("Enabled L2 regularization")
 
     def remove_reg_l2(self) -> None:
         """
         Disable reg in the controller.
         """
-        self.controller.set_reg_l2(False)
+        for i, hp in enumerate(self.space):
+            if hp.name == "reg_l2":
+                new_categories = [False]
+                self.space.dimensions[i] = Categorical(new_categories, name='reg_l2')
         logger.info("Disable L2 regularization")
 
     def data_augmentation(self) -> None:
         """
         Enable data augmentation in the controller.
         """
-        self.controller.set_data_augmentation(True)
+        for i, hp in enumerate(self.space):
+            if hp.name == "data_augmentation":
+                new_categories = [True, False]
+                self.space.dimensions[i] = Categorical(new_categories, name='data_augmentation')
         logger.info("Enabled data augmentation")
 
     def remove_data_augmentation(self) -> None:
         """
         Enable data augmentation in the controller.
         """
-        self.controller.set_data_augmentation(False)
+        for i, hp in enumerate(self.space):
+            if hp.name == "data_augmentation":
+                new_categories = [False]
+                self.space.dimensions[i] = Categorical(new_categories, name='data_augmentation')
         logger.info("Disabled data augmentation")
 
     def add_residual(self) -> None:
         """
         Enable residual connection in the controller.
         """
-        self.controller.set_residual(True)
+        for i, hp in enumerate(self.space):
+            if hp.name == "skip_connection":
+                new_categories = [True, False]
+                self.space.dimensions[i] = Categorical(new_categories, name='skip_connection')
         logger.info("Enabled residual connection")
     # -------------------------- Architecture edits ---------------------------
 
@@ -88,7 +104,7 @@ class tuning_rules_symbolic:
         """
         Add a fully-connected (dense) layer, respecting a soft upper bound to avoid bloat.
         """
-        if self.controller.count_new_fc + self.controller.start_fc > self.controller.max_fc:
+        if self.controller.count_new_fc > self.controller.max_fc:
             print(
                 colors.FAIL,
                 "Max number of dense layers reached",
@@ -107,9 +123,9 @@ class tuning_rules_symbolic:
             return
 
         self.controller.count_new_fc += 1
-        new_p = {f"new_fc_{self.controller.count_new_fc}": 512}
+        new_p = {f"new_fc_{self.controller.count_new_fc}": 32}
         self.space = self.ss.add_params(new_p)
-        logger.info("Added dense layer #%d with 512 units", self.controller.count_new_fc)
+        logger.info("Added dense layer #%d", self.controller.count_new_fc)
 
     def dec_fc_layer(self) -> None:
         """
@@ -122,7 +138,7 @@ class tuning_rules_symbolic:
             self.controller.count_new_fc = 0
             return
 
-        new_p = {f"new_fc_{self.controller.count_new_fc}": 512}
+        new_p = {f"new_fc_{self.controller.count_new_fc}": 0}
         self.space = self.ss.remove_params(new_p)
         logger.info("Removed one dense layer; remaining added layers: %d", self.controller.count_new_fc)
         self.controller.count_new_fc -= 1
@@ -148,9 +164,9 @@ class tuning_rules_symbolic:
             return
 
         self.controller.count_new_cv += 1
-        new_p = {f"new_conv_{self.controller.count_new_cv}": 512}
+        new_p = {f"new_conv_{self.controller.count_new_cv}": 16}
         self.space = self.ss.add_params(new_p)
-        logger.info("Added conv section #%d with 512 filters", self.controller.count_new_cv)
+        logger.info("Added conv section #%d", self.controller.count_new_cv)
 
     def dec_conv_block(self) -> None:
         """
@@ -162,7 +178,7 @@ class tuning_rules_symbolic:
             return
 
         # Remove param key associated with the *next* (now absent) conv
-        new_p = {f"new_conv_{self.controller.count_new_cv}": 512}
+        new_p = {f"new_conv_{self.controller.count_new_cv}": 0}
         self.space = self.ss.remove_params(new_p)
         logger.info("Removed one conv section; remaining added sections: %d", self.controller.count_new_cv)
         self.controller.count_new_cv -= 1
@@ -207,6 +223,7 @@ class tuning_rules_symbolic:
         """
         # itereate over each hyperparameter and if one of these is a convolutional
         # or dense layer decrease the lower value of the range
+        valid_names = ['unit_c1', 'unit_c2', 'unit_d', 'new_conv', 'new_fc']
         for hp in self.space:
             if 'unit_c1' in hp.name:
                 hp.low = max(params['unit_c1'] - 16, 16)
@@ -223,9 +240,22 @@ class tuning_rules_symbolic:
         """
         method used to increment batch_size
         """
-        for hp in self.space:
+        for i, hp in enumerate(self.space):
             if hp.name == 'batch_size':
-                hp.low = params['batch_size'] - 1
+                current_val = params.get('batch_size')
+                if current_val is None:
+                    raise ValueError("Parameter 'batch_size' not found in params.")
+                if not isinstance(hp, Categorical):
+                    raise TypeError("The 'batch_size' dimension must be Categorical.")
+
+                # Keep only categories >= current batch size
+                new_categories = [c for c in hp.categories if c >= current_val]
+
+                if not new_categories:
+                    raise ValueError(f"No valid categories >= {current_val} for 'batch_size'.")
+
+                # Replace the dimension with the filtered one
+                self.space.dimensions[i] = Categorical(new_categories, name='batch_size')
 
     def inc_dropout(self, params):
         """
@@ -267,9 +297,22 @@ class tuning_rules_symbolic:
         """
         method used to decrement batch_size
         """
-        for hp in self.space:
+        for i, hp in enumerate(self.space):
             if hp.name == 'batch_size':
-                hp.high = params['batch_size'] + 1
+                current_val = params.get('batch_size')
+                if current_val is None:
+                    raise ValueError("Parameter 'batch_size' not found in params.")
+                if not isinstance(hp, Categorical):
+                    raise TypeError("The 'batch_size' dimension must be Categorical.")
+
+                # Keep only categories >= current batch size
+                new_categories = [c for c in hp.categories if c <= current_val]
+
+                if not new_categories:
+                    raise ValueError(f"No valid categories <= {current_val} for 'batch_size'.")
+
+                # Replace the dimension with the filtered one
+                self.space.dimensions[i] = Categorical(new_categories, name='batch_size')
 
     def dec_dropout(self, params):
         """

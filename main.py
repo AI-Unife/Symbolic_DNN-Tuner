@@ -157,7 +157,6 @@ def run_optimization(search_space: Space, controller: controller, max_iter: int)
     no_rules = ["RS", "standard"]
     with_rules = ["filtered", "RS_ruled", "basic"]
     use_filter = (cfg.opt == "filtered")
-
     # Initialize the chosen optimizer for the very first evaluation
     if "RS" in cfg.opt:
         random_search = RandomSearch(random_state=cfg.seed, total_iter=max_iter)
@@ -200,7 +199,7 @@ def run_optimization(search_space: Space, controller: controller, max_iter: int)
             try:
                 if "RS" in cfg.opt:
                     # Random search: keep drawing one more sample/eval
-                    res = random_search(obj_fn.objective, search_space,
+                    res = random_search(obj_fn.objective, new_space,
                                         callback=callback
                                         )
                 else:
@@ -219,7 +218,7 @@ def run_optimization(search_space: Space, controller: controller, max_iter: int)
             except Exception as e:
                 print(colors.FAIL, f"Optimization error: {e}", colors.ENDC)
                 if "RS" in cfg.opt:
-                    res = random_search(obj_fn.objective, search_space,
+                    res = random_search(obj_fn.objective, new_space,
                                         callback=callback
                                         )
                 else:
@@ -240,14 +239,13 @@ def run_optimization(search_space: Space, controller: controller, max_iter: int)
 
         else:
             # Space changed (structure or bounds) -> restart the optimizer on the new space
-            search_space = copy.deepcopy(new_space)
             print(colors.WARNING, "Search space changed. Restarting BO...", colors.ENDC)
 
-            obj_fn = ObjectiveWrapper(search_space, controller)
+            obj_fn = ObjectiveWrapper(new_space, controller)
             if "RS" in cfg.opt:
                 # Reset RS history so it doesn't bias sampling with stale configs
                 random_search.Xi, random_search.Yi = [], []
-                res = random_search(obj_fn.objective, search_space,
+                res = random_search(obj_fn.objective, new_space,
                                     callback=callback
                                     )
             else:
@@ -280,15 +278,15 @@ def parse_args() -> argparse.Namespace:
         description="Symbolic DNN Tuner Configuration"
     )
 
-    parser.add_argument("--eval", type=int, default=30,
+    parser.add_argument("--eval", type=int, default=300,
                         help="Max number of evaluations")
-    parser.add_argument("--epochs", type=int, default=20,
+    parser.add_argument("--epochs", type=int, default=2,
                         help="Epochs for training")
     parser.add_argument(
         "--mod_list", nargs="+", default=[],
         help="List of active modules (e.g., hardware_module flops_module)"
     )
-    parser.add_argument("--dataset", type=str, default="tinyimagenet",
+    parser.add_argument("--dataset", type=str, default="cifar10",
                         help="Dataset name")
     parser.add_argument("--name", type=str, default="debug",
                         help="Experiment name")
@@ -352,13 +350,23 @@ if __name__ == "__main__":
 
 
     # Base search space
-    sp = search_space()
-    first_space = sp.search_sp()
+    # Controller orchestrates training & symbolic tuning
+    ctrl = controller(X_train, Y_train, X_test, Y_test, n_classes)
+    # if cfg.opt in ["RS", "standard"]:
+    #     print(colors.OKBLUE, "Running optimization WITHOUT tuning rules.", colors.ENDC)
+    #     print(colors.OKBLUE, "add all possible dimensions at max bounds.", colors.ENDC)
+    #     for i, dim in enumerate(ctrl.space.dimensions):
+    #         if 'new_conv' in dim.name:
+    #             ctrl.space = ctrl.ss.add_params({dim.name: 16})
+    #         if 'new_fc' in dim.name:
+    #             ctrl.space = ctrl.ss.add_params({dim.name: 32})
+    #         if dim.name in ['reg_l2', 'data_augmentation', 'skip_connection']:
+    #             new_categories = [True, False]
+    #             ctrl.space.dimensions[i] = Categorical(new_categories, name=dim.name)
+    first_space = ctrl.space
     print(colors.MAGENTA, "|  ----------- SEARCH SPACE ----------  |\n", colors.ENDC)
     print(first_space)
 
-    # Controller orchestrates training & symbolic tuning
-    ctrl = controller(X_train, Y_train, X_test, Y_test, n_classes)
 
     start_time = time.time()
     print(colors.OKGREEN, "\nSTARTING ALGORITHM \n", colors.ENDC)

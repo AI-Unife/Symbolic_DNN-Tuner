@@ -255,47 +255,46 @@ class neural_network:
         x = Activation(params["activation"])(x)
         # x = BatchNormalization()(x)
         for _ in range(1, layer_x_block-1):
-            x = Conv2D(params["unit_c1"], (3, 3), padding="same")(x)
+            x = Conv2D(params["unit_c1"] * params['num_neurons'], (3, 3), padding="same")(x)
             x = Activation(params["activation"])(x)
             # x = BatchNormalization()(x)
         if self.residual:
-            x = Conv2D(params["unit_c1"], (3, 3), padding="same")(x)
-            x = self.add_residual(inputs, x, params['unit_c1'], params['activation'], reg_layer)
+            x = Conv2D(params["unit_c1"] * params['num_neurons'] , (3, 3), padding="same")(x)
+            x = self.add_residual(inputs, x, params['unit_c1'] * params['num_neurons'], params['activation'], reg_layer)
         else:
-            x = Conv2D(params["unit_c1"], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
+            x = Conv2D(params["unit_c1"] * params['num_neurons'] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
             x = Activation(params["activation"])(x)
             # x = BatchNormalization()(x)
         x = MaxPooling2D(pool_size=(2, 2))(x)
-        x = Dropout(params["dr1_2"])(x)
 
         shortcut = x
         for _ in range(layer_x_block-1):
-            x = Conv2D(params["unit_c2"], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
+            x = Conv2D(params["unit_c2"] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
             x = Activation(params["activation"])(x)
             # x = BatchNormalization()(x)
         if self.residual:
-            x = Conv2D(params["unit_c2"], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
-            x = self.add_residual(shortcut, x, params['unit_c2'], params['activation'], reg_layer)
+            x = Conv2D(params["unit_c2"] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
+            x = self.add_residual(shortcut, x, params['unit_c2'] * params['num_neurons'], params['activation'], reg_layer)
         else:
-            x = Conv2D(params["unit_c2"], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
+            x = Conv2D(params["unit_c2"] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
             x = Activation(params["activation"])(x)
             # x = BatchNormalization()(x)
         x = MaxPooling2D(pool_size=(2, 2))(x)
 
 
         # Dynamically added conv blocks (conv -> act -> conv -> act -> pool -> dropout)
-        added_convs = [k for k in params if re.match(r"new_conv_\d+$", k)]
+        added_convs = [k for k in params if re.match(r"new_conv_\d+$", k) and params[k] > 0]
         for layer_key in sorted(added_convs, key=lambda s: int(s.split("_")[-1])):  # stable order
             shortcut = x
             for _ in range(layer_x_block-1):
-                x = Conv2D(params[layer_key], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
+                x = Conv2D(params[layer_key] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
                 x = Activation(params["activation"])(x)
                 # x = BatchNormalization()(x)
             if self.residual:
-                x = Conv2D(params[layer_key], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
-                x = self.add_residual(shortcut, x, params[layer_key], params['activation'], reg_layer)
+                x = Conv2D(params[layer_key] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
+                x = self.add_residual(shortcut, x, params[layer_key] * params['num_neurons'], params['activation'], reg_layer)
             else:
-                x = Conv2D(params[layer_key], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
+                x = Conv2D(params[layer_key] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
                 x = Activation(params["activation"])(x)
                 # x = BatchNormalization()(x)
             x = MaxPooling2D(pool_size=(2, 2))(x)
@@ -307,9 +306,9 @@ class neural_network:
         x = Dropout(params["dr_f"])(x)
 
         # Dynamically added FC layers
-        added_fcs = [k for k in params if re.match(r"new_fc_\d+$", k)]
+        added_fcs = [k for k in params if re.match(r"new_fc_\d+$", k) and params[k] > 0]
         for layer_key in sorted(added_fcs, key=lambda s: int(s.split("_")[-1])):  # stable order
-            x = Dense(params[layer_key], kernel_regularizer=reg_layer)(x)
+            x = Dense(params[layer_key] * params['num_neurons'], kernel_regularizer=reg_layer)(x)
             x = Activation(params["activation"])(x)
             x = Dropout(params["dr_f"])(x)
 
@@ -393,8 +392,8 @@ class neural_network:
                             mode="min", restore_best_weights=True)
         es2 = EarlyStopping(monitor="val_accuracy", min_delta=0.005, patience=20, verbose=1,
                             mode="max", restore_best_weights=True)
-        reduce_lr = ReduceLROnPlateau(monitor="val_loss", factor=0.2, patience=30,
-                                      verbose=1, min_lr=1e-4)
+        # reduce_lr = ReduceLROnPlateau(monitor="val_loss", factor=0.2, patience=30,
+        #                               verbose=1, min_lr=1e-4)
         # gm = GradientMonitor()
         # --- Optional data augmentation ---
         # We prepend a small augmentation pipeline. Wrapping with Sequential is fine here
@@ -421,7 +420,7 @@ class neural_network:
                     self.train_data, self.train_labels,
                     self.test_data, self.test_labels,
                     self.epochs, params,
-                    [tensorboard, reduce_lr, es1, es2]
+                    [tensorboard, es]
                 )
         else:
             if "debug" in self.cfg.name:
@@ -438,7 +437,7 @@ class neural_network:
                     batch_size=int(params["batch_size"]),
                     verbose=2,
                     validation_data=(self.test_data, self.test_labels),
-                    callbacks=[tensorboard, reduce_lr, es1, es2],
+                    callbacks=[tensorboard, es],
                 ).history
         # --- Evaluate ---
         if (self.cfg.name in ("fwdPass", "hybrid")) and "gesture" in self.cfg.dataset:

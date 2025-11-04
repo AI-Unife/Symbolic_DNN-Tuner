@@ -135,7 +135,9 @@ class LfiIntegration:
         """
         # 1) Add current evidence to the in-memory experience
         current = self.evidence(improve, tuning, diagnosis)
-        if "X" not in current:
+        if "X" in current or current == []:
+            print("Skipping evidence with 'X' action.")
+        else:
             self.experience.append(current)
 
         # 2) Load the base program from disk and append dynamic actions
@@ -154,6 +156,7 @@ class LfiIntegration:
             to_learn += actions
 
         # 3) Run LFI. `self.experience` must be a list of interpretations (lists of (atom, bool)).
+        
         try:
             # print("\n".join(map(str, self.experience)))
             # print(to_learn)
