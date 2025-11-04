@@ -292,17 +292,17 @@ class NeuralSymbolicBridge:
                 # Choose argmax action for this problem (with random tie-breaking)
 
                 # --- Regularization, residual, and DA controls ---
-                if True in controller.space['reg_l2'][1].categories and "reg_l2" in res[prob]:
+                if controller.reg and "reg_l2" in res[prob]:
                     res[prob]["reg_l2"] = 0
-                elif True not in controller.space['reg_l2'][1].categories and "remove_reg_l2" in res[prob]:
+                elif not controller.reg and "remove_reg_l2" in res[prob]:
                     res[prob]["remove_reg_l2"] = 0
 
-                if True in controller.space['skip_connection'][1].categories and "add_residual" in res[prob]:
+                if controller.residual and "add_residual" in res[prob]:
                     res[prob]["add_residual"] = 0
-                # elif True not in controller.space['skipp_connection'][1].categoriesand and "remove_residual" in res[prob]:
-                #     res[prob]["remove_residual"] = 0
+                elif not controller.residual and "remove_residual" in res[prob]:
+                    res[prob]["remove_residual"] = 0
 
-                if True in controller.space['data_augmentation'][1].categories and "data_augmentation" in res[prob]:
+                if controller.da and "data_augmentation" in res[prob]:
                     res[prob]["data_augmentation"] = 0
 
                 # --- Architectural constraints ---
@@ -324,7 +324,7 @@ class NeuralSymbolicBridge:
                     res[prob]["dec_conv_layer"] = 0
                     print("Reached min layers per block")
 
-                if controller.count_new_fc > controller.max_fc and "new_fc_layer" in res[prob]:
+                if controller.count_new_fc + controller.start_fc > controller.max_fc and "new_fc_layer" in res[prob]:
                     res[prob]["new_fc_layer"] = 0
                     print("Reached max fc layers")
 
