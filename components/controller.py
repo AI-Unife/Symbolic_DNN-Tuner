@@ -72,15 +72,6 @@ class controller:
 
         self.cfg = load_cfg()
         
-        # Internal counters
-        self.count_new_fc = 0
-        self.count_new_cv = 0
-        self.max_fc = 3
-        self.start_conv, self.start_fc = self.ss.count_initial_layers(self.space)
-        self.max_conv = self.count_max_conv(base_blocks=self.start_conv)
-        self.count_no_probs = 0
-        self.layer_x_block = 2
-        self.max_layer_x_block = 6
 
         # Search space + tuning rules
         self.ss = search_space()
@@ -129,6 +120,16 @@ class controller:
         self.best_score: float = 1e10 #float("inf")  # lower is better if we minimize
         self.convergence: bool = False
         self.best_iter: int = -1
+
+        # Internal counters
+        self.count_new_fc = 0
+        self.count_new_cv = 0
+        self.max_fc = 3
+        self.start_conv, self.start_fc = self.ss.count_initial_layers(self.space)
+        self.max_conv = self.count_max_conv(base_blocks=self.start_conv)
+        self.count_no_probs = 0
+        self.layer_x_block = 2
+        self.max_layer_x_block = 6
 
         
 
