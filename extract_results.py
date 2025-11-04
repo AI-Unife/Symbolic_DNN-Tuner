@@ -223,11 +223,11 @@ _METRIC_PATTERNS: Dict[str, re.Pattern] = {
 
 # Metadata patterns from `output.log`
 _META_PATTERNS: Dict[str, re.Pattern] = {
-    "dataset": re.compile(r"DATASET NAME:\s+(.+)", re.IGNORECASE),
-    "max_eval": re.compile(r"MAX NET EVAL:\s+(\d+)", re.IGNORECASE),
-    "epochs": re.compile(r"EPOCHS FOR TRAINING:\s+(\d+)", re.IGNORECASE),
-    "modules": re.compile(r"MODULE LIST:\s+(\[.+\])", re.IGNORECASE),
-    "seed": re.compile(r"SEED:\s+(\d+)", re.IGNORECASE),
+    "dataset": re.compile(r"dataset:\s+(.+)", re.IGNORECASE),
+    "max_eval": re.compile(r"eval:\s+(\d+)", re.IGNORECASE),
+    "epochs": re.compile(r"epochs:\s+(\d+)", re.IGNORECASE),
+    "modules": re.compile(r"mod_list:\s+(\[.+\])", re.IGNORECASE),
+    "seed": re.compile(r"seed:\s+(\d+)", re.IGNORECASE),
     "total_time": re.compile(r"TOTAL TIME -------->\s*([0-9]*\.?[0-9]+)", re.IGNORECASE),
 }
 
@@ -512,16 +512,16 @@ def parse_modules_list(raw: Optional[str], all_modules: Iterable[str]) -> Dict[s
     return flags
 
 
-def parse_experiment_meta(log_text: str, all_modules: Iterable[str]) -> Tuple[str, Dict[str, float | str], Dict[str, bool]]:
+def parse_experiment_meta(config_text: str, log_text: str, all_modules: Iterable[str]) -> Tuple[str, Dict[str, float | str], Dict[str, bool]]:
     """
     Extract metadata fields from a full log text using precompiled regexes.
     Returns (dataset_name, numeric_fields, modules_flags).
     """
-    dataset = _META_PATTERNS["dataset"].search(log_text)
-    max_eval = _META_PATTERNS["max_eval"].search(log_text)
-    epochs = _META_PATTERNS["epochs"].search(log_text)
-    modules = _META_PATTERNS["modules"].search(log_text)
-    seed = _META_PATTERNS["seed"].search(log_text)
+    dataset = _META_PATTERNS["dataset"].search(config_text)
+    max_eval = _META_PATTERNS["max_eval"].search(config_text)
+    epochs = _META_PATTERNS["epochs"].search(config_text)
+    modules = _META_PATTERNS["modules"].search(config_text)
+    seed = _META_PATTERNS["seed"].search(config_text)
     total_time = _META_PATTERNS["total_time"].search(log_text)
 
     numeric_fields: Dict[str, float | str] = {
@@ -687,6 +687,7 @@ def summarize_experiment(exp_dir: Path, all_modules: Iterable[str]) -> Optional[
     if rep_log:
         output_log = copy_log_to_output(rep_log, exp_dir)
 
+    config_file = exp_dir / "config.yaml"
     # If both are missing, there's nothing to summarize
     if not results_csv or not results_csv.is_file():
         logging.warning("Missing results.csv for %s; skipping.", exp_name)
@@ -714,8 +715,9 @@ def summarize_experiment(exp_dir: Path, all_modules: Iterable[str]) -> Optional[
             except Exception as e:
                 logging.warning("Unable to plot stacked %% changes for %s: %s", exp_dir.name, e)
         try:
-            text = output_log.read_text(encoding="utf-8", errors="ignore")
-            dataset_name, numeric_fields, modules_flags = parse_experiment_meta(text, all_modules)
+            config_text = config_file.read_text(encoding="utf-8", errors="ignore")
+            log_text = output_log.read_text(encoding="utf-8", errors="ignore")
+            dataset_name, numeric_fields, modules_flags = parse_experiment_meta(config_text, log_text, all_modules)
             info.dataset_name = dataset_name
             info.max_net_eval = numeric_fields["Max Net Eval"]
             info.epochs_for_training = numeric_fields["Epochs for Training"]
@@ -739,7 +741,7 @@ def summarize_experiment(exp_dir: Path, all_modules: Iterable[str]) -> Optional[
         if "score" in df.columns and not df["score"].dropna().empty:
             best_idx = int(df["score"].idxmin())
             info.best_iteration = int(df.loc[best_idx, "iteration"]) if "iteration" in df.columns else None
-            idx_acc = int(df["accuracy"].idxmin())
+            idx_acc = int(df["accuracy"].idxmax())
         else:
             info.best_iteration = None
 

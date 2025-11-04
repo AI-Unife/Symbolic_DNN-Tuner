@@ -23,6 +23,7 @@ from components.random_search import RandomSearch
 
 from pathlib import Path
 from exp_config import create_config_file, set_active_config, load_cfg
+import tensorflow as tf
 
 # ------------------------------ filesystem -----------------------------------
 
@@ -325,6 +326,9 @@ def parse_args() -> argparse.Namespace:
 
 if __name__ == "__main__":
     # Optional cosmetic for Windows terminals (enables ANSI colors)
+    gpus = tf.config.list_physical_devices('GPU')
+    for gpu in gpus:
+        tf.config.experimental.set_memory_growth(gpu, True)
     os.system("")
 
     # TensorFlow performance/logging toggles

@@ -7,6 +7,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 import numpy as np  # only for type hints; safe if arrays are numpy-like
 from tensorflow.keras import backend as K
 import matplotlib.pyplot as plt
+import gc
 
 try:
     from components.colors import colors
@@ -301,7 +302,14 @@ class controller:
         # if we have no improv in 10 iter end tuner evaluations
         if self.iter > self.best_iter + 50:
             self.convergence = True
-
+        try:
+            del self.model
+            del self.history
+            del self.nn.model
+            K.clear_session()
+            gc.collect()
+        except Exception as e:
+            logger.warning("Failed to clear session: %s", e)
         return self.score
     # ------------------------------ Diagnosis --------------------------------
 

@@ -215,7 +215,7 @@ class tuning_rules_symbolic:
             if 'unit_d' in hp.name:
                 hp.low = max(params['unit_d'] - 16, 0)
             if 'new_conv' in hp.name:
-                hp.low = max(params[hp.name] - 16, abs(int(512 / self.space.epsilon_d)))
+                hp.low = max(params[hp.name] - 16, 512)
             if 'new_fc' in hp.name:
                 hp.low = max(params[hp.name] - 16, 0)
     
