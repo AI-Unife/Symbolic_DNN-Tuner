@@ -16,4 +16,3 @@
 0.99::action(decr_lr,high_lr):- problem(high_lr).
 0.80::action(inc_batch_size,floating_loss):- problem(floating_loss).
 0.30::action(decr_lr,floating_loss):- problem(floating_loss).
-0.70::action(add_residual, need_skip) :- problem(need_skip).

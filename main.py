@@ -240,7 +240,7 @@ def run_optimization(search_space: Space, controller: controller, max_iter: int)
         else:
             # Space changed (structure or bounds) -> restart the optimizer on the new space
             print(colors.WARNING, "Search space changed. Restarting BO...", colors.ENDC)
-
+            search_space = copy.deepcopy(new_space)
             obj_fn = ObjectiveWrapper(new_space, controller)
             if "RS" in cfg.opt:
                 # Reset RS history so it doesn't bias sampling with stale configs
