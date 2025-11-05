@@ -36,3 +36,4 @@ class quantizer_interface(ABC):
         Function to save log informations
         """
         pass
+
