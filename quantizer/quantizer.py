@@ -1,6 +1,11 @@
 
 from quantizer.quantizer_interface import quantizer_interface
 
+
+#### Define here your quantizer class, inheriting from quantizer_interface
+#### rename this file with the name of your quantizer 
+
+
 class quantizer_module(quantizer_interface):
     
     def __init__(self): 
