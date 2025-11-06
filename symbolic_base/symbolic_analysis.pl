@@ -18,6 +18,31 @@ area_sub(R) :- int_loss(A), int_slope(B), Rt is A - B, abs2(Rt,R).
 threshold_up(Th) :- int_slope(A), Th is A/4.
 threshold_down(Th) :- int_slope(A), Th is A*(3/4).
 
+% Utility: safe denom
+safe_den(0.0, 1.0e-9).
+safe_den(A, A) :- A =\= 0.0.
+
+% Relative improvements on training loss
+rel_impr_loss_early(R) :-
+    l(L), nth0(0, L, L0),
+    length(L, N), K is min(5, N-1),            % prime ~5 epoche (adatta se vuoi)
+    nth0(K, L, Lk),
+    safe_den(L0, D), R is (L0 - Lk)/D.
+
+rel_impr_loss_total(R) :-
+    l(L), nth0(0, L, L0),
+    last(L, Lend),
+    safe_den(L0, D), R is (L0 - Lend)/D.
+
+% Instabilità (oscillazioni) su loss/acc già definite altrove, ma le raccogliamo qui
+instability_signal :- up_down_loss ; up_down_acc.
+
+% Slow start: la loss scende pochissimo all inizio (tipico di reti che beneficiano di skip)
+slow_start :- rel_impr_loss_early(R), R < 0.05.                  % <5% nelle prime ~5 epoche
+
+% Plateau precoce: miglioramento totale modesto
+early_plateau :- rel_impr_loss_total(R), R < 0.20.               % <20% sull’intero run
+
 % ANALYSIS
 gap_tr_te_acc :- a(A), va(VA), last(A,LTA), last(VA,ScoreA),
                 Res is LTA - ScoreA, abs2(Res,Res1), Res1 > 0.2.
@@ -32,6 +57,14 @@ up_down_loss :- l(L),add_to_UpList(L,Usl), add_to_DownList(L,Dsl), isclose(Usl,D
 to_low_lr :- area_sub(As), threshold_up(Th), As < Th.
 to_high_lr :- area_sub(As), threshold_down(Th), As > Th.
 
+vanish_gradient :- grad_global_norm(G), vanish_th(Th), G < Th.
+exploding_gradient :- grad_global_norm(G), exploding_th(Th), G > Th.
+% Problemi di ottimizzazione senza segnali di LR “sbagliato”
+opt_difficulty :-
+    problem(underfitting),                                        % low_acc o high_loss
+    \+ problem(low_lr),
+    \+ problem(high_lr).
+
 % POSSIBLE PROBLEMS
 problem(overfitting) :- gap_tr_te_acc; gap_tr_te_loss.
 problem(underfitting) :- low_acc; high_loss.
@@ -39,6 +72,9 @@ problem(inc_loss) :- growing_loss_trend.
 problem(floating_loss) :- up_down_loss.
 problem(low_lr) :- to_low_lr.
 problem(high_lr) :- to_high_lr.
+problem(gradient) :- vanish_gradient; exploding_gradient.
+% PROBLEMI SPECIFICI CHE SUGGERISCONO SKIP
+problem(need_skip) :- vanish_gradient; exploding_gradient ; slow_start ; early_plateau ; instability_signal ; opt_difficulty.
 
 
 % QUERY ----------------------------------------------------------------------------------------------------------------

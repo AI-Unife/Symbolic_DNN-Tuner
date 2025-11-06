@@ -33,9 +33,7 @@ except Exception:
     # TF/Keras 2.x
     from tensorflow.keras.utils import serialize_keras_object, deserialize_keras_object
 
-from components.gesture_dataset import gesture_data
-from components.search_space import search_space
-from components.colors import colors
+from components.dataset import get_datasets
 from components.custom_train import train_model, eval_model
 from flops.flops_calculator import analyze_model
 # from components.monitor_model import MonitoredModel, GradientMonitor
@@ -252,34 +250,34 @@ class neural_network:
             inputs = tf.keras.layers.RandomTranslation(height_factor=0.1, width_factor=0.1, fill_mode="nearest")(inputs)
 
         x = Conv2D(params["unit_c1"], (3, 3), padding="same")(inputs)
-        x = Activation(params["activation"])(x)
         x = BatchNormalization()(x)
+        x = Activation(params["activation"])(x)
         for _ in range(1, layer_x_block-1):
             x = Conv2D(params["unit_c1"], (3, 3), padding="same")(x)
-            x = Activation(params["activation"])(x)
             x = BatchNormalization()(x)
+            x = Activation(params["activation"])(x)
         if self.residual:
             x = Conv2D(params["unit_c1"], (3, 3), padding="same")(x)
             x = self.add_residual(inputs, x, params['unit_c1'], params['activation'], reg_layer)
         else:
             x = Conv2D(params["unit_c1"], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
-            x = Activation(params["activation"])(x)
             x = BatchNormalization()(x)
+            x = Activation(params["activation"])(x)
         x = MaxPooling2D(pool_size=(2, 2))(x)
         x = Dropout(params["dr1_2"])(x)
 
         shortcut = x
         for _ in range(layer_x_block-1):
             x = Conv2D(params["unit_c2"], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
-            x = Activation(params["activation"])(x)
             x = BatchNormalization()(x)
+            x = Activation(params["activation"])(x)
         if self.residual:
             x = Conv2D(params["unit_c2"], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
             x = self.add_residual(shortcut, x, params['unit_c2'], params['activation'], reg_layer)
         else:
             x = Conv2D(params["unit_c2"], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
-            x = Activation(params["activation"])(x)
             x = BatchNormalization()(x)
+            x = Activation(params["activation"])(x)
         x = MaxPooling2D(pool_size=(2, 2))(x)
 
 
@@ -289,15 +287,15 @@ class neural_network:
             shortcut = x
             for _ in range(layer_x_block-1):
                 x = Conv2D(params[layer_key], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
-                x = Activation(params["activation"])(x)
                 x = BatchNormalization()(x)
+                x = Activation(params["activation"])(x)
             if self.residual:
                 x = Conv2D(params[layer_key], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
                 x = self.add_residual(shortcut, x, params[layer_key], params['activation'], reg_layer)
             else:
                 x = Conv2D(params[layer_key], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
-                x = Activation(params["activation"])(x)
                 x = BatchNormalization()(x)
+                x = Activation(params["activation"])(x)
             x = MaxPooling2D(pool_size=(2, 2))(x)
 
         x = GlobalAveragePooling2D()(x)
@@ -480,31 +478,117 @@ class neural_network:
 
 # ------------------------------ Standalone test ------------------------------
 
+
+
+
 if __name__ == "__main__":
-    X_train, X_test, Y_train, Y_test, n_classes = gesture_data()
+    import argparse
+    from pathlib import Path
+    from exp_config import create_config_file, set_active_config, load_cfg
+    from itertools import product
+    
+    def parse_args() -> argparse.Namespace:
+        """
+        Parse command-line arguments for the Symbolic DNN Tuner configuration.
 
-    # Example: evaluate a saved best model (if present)
-    try:
-        model = tf.keras.models.load_model(
-            f"{'25_03_04_12_35_fwdPass_gesture_accuracy_module_100_20'}/Model/best-model.keras"
+        Returns:
+            argparse.Namespace containing all configuration values.
+        """
+        parser = argparse.ArgumentParser(
+            description="Symbolic DNN Tuner Configuration"
         )
-        print(model.summary())
-        start = datetime.now()
-        score = eval_model(model, X_test, Y_test)
-        print("Time fwdPass: ", datetime.now() - start)
-        print("Accuracy: ", score[1], "Loss: ", score[0])
-    except Exception as e:
-        print("Could not load first best model:", e)
 
-    print("----------------------------------------------------")
-
-    try:
-        model = tf.keras.models.load_model(
-            f"{'25_03_04_12_03_depth_gesture_accuracy_module_100_20'}/Model/best-model.keras"
+        parser.add_argument("--eval", type=int, default=300,
+                            help="Max number of evaluations")
+        parser.add_argument("--epochs", type=int, default=50,
+                            help="Epochs for training")
+        parser.add_argument(
+            "--mod_list", nargs="+", default=[],
+            help="List of active modules (e.g., hardware_module flops_module)"
         )
-        start = datetime.now()
-        score = model.evaluate(X_test, Y_test)
-        print("Time depth: ", datetime.now() - start)
-        print("Accuracy: ", score[1], "Loss: ", score[0])
-    except Exception as e:
-        print("Could not load second best model:", e)
+        parser.add_argument("--dataset", type=str, default="tinyimagenet",
+                            help="Dataset name")
+        parser.add_argument("--name", type=str, default="tinyimagenet_exp",
+                            help="Experiment name")
+        parser.add_argument("--frames", type=int, default=16,
+                            help="Number of frames for gesture dataset")
+        parser.add_argument("--mode", type=str, default="fwdPass",
+                            choices=["fwdPass", "depth", "hybrid"],
+                            help="Experiment mode (fwdPass, depth, hybrid)")
+        parser.add_argument("--channels", type=int, default=2,
+                            help="Number of channels for the dataset")
+        parser.add_argument("--polarity", type=str, default="both",
+                            choices=["both", "sum", "sub", "drop"],
+                            help="Polarity for event-based datasets")
+        parser.add_argument("--seed", type=int, default=42,
+                            help="Random seed for reproducibility")
+        parser.add_argument(
+            "--opt", type=str, default="RS_ruled",
+            choices=["standard", "filtered", "basic", "RS", "RS_ruled"],
+            help="Optimizer type for the analysis"
+        )
+
+        args = parser.parse_args()
+
+        # Validate module list
+        valid_modules = {"hardware_module", "flops_module"}
+        for mod in args.mod_list:
+            if mod not in valid_modules:
+                parser.error(
+                    f"Invalid module '{mod}'. Choose from: {', '.join(valid_modules)}"
+                )
+
+        return args
+
+
+    def create_experiment_folders() -> None:
+        import sys
+        """
+        Ensure the experiment directory structure exists.
+        """
+        required_dirs = [
+            "Model", "Weights", "database", "checkpoints", "log_folder",
+            "algorithm_logs", "dashboard/model", "symbolic"
+        ]
+        try:
+            os.makedirs(cfg.name, exist_ok=True)
+            for folder in required_dirs:
+                os.makedirs(f"{cfg.name}/{folder}", exist_ok=True)
+        except OSError as e:
+            
+            sys.exit(1)
+    
+    args = parse_args()
+    exp_dir = Path(args.name)
+    exp_dir.mkdir(parents=True, exist_ok=True)
+
+    cfg_path = create_config_file(exp_dir, overrides=args.__dict__)
+
+    set_active_config(cfg_path)
+    cfg = load_cfg(force=True)
+    create_experiment_folders()
+    
+    X_train, Y_train, X_test, Y_test, n_classes = get_datasets('tinyimagenet')
+
+    params = {'unit_c1': 64, 
+              'dr1_2': 0.3, 
+              'unit_c2': 64, 
+              'unit_d': 2048, 
+              'dr_f': 0.5, 
+              'learning_rate': 0.001, 
+              'batch_size': 64, 
+              'optimizer': 'Adamax', 
+              'activation': 'swish'}
+    
+    for da, regl2, residual in product([False, True], repeat=3):
+        print(f"\n=== Testing configuration: da={da}, reg={regl2}, residual={residual} ===")
+        nn = neural_network(X_train, Y_train, X_test, Y_test, n_classes, da=da, reg=regl2, residual=residual)
+    
+        nn.build_network(params, layer_x_block=2)
+        score, history, model = nn.training(params)
+        print(f"Test loss: {score[0]}")
+        print(f"Test accuracy: {score[1]}")
+        del nn
+        del model
+        del history
+        K.clear_session()
