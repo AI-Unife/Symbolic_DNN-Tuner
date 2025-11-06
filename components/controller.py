@@ -72,10 +72,19 @@ class controller:
 
         self.cfg = load_cfg()
         
+        # Internal counters
+        self.count_new_fc = 0
+        self.count_new_cv = 0
+        self.max_fc = 10
+        self.start_conv = 2
+        self.max_conv = self.count_max_conv(base_blocks=self.start_conv)
+        self.count_no_probs = 0
+        self.layer_x_block = 2
+        self.max_layer_x_block = 6
 
         # Search space + tuning rules
         self.ss = search_space()
-        self.space = self.ss.search_sp()
+        self.space = self.ss.search_sp(max_block=self.max_conv, max_dense=self.max_fc)
         self.tr = tuning_rules_symbolic(self.space, self.ss, self)
 
         # Symbolic reasoning & learning-from-interpretations
@@ -104,7 +113,7 @@ class controller:
         self.iter: int = 0
 
         # Dynamic thresholds (updated at given epochs)
-        self.lacc: float = 0.30
+        self.lacc: float = 0.70
         self.hloss: float = np.log(n_classes)
         self.acc_w = 0.5  # weight of accuracy in combined score
         self.vanish_th = 1e-8
@@ -120,16 +129,6 @@ class controller:
         self.best_score: float = 1e10 #float("inf")  # lower is better if we minimize
         self.convergence: bool = False
         self.best_iter: int = -1
-
-        # Internal counters
-        self.count_new_fc = 0
-        self.count_new_cv = 0
-        self.max_fc = 3
-        self.start_conv, self.start_fc = self.ss.count_initial_layers(self.space)
-        self.max_conv = self.count_max_conv(base_blocks=self.start_conv)
-        self.count_no_probs = 0
-        self.layer_x_block = 2
-        self.max_layer_x_block = 6
 
         
 
@@ -256,9 +255,9 @@ class controller:
         K.clear_session()
 
         # Build and train model
-        # self.set_data_augmentation(params.get("data_augmentation", False))
-        # self.set_reg_l2(params.get("reg_l2", False))
-        # self.set_residual(params.get("skip_connection", False))
+        self.set_data_augmentation(params.get("data_augmentation", False))
+        self.set_reg_l2(params.get("reg_l2", False))
+        self.set_residual(params.get("skip_connection", False))
         print("Action flags for this training: ")
         print(f"  Data Augmentation: {self.da}")
         print(f"  L2 Regularization: {self.reg}")

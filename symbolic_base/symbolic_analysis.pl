@@ -48,33 +48,50 @@ gap_tr_te_acc :- a(A), va(VA), last(A,LTA), last(VA,ScoreA),
                 Res is LTA - ScoreA, abs2(Res,Res1), Res1 > 0.2.
 gap_tr_te_loss :- l(L), vl(VL), last(L,LTL), last(VL,ScoreL),
                 Res is LTL - ScoreL, abs2(Res,Res1), Res1 > 0.2.
-low_acc :- va(A), lacc(Tha), last(A,LTA),
+low_acc :- a(A), lacc(Tha), last(A,LTA),
                 Res is LTA - 1.0, abs2(Res,Res1), Res1 > Tha.
-high_loss :- vl(L), hloss(Thl), last(L,LTL), \+isclose(LTL,0,Thl).
+high_loss :- l(L), hloss(Thl), last(L,LTL), \+isclose(LTL,0,Thl).
 growing_loss_trend :- l(L),add_to_UpList(L,Usl), length(L,Length_u), G is (Usl*100)/Length_u, G > 50.
 up_down_acc :- a(A),add_to_UpList(A,Usa), add_to_DownList(A,Dsa), isclose(Usa,Dsa,150), Usa > 0, Dsa > 0.
 up_down_loss :- l(L),add_to_UpList(L,Usl), add_to_DownList(L,Dsl), isclose(Usl,Dsl,150), Usl > 0, Dsl > 0.
 to_low_lr :- area_sub(As), threshold_up(Th), As < Th.
 to_high_lr :- area_sub(As), threshold_down(Th), As > Th.
 
+loss_increase([],_,_Th,_M):-false.
+loss_increase([H|_],C,Th,_M):-
+    C > Th.
+loss_increase([H|T],C,Th,M):-
+    H >= M,
+    C1 is C + 1,
+    loss_increase(T,C1,Th,M).
+loss_increase([H|T],_C,Th,M):-
+    H < M,
+    loss_increase(T,0,Th,H).
+
+min_list([],_M):-!,false.
+min_list([H|T],M):-
+    H >= M,
+    min_list(T,M).
+min_list([H|T],M):-
+    H < M,
+    min_list(T,H).
+
+is_overfitting:- vl(L_val), loss_increase(L_val,0,5,100).
+
 vanish_gradient :- grad_global_norm(G), vanish_th(Th), G < Th.
 exploding_gradient :- grad_global_norm(G), exploding_th(Th), G > Th.
-% Problemi di ottimizzazione senza segnali di LR “sbagliato”
-opt_difficulty :-
-    problem(underfitting),                                        % low_acc o high_loss
-    \+ problem(low_lr),
-    \+ problem(high_lr).
+
 
 % POSSIBLE PROBLEMS
-problem(overfitting) :- gap_tr_te_acc; gap_tr_te_loss.
-problem(underfitting) :- low_acc; high_loss.
+problem(overfitting) :- is_overfitting, \+ problem(underfitting).
+problem(underfitting) :- low_acc.
 problem(inc_loss) :- growing_loss_trend.
 problem(floating_loss) :- up_down_loss.
 problem(low_lr) :- to_low_lr.
 problem(high_lr) :- to_high_lr.
 problem(gradient) :- vanish_gradient; exploding_gradient.
 % PROBLEMI SPECIFICI CHE SUGGERISCONO SKIP
-problem(need_skip) :- vanish_gradient; exploding_gradient ; slow_start ; early_plateau ; instability_signal ; opt_difficulty.
+problem(need_skip) :- vanish_gradient; exploding_gradient ; slow_start ; early_plateau ; instability_signal.
 
 
 % QUERY ----------------------------------------------------------------------------------------------------------------

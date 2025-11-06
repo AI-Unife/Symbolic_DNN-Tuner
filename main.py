@@ -7,10 +7,8 @@ import sys
 import os
 import copy
 import shutil
-from symtable import Class
-from typing import List, Tuple, Optional
+from typing import List
 
-import numpy as np
 from skopt import gp_minimize, load
 from skopt.callbacks import CheckpointSaver
 from skopt.space import Real, Integer, Categorical, Space
@@ -177,12 +175,8 @@ def run_optimization(search_space: Space, controller: controller, max_iter: int)
             n_calls=1,
             n_random_starts=1,
             callback=callback,
-            space_constraint=const_fn.apply_constraints
+            space_constraint=const_fn.apply_constraints if use_filter else None
         )
-
-    # Accumulate results
-    all_x.extend(res.x_iters)
-    all_y.extend(res.func_vals)
 
     # Decide initial new_space (rule-driven or fixed)
     new_space = copy.deepcopy(search_space) if cfg.opt in no_rules else controller.diagnosis()
@@ -192,12 +186,9 @@ def run_optimization(search_space: Space, controller: controller, max_iter: int)
 
         # If the space shape didn't change, we can warm-start BO with previous data
         if len(new_space.dimensions) == len(search_space.dimensions):
-            # if use_filter:
-            #     # Re-inject past points that satisfy current constraints (avoid duplicates)
-            #     for x, y in zip(all_x, all_y):
-            #         if apply_constraints(new_space, x) and x not in res.x_iters:
-            #             res.x_iters.append(list(x))
-            #             res.func_vals = np.append(res.func_vals, y)
+            if not use_filter:
+                # Re-inject past points that satisfy current constraints (avoid duplicates)
+                search_space = copy.deepcopy(new_space)
 
             x0, y0 = res.x_iters, res.func_vals
             obj_fn = ObjectiveWrapper(search_space, controller)
@@ -206,7 +197,7 @@ def run_optimization(search_space: Space, controller: controller, max_iter: int)
             try:
                 if "RS" in cfg.opt:
                     # Random search: keep drawing one more sample/eval
-                    res = random_search(obj_fn.objective, new_space,
+                    res = random_search(obj_fn.objective, search_space,
                                         callback=callback
                                         )
                 else:
@@ -221,53 +212,49 @@ def run_optimization(search_space: Space, controller: controller, max_iter: int)
                         n_random_starts=0,
                         random_state=cfg.seed,
                         callback=callback,
-                        space_constraint=const_fn.apply_constraints
+                        space_constraint=const_fn.apply_constraints if use_filter else None
                     )
             except Exception as e:
                 print(colors.FAIL, f"Optimization error: {e}", colors.ENDC)
                 if "RS" in cfg.opt:
-                    res = random_search(obj_fn.objective, new_space,
+                    res = random_search(obj_fn.objective, search_space,
                                         callback=callback
                                         )
                 else:
                     res = gp_minimize(
                         obj_fn.objective,
-                        new_space,
+                        search_space,
                         acq_func="EI",
                         n_calls=1,
                         n_random_starts=1,
                         random_state=cfg.seed,
                         callback=callback,
-                        space_constraint=const_fn.apply_constraints
+                        space_constraint=const_fn.apply_constraints if use_filter else None
                     )
 
-            if cfg.opt in with_rules:
-                # Accumulate unique x's and all y's
-                all_x.extend(x for x in res.x_iters if x not in all_x)
-                all_y.extend(res.func_vals)
 
         else:
             # Space changed (structure or bounds) -> restart the optimizer on the new space
             print(colors.WARNING, "Search space changed. Restarting BO...", colors.ENDC)
             search_space = copy.deepcopy(new_space)
-            obj_fn = ObjectiveWrapper(new_space, controller)
+            obj_fn = ObjectiveWrapper(search_space, controller)
             const_fn = ConstraintsWrapper(new_space)
             if "RS" in cfg.opt:
                 # Reset RS history so it doesn't bias sampling with stale configs
                 random_search.Xi, random_search.Yi = [], []
-                res = random_search(obj_fn.objective, new_space,
+                res = random_search(obj_fn.objective, search_space,
                                     callback=callback
                                     )
             else:
                 res = gp_minimize(
                     obj_fn.objective,
-                    new_space,
+                    search_space,
                     acq_func="EI",
                     n_calls=1,
                     n_random_starts=1,
                     random_state=cfg.seed,
                     callback=callback,
-                    space_constraint=const_fn.apply_constraints
+                    space_constraint=const_fn.apply_constraints if use_filter else None
                 )
 
             if cfg.opt in with_rules:
@@ -314,7 +301,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=42,
                         help="Random seed for reproducibility")
     parser.add_argument(
-        "--opt", type=str, default="basic",
+        "--opt", type=str, default="filtered",
         choices=["standard", "filtered", "basic", "RS", "RS_ruled"],
         help="Optimizer type for the analysis"
     )
