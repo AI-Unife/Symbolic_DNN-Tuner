@@ -256,9 +256,9 @@ class controller:
         K.clear_session()
 
         # Build and train model
-        self.set_data_augmentation(params.get("data_augmentation", False))
-        self.set_reg_l2(params.get("reg_l2", False))
-        self.set_residual(params.get("skip_connection", False))
+        # self.set_data_augmentation(params.get("data_augmentation", False))
+        # self.set_reg_l2(params.get("reg_l2", False))
+        # self.set_residual(params.get("skip_connection", False))
         print("Action flags for this training: ")
         print(f"  Data Augmentation: {self.da}")
         print(f"  L2 Regularization: {self.reg}")
