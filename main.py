@@ -7,6 +7,7 @@ import sys
 import os
 import copy
 import shutil
+from symtable import Class
 from typing import List, Tuple, Optional
 
 import numpy as np
@@ -115,28 +116,31 @@ def print_diff(old_space: Space, new_space: Space) -> None:
         else:
             print(colors.FAIL, f"Dimension {i}: {old_dim.name} unchanged", colors.ENDC)
 
+class ConstraintsWrapper:
+    def __init__(self, space: Space):
+        self.space = space
 
-def apply_constraints(space: Space, params: List) -> bool:
-    """
-    Check whether a sampled parameter vector fits within the (possibly updated) space.
+    def apply_constraints(self, params: List) -> bool:
+        """
+        Check whether a sampled parameter vector fits within the (possibly updated) space.
 
-    When running RS variants we skip constraints (returns True).
-    """
-    if "RS" in cfg.opt:
+        When running RS variants we skip constraints (returns True).
+        """
+        if "RS" in cfg.opt:
+            return True
+
+        for i, dim in enumerate(self.space.dimensions):
+            val = params[i]
+            if isinstance(dim, Categorical):
+                if val not in dim.categories:
+                    return False
+            elif isinstance(dim, (Integer, Real)):
+                if not (dim.low <= val <= dim.high):
+                    return False
+            else:
+                print(f"Type space dimension {dim} - {type(dim)} not valid")
+                sys.exit(1)
         return True
-
-    for i, dim in enumerate(space.dimensions):
-        val = params[i]
-        if isinstance(dim, Categorical):
-            if val not in dim.categories:
-                return False
-        elif isinstance(dim, (Integer, Real)):
-            if not (dim.low <= val <= dim.high):
-                return False
-        else:
-            print(f"Type space dimension {dim} - {type(dim)} not valid")
-            sys.exit(1)
-    return True
 
 
 # ------------------------------ optimization ---------------------------------
@@ -154,6 +158,7 @@ def run_optimization(search_space: Space, controller: controller, max_iter: int)
     callback = None # CheckpointSaver(ckpt_path, compress=9)
 
     obj_fn = ObjectiveWrapper(search_space, controller)
+    const_fn = ConstraintsWrapper(search_space)
     no_rules = ["RS", "standard"]
     with_rules = ["filtered", "RS_ruled", "basic"]
     use_filter = (cfg.opt == "filtered")
@@ -172,6 +177,7 @@ def run_optimization(search_space: Space, controller: controller, max_iter: int)
             n_calls=1,
             n_random_starts=1,
             callback=callback,
+            space_constraint=const_fn.apply_constraints
         )
 
     # Accumulate results
@@ -186,15 +192,16 @@ def run_optimization(search_space: Space, controller: controller, max_iter: int)
 
         # If the space shape didn't change, we can warm-start BO with previous data
         if len(new_space.dimensions) == len(search_space.dimensions):
-            if use_filter:
-                # Re-inject past points that satisfy current constraints (avoid duplicates)
-                for x, y in zip(all_x, all_y):
-                    if apply_constraints(new_space, x) and x not in res.x_iters:
-                        res.x_iters.append(list(x))
-                        res.func_vals = np.append(res.func_vals, y)
+            # if use_filter:
+            #     # Re-inject past points that satisfy current constraints (avoid duplicates)
+            #     for x, y in zip(all_x, all_y):
+            #         if apply_constraints(new_space, x) and x not in res.x_iters:
+            #             res.x_iters.append(list(x))
+            #             res.func_vals = np.append(res.func_vals, y)
 
             x0, y0 = res.x_iters, res.func_vals
-            obj_fn = ObjectiveWrapper(new_space, controller)
+            obj_fn = ObjectiveWrapper(search_space, controller)
+            const_fn = ConstraintsWrapper(new_space)
 
             try:
                 if "RS" in cfg.opt:
@@ -206,7 +213,7 @@ def run_optimization(search_space: Space, controller: controller, max_iter: int)
                     # BO: one more call using warm-start data
                     res = gp_minimize(
                         obj_fn.objective,
-                        new_space,
+                        search_space,
                         x0=list(x0),
                         y0=list(y0),
                         acq_func="EI",
@@ -214,6 +221,7 @@ def run_optimization(search_space: Space, controller: controller, max_iter: int)
                         n_random_starts=0,
                         random_state=cfg.seed,
                         callback=callback,
+                        space_constraint=const_fn.apply_constraints
                     )
             except Exception as e:
                 print(colors.FAIL, f"Optimization error: {e}", colors.ENDC)
@@ -230,6 +238,7 @@ def run_optimization(search_space: Space, controller: controller, max_iter: int)
                         n_random_starts=1,
                         random_state=cfg.seed,
                         callback=callback,
+                        space_constraint=const_fn.apply_constraints
                     )
 
             if cfg.opt in with_rules:
@@ -240,8 +249,9 @@ def run_optimization(search_space: Space, controller: controller, max_iter: int)
         else:
             # Space changed (structure or bounds) -> restart the optimizer on the new space
             print(colors.WARNING, "Search space changed. Restarting BO...", colors.ENDC)
-
+            search_space = copy.deepcopy(new_space)
             obj_fn = ObjectiveWrapper(new_space, controller)
+            const_fn = ConstraintsWrapper(new_space)
             if "RS" in cfg.opt:
                 # Reset RS history so it doesn't bias sampling with stale configs
                 random_search.Xi, random_search.Yi = [], []
@@ -257,6 +267,7 @@ def run_optimization(search_space: Space, controller: controller, max_iter: int)
                     n_random_starts=1,
                     random_state=cfg.seed,
                     callback=callback,
+                    space_constraint=const_fn.apply_constraints
                 )
 
             if cfg.opt in with_rules:
@@ -303,7 +314,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=42,
                         help="Random seed for reproducibility")
     parser.add_argument(
-        "--opt", type=str, default="RS_ruled",
+        "--opt", type=str, default="basic",
         choices=["standard", "filtered", "basic", "RS", "RS_ruled"],
         help="Optimizer type for the analysis"
     )

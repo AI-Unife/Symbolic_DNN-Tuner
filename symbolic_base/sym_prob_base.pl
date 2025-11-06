@@ -1,11 +1,11 @@
-0.99::action(reg_l2,overfitting):- problem(overfitting).
+0.50::action(reg_l2,overfitting):- problem(overfitting).
 0.50::action(inc_dropout,overfitting):- problem(overfitting).
 0.70::action(dec_conv_layer,overfitting):- problem(overfitting).
 0.70::action(dec_conv_block,overfitting):- problem(overfitting).
 0.70::action(dec_fc_layer,overfitting):- problem(overfitting).
 0.40::action(dec_neurons,overfitting):- problem(overfitting).
 0.99::action(data_augmentation,underfitting):- problem(underfitting).
-0.30::action(remove_reg_l2,underfitting):- problem(underfitting).
+0.50::action(remove_reg_l2,underfitting):- problem(underfitting).
 0.50::action(dec_dropout,underfitting):- problem(underfitting).
 0.50::action(decr_lr,underfitting):- problem(underfitting).
 0.40::action(inc_neurons,underfitting):- problem(underfitting).
