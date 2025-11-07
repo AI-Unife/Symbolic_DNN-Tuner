@@ -13,6 +13,11 @@ database/*
 .vscode
 depth_exp/*
 25_*/*
+results/*
 slurm-*.out
 *.slurm
 prova.py
+*.keras
+gesture/*
+*.h5
+test_gesture/*

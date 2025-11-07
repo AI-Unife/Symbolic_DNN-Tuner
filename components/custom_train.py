@@ -1,122 +1,239 @@
+from __future__ import annotations
+
+from typing import Dict, List, Tuple, Optional
+
 import tensorflow as tf
-import scipy
 from tqdm import tqdm
 
-def accuracy(outputs, targets):
+# -----------------------------------------------------------------------------
+# Metrics
+# -----------------------------------------------------------------------------
+
+def accuracy(outputs: tf.Tensor, targets: tf.Tensor) -> float:
     """
-    Computes classification accuracy by selecting the most frequent predicted class.
+    Sequence-level accuracy by majority vote (mode) over time.
+
+    Given logits/probabilities over classes for each time-step, this computes:
+      - per-frame argmax (predicted class per time-step)
+      - per-sequence MODE over time-steps
+      - compare the per-sequence predicted mode vs target mode
+      - return the average accuracy over the batch (Python float)
+
+    Args:
+        outputs: Tensor of shape [B, T, C] (logits or probs are fine for argmax).
+        targets: One-hot labels of shape [B, T, C].
+
+    Returns:
+        float: mean accuracy across the batch.
     """
-    output_frames = tf.argmax(outputs, axis=2).numpy()
-    mode, _ = scipy.stats.mode(output_frames, axis=1, keepdims=False)
-    output_preds = tf.cast(mode, tf.int64)
+    # [B, T]
+    pred_frames = tf.argmax(outputs, axis=2, output_type=tf.int32)
+    targ_frames = tf.argmax(targets, axis=2, output_type=tf.int32)
 
-    target_frames = tf.argmax(targets, axis=2).numpy()
-    target_mode, _ = scipy.stats.mode(target_frames, axis=1, keepdims=False)
+    num_classes = tf.shape(outputs)[-1]
 
-    return tf.reduce_mean(tf.cast(output_preds == target_mode, tf.float64)).numpy()
+    def row_mode(row: tf.Tensor) -> tf.Tensor:
+        """Mode (most frequent value) for 1-D int tensor."""
+        counts = tf.math.bincount(row, minlength=num_classes, maxlength=num_classes)
+        return tf.argmax(counts, axis=0, output_type=tf.int32)
+
+    # [B]
+    pred_mode = tf.map_fn(row_mode, pred_frames, fn_output_signature=tf.int32)
+    targ_mode = tf.map_fn(row_mode, targ_frames, fn_output_signature=tf.int32)
+
+    acc = tf.reduce_mean(tf.cast(tf.equal(pred_mode, targ_mode), tf.float32))
+    return float(acc.numpy())
 
 
-def train_model(model, optimizer, train_data, train_labels, test_data, test_labels, epochs, params, callbacks):
+# -----------------------------------------------------------------------------
+# Training
+# -----------------------------------------------------------------------------
+
+def train_model(
+    model: tf.keras.Model,
+    optimizer: tf.keras.optimizers.Optimizer,
+    train_data: tf.Tensor,
+    train_labels: tf.Tensor,
+    test_data: tf.Tensor,
+    test_labels: tf.Tensor,
+    epochs: int,
+    params: Dict,
+    callbacks: List[tf.keras.callbacks.Callback],
+) -> Dict[str, List[float]]:
     """
-    Custom training function replacing model.fit(), but keeping callbacks and returning history.
+    Custom training loop that mimics `model.fit` structure:
+      - supports Keras callbacks (EarlyStopping, ReduceLROnPlateau, TensorBoard, ...)
+      - returns a `history` dict like `model.fit(...).history`
+
+    Expected shapes:
+      - train_data: [B, T, ...]
+      - train_labels: [B, T, C] (one-hot)
+      - test_data:  [B_val, T, ...]
+      - test_labels:[B_val, T, C] (one-hot)
+
+    Notes:
+      - Uses CategoricalCrossentropy(from_logits=True).
+      - Per-epoch validation runs on the full validation tensor (no dataset).
     """
-    # Prepara il data generator
-    train_loader = tf.data.Dataset.from_tensor_slices((train_data, train_labels)).batch(params['batch_size'])#.shuffle(100).prefetch(tf.data.AUTOTUNE)
+    # -------------------------------------------------------------------------
+    # Data pipeline (simple & deterministic; enable shuffle if needed)
+    # -------------------------------------------------------------------------
+    batch_size = int(params["batch_size"])
+    ds = tf.data.Dataset.from_tensor_slices((train_data, train_labels))
+    # Uncomment to enable shuffling & prefetch for performance:
+    # ds = ds.shuffle(buffer_size=min(4 * batch_size, 1000), reshuffle_each_iteration=True)
+    ds = ds.batch(batch_size)
+    # ds = ds.prefetch(tf.data.AUTOTUNE)
 
-    # datagen = tf.keras.preprocessing.image.ImageDataGenerator()
-    # train_loader = datagen.flow(train_data, train_labels, batch_size=params['batch_size'])
-
-    # Definizione della loss e dell'ottimizzatore
+    # -------------------------------------------------------------------------
+    # Loss & (optional) grad clipping
+    # -------------------------------------------------------------------------
     loss_fn = tf.keras.losses.CategoricalCrossentropy(from_logits=True)
-    # optimizer = tf.keras.optimizers.Adam()
 
-    # Inizializzazione history
+    clipnorm: Optional[float] = params.get("clipnorm")
+    clipvalue: Optional[float] = params.get("clipvalue")
+
+    @tf.function(reduce_retracing=True)
+    def train_step(batch_x: tf.Tensor, batch_y: tf.Tensor) -> Tuple[tf.Tensor, tf.Tensor]:
+        """
+        One training step:
+          - unroll model over time dimension T (frame-wise forward)
+          - stack outputs to [B, T, C]
+          - compute loss & gradients, apply optimizer (with optional clipping)
+          - compute batch accuracy (Python conversion is avoided inside tf.function)
+        """
+        time_steps = tf.shape(batch_x)[1]
+
+        out_dtype = tf.as_dtype(getattr(model, "compute_dtype", tf.float32))
+
+        with tf.GradientTape() as tape:
+            ta = tf.TensorArray(dtype=out_dtype, size=time_steps)
+
+            # Unroll temporale; usare tf.range dentro @tf.function crea un tf.while_loop ma con TensorArray è ok
+            for t in tf.range(time_steps):
+                # batch_x[:, t] : [B, ...]
+                out_t = model(batch_x[:, t], training=True)  # [B, C]
+                ta = ta.write(t, out_t)
+
+            # ta.stack(): [T, B, C] -> permuta a [B, T, C]
+            outputs = tf.transpose(ta.stack(), perm=[1, 0, 2])
+
+            loss = loss_fn(batch_y, outputs)
+
+        grads = tape.gradient(loss, model.trainable_variables)
+
+        if clipnorm is not None:
+            grads = [tf.clip_by_norm(g, clipnorm) if g is not None else None for g in grads]
+        if clipvalue is not None:
+            grads = [tf.clip_by_value(g, -clipvalue, clipvalue) if g is not None else None for g in grads]
+
+        optimizer.apply_gradients(zip(grads, model.trainable_variables))
+
+        # accuracy() returns a Python float; compute a TF tensor here to avoid pyfunc inside tf.function
+        # (We replicate the logic in TF to keep this callable as a graph function.)
+        pred_frames = tf.argmax(outputs, axis=2, output_type=tf.int32)
+        targ_frames = tf.argmax(batch_y, axis=2, output_type=tf.int32)
+        num_classes_local = tf.shape(outputs)[-1]
+
+        def row_mode_tf(row: tf.Tensor) -> tf.Tensor:
+            counts = tf.math.bincount(row, minlength=num_classes_local, maxlength=num_classes_local)
+            return tf.argmax(counts, axis=0, output_type=tf.int32)
+
+        pred_mode = tf.map_fn(row_mode_tf, pred_frames, fn_output_signature=tf.int32)
+        targ_mode = tf.map_fn(row_mode_tf, targ_frames, fn_output_signature=tf.int32)
+        batch_acc = tf.reduce_mean(tf.cast(tf.equal(pred_mode, targ_mode), tf.float32))
+
+        return loss, batch_acc
+
+    # -------------------------------------------------------------------------
+    # History & callbacks
+    # -------------------------------------------------------------------------
     history = {key: [] for key in ["loss", "accuracy", "val_loss", "val_accuracy"]}
 
-    # Inizializzazione delle callback
-    for callback in callbacks:
-        callback.set_model(model)
-        callback.on_train_begin()
+    for cb in callbacks:
+        cb.set_model(model)
+        cb.on_train_begin()
 
-    num_epochs = epochs
+    # -------------------------------------------------------------------------
+    # Epoch loop
+    # -------------------------------------------------------------------------
+    for epoch in range(epochs):
+        epoch_loss_sum = 0.0
+        epoch_acc_sum = 0.0
+        n_batches = 0
 
-    for epoch in range(num_epochs):
-        epoch_loss, epoch_acc, n_batches = 0, 0, 0
+        for cb in callbacks:
+            cb.on_epoch_begin(epoch)
 
-        # Avvio callbacks per l'epoca
-        for callback in callbacks:
-            callback.on_epoch_begin(epoch)
-        print(f"Epoch {epoch + 1}/{num_epochs}")
-        # Training loop
-        for data, targets in tqdm(train_loader):
-            batch_size, time_steps, *input_shape = data.shape
-            outputs_list = []
+        print(f"Epoch {epoch + 1}/{epochs}")
 
-            with tf.GradientTape() as tape:
-                for t in range(time_steps):
-                    frame_outputs = model(data[:, t], training=True)
-                    outputs_list.append(frame_outputs)
-
-                outputs = tf.stack(outputs_list, axis=1)
-                # print("target shape: ", targets.shape)
-                # print("output shape: ", outputs.shape)
-                loss = loss_fn(targets, outputs)
-
-            # Calcolo gradienti e aggiornamento pesi
-            grads = tape.gradient(loss, model.trainable_variables)
-            optimizer.apply_gradients(zip(grads, model.trainable_variables))
-
-            # Aggiorna metriche
-            epoch_loss += loss.numpy()
-            epoch_acc += accuracy(outputs, targets)
+        # Training
+        for batch_x, batch_y in tqdm(ds, leave=False):
+            loss_t, acc_t = train_step(batch_x, batch_y)
+            epoch_loss_sum += float(loss_t.numpy())
+            epoch_acc_sum += float(acc_t.numpy())
             n_batches += 1
 
-        # Calcola loss e accuracy medie dell'epoca
-        avg_loss = epoch_loss / n_batches
-        avg_acc = epoch_acc / n_batches
+        # Aggregate epoch stats
+        avg_loss = epoch_loss_sum / max(n_batches, 1)
+        avg_acc = epoch_acc_sum / max(n_batches, 1)
         history["loss"].append(avg_loss)
         history["accuracy"].append(avg_acc)
 
-        # Validazione
-        val_outputs_list = []
-        for t in range(test_data.shape[1]):
-            val_frame_outputs = model(test_data[:, t], training=False)
-            val_outputs_list.append(val_frame_outputs)
-
-        val_outputs = tf.stack(val_outputs_list, axis=1)
-        val_loss = loss_fn(test_labels, val_outputs).numpy()
+        # Validation (full tensor, frame-wise forward)
+        time_steps_val = test_data.shape[1]
+        outputs_val_list = []
+        for t in range(time_steps_val):
+            outputs_val_list.append(model(test_data[:, t], training=False))
+        val_outputs = tf.stack(outputs_val_list, axis=1)  # [B_val, T, C]
+        val_loss = float(tf.keras.losses.categorical_crossentropy(
+            test_labels, val_outputs, from_logits=True
+        ).numpy().mean())
         val_acc = accuracy(val_outputs, test_labels)
 
         history["val_loss"].append(val_loss)
         history["val_accuracy"].append(val_acc)
 
-        # Logging
-        print(f"Epoch {epoch + 1}/{num_epochs} - Loss: {avg_loss:.4f}, Accuracy: {avg_acc:.4f}, "
-              f"Val Loss: {val_loss:.4f}, Val Accuracy: {val_acc:.4f}")
+        print(
+            f"Epoch {epoch + 1}/{epochs} - "
+            f"Loss: {avg_loss:.4f}, Accuracy: {avg_acc:.4f}, "
+            f"Val Loss: {val_loss:.4f}, Val Accuracy: {val_acc:.4f}"
+        )
 
-        # Avvio callbacks per la fine dell'epoca
+        # Feed logs to callbacks (EarlyStopping/ReduceLROnPlateau/etc.)
         logs = {"loss": avg_loss, "accuracy": avg_acc, "val_loss": val_loss, "val_accuracy": val_acc}
-        for callback in callbacks:
-            callback.on_epoch_end(epoch, logs)
+        for cb in callbacks:
+            cb.on_epoch_end(epoch, logs)
 
-    # Callback per la fine dell'addestramento
-    for callback in callbacks:
-        callback.on_train_end()
+    for cb in callbacks:
+        cb.on_train_end()
 
-    return history  # Stesso formato di model.fit().history
+    return history  # same shape/keys as Keras History.history
 
 
-def eval_model(model, X, y):
-    val_outputs_list = []
+# -----------------------------------------------------------------------------
+# Evaluation
+# -----------------------------------------------------------------------------
+
+def eval_model(model: tf.keras.Model, X: tf.Tensor, y: tf.Tensor) -> Tuple[float, float]:
+    """
+    Evaluate a trained model on a temporal batch:
+      - unroll over time, stack outputs to [B, T, C]
+      - compute CategoricalCrossentropy(from_logits=True)
+      - compute sequence-level majority-vote accuracy
+
+    Returns:
+        (val_loss, val_accuracy)
+    """
+    time_steps = X.shape[1]
+    outputs_val_list = []
     loss_fn = tf.keras.losses.CategoricalCrossentropy(from_logits=True)
-    for t in range(X.shape[1]):
-        val_frame_outputs = model(X[:, t], training=False)
-        val_outputs_list.append(val_frame_outputs)
 
-    val_outputs = tf.stack(val_outputs_list, axis=1)
-    val_loss = loss_fn(y, val_outputs).numpy()
+    for t in range(time_steps):
+        outputs_val_list.append(model(X[:, t], training=False))
+
+    val_outputs = tf.stack(outputs_val_list, axis=1)  # [B, T, C]
+    val_loss = float(loss_fn(y, val_outputs).numpy())
     val_acc = accuracy(val_outputs, y)
-    
-    return val_loss, val_acc
 
-        
+    return val_loss, val_acc

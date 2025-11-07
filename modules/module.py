@@ -32,6 +32,11 @@ class module:
         self.modules_ready = []
         self.load_modules()
 
+    def get_module(self, name):
+        for i, module in enumerate(self.modules_list):
+            if module == name:
+                return self.modules_obj[i]
+
     def load_modules(self):
         """
         Creation of module instances
@@ -88,9 +93,9 @@ class module:
         # rules contains prolog rules useful for defining problems that might affect the network
         # actions contains the rules for tuning probabilities
         # problems contains the definition of actions to use given a certain problem
-        rules = ""
-        actions = ""
-        problems = ""
+        rules = "\n"
+        actions = "\n"
+        problems = "\n"
 
         for index, name in enumerate(self.modules_name):
 

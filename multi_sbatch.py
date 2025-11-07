@@ -1,76 +1,67 @@
-import os
+import subprocess
+from itertools import product
 
-# Definizione delle configurazioni
-configurations = [
-    # {"MODE": "depth", "FRAMES": 4, "CHANNEL": 4},
-    {"MODE": "depth", "FRAMES": 8, "CHANNEL": 8}, #mancano 2
-    # {"MODE": "depth", "FRAMES": 16, "CHANNEL": 16},
-    # {"MODE": "depth", "FRAMES": 32, "CHANNEL": 32},
-    # {"MODE": "depth", "FRAMES": 64, "CHANNEL": 64},
-    # {"MODE": "fwdPass", "FRAMES": 4, "CHANNEL": 2}, 
-    # {"MODE": "fwdPass", "FRAMES": 8, "CHANNEL": 2},
-    # {"MODE": "fwdPass", "FRAMES": 16, "CHANNEL": 2},
-    {"MODE": "fwdPass", "FRAMES": 32, "CHANNEL": 2}, # mancano 2
-    # {"MODE": "fwdPass", "FRAMES": 64, "CHANNEL": 2}, # annullato
-    {"MODE": "hybrid", "FRAMES": 16, "CHANNEL": 4},
-    {"MODE": "hybrid", "FRAMES": 16, "CHANNEL": 8},
-    {"MODE": "hybrid", "FRAMES": 32, "CHANNEL": 4},
-    {"MODE": "hybrid", "FRAMES": 32, "CHANNEL": 8},
-    # {"MODE": "hybrid", "FRAMES": 64, "CHANNEL": 4},# annullato
-    # {"MODE": "hybrid", "FRAMES": 64, "CHANNEL": 8},# annullato
-    # {"MODE": "hybrid", "FRAMES": 64, "CHANNEL": 16},# annullato
-]
+datasets_cifar = ['CIFAR-10', 'CIFAR-100', 'Imagenet16120']
+optimizers = ['filtered', 'standard', 'basic', 'RS', 'RS_ruled']
+seeds = [42, 84, 123, 96, 7]
 
-# Crea una directory per gli script
-os.makedirs("sbatch_scripts", exist_ok=True)
 
-# Testo comune del file sbatch
-header = """#!/bin/bash
+def generate_jobs():
+    job_configs = []
 
-#SBATCH --job-name={job_name}
-#SBATCH --partition=gpu
-#SBATCH --gres=gpu:GH100:1
+    # CIFAR - flops
+    for dataset, optimizer, seed in product(datasets_cifar, optimizers, seeds):
+        job_configs.append({
+            "data_name": dataset,
+            "opt": optimizer,
+            "seed": seed,
+        })
+    return job_configs
 
-TIMESTAMP=$(date +%y_%m_%d_%H_%M_%S_%N)
-FRAMES={frames}
-CHANNEL={channel}
-EPOCH=20
-MAX_EVAL=100
-MODE="{mode}"
 
-# Genera il nome dell'esperimento
-NAME_EXP="$(date +%y_%m_%d_%H)_${SLURM_JOB_ID}_${{MODE}}_gesture_accuracy_module_${{MAX_EVAL}}_${{EPOCH}}_${{FRAMES}}_${{CHANNEL}}_2"
 
-mkdir -p ${{NAME_EXP}}
+def save_job_configs_to_file(job_configs, filename="params.txt"):
+    # Ordina per seed
+    job_configs = sorted(job_configs, key=lambda x: x["seed"])
 
-# Reindirizza manualmente stdout e stderr
-exec > ${{NAME_EXP}}/${{TIMESTAMP}}.out 2> ${{NAME_EXP}}/${{TIMESTAMP}}.err
-
-module load cuda/12.2
-module load miniconda3/24.4.0
-conda activate tf
-
-cd ${{HOME}}/Symbolic_DNN-Tuner
-python main.py --mod_list accuracy_module --name ${{NAME_EXP}} --max_eval ${{MAX_EVAL}} --epochs ${{EPOCH}} --data_name gesture --mode ${{MODE}} --frames ${{FRAMES}} --channels ${{CHANNEL}}
-
-if [[ -n "$SLURM_JOB_ID" ]]; then
-    mv slurm-${{SLURM_JOB_ID}}.out ${{NAME_EXP}}/
-fi
-"""
-
-# Genera un file per ogni configurazione
-for config in configurations:
-    filename = f"sbatch_scripts/sbatch_{config['MODE']}_frames{config['FRAMES']}_channels{config['CHANNEL']}.slurm"
-    job_name = f"{config['MODE']}_{config['FRAMES']}_{config['CHANNEL']}"
-    
     with open(filename, "w") as f:
-        f.write(header.format(
-            job_name=job_name,
-            frames=config["FRAMES"],
-            mode=config["MODE"],
-            channel=config["CHANNEL"],
-        ))
-    for i in range(5):
-        os.system(f"sbatch {filename}")
+        for config in job_configs:
+            line = ",".join(str(config[k]) for k in ["data_name", "opt", "seed"])
+            f.write(line + "\n")
+            
+# generate_params.py
+from pathlib import Path
 
-print("Script sbatch generati nella cartella 'sbatch_scripts' e run avviata 5 volte per esperimento.")
+def generate_params_file(output_path: str = "params_gesture.txt"):
+    """
+    Genera un file params.txt per job array, dove ogni riga è una combinazione di parametri
+    a partire da 'gesture'. Ignora prefissi e ID.
+    """
+    dataset = "gesture"
+    epochs = 100
+    batch_size = 30
+
+    # definizione delle configurazioni
+    configs = [
+        ("depth",   [(4, 4, 2), (8, 8, 2), (16, 16, 2), (32, 32, 2), (64, 64, 2)]),
+        ("fwdPass", [(4, 2, 2), (8, 2, 2), (16, 2, 2), (32, 2, 2), (64, 2, 2)]),
+        ("hybrid",  [(16, 4, 2), (16, 8, 2), (32, 4, 2), (32, 8, 2), (64, 4, 2), (64, 8, 2), (64, 16, 2)]),
+    ]
+
+    lines = []
+    for mode, params_list in configs:
+        for p in params_list:
+            line = f"{dataset},{epochs},{batch_size},{mode},{p[0]},{p[1]},{p[2]}"
+            lines.append(line)
+
+    # scrive il file
+    Path(output_path).write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(f"✅ File '{output_path}' generato con {len(lines)} combinazioni.")
+
+def main():
+    job_configs = generate_jobs()
+    save_job_configs_to_file(job_configs)
+    # generate_params_file()
+
+if __name__ == "__main__":
+    main()
