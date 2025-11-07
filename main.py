@@ -9,10 +9,12 @@ import copy
 import shutil
 from typing import List
 
-from skopt import gp_minimize, load
+from skopt import load
 from skopt.callbacks import CheckpointSaver
 from skopt.space import Real, Integer, Categorical, Space
 from tensorflow.keras import backend as K
+
+from components.gp import gp_minimize
 
 from components.colors import colors
 from components.controller import controller

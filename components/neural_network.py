@@ -419,7 +419,7 @@ class neural_network:
                     self.train_data, self.train_labels,
                     self.test_data, self.test_labels,
                     self.epochs, params,
-                    [tensorboard, es]
+                    [tensorboard, es1, es2]
                 )
         else:
             if "debug" in self.cfg.name:
@@ -436,7 +436,7 @@ class neural_network:
                     batch_size=int(params["batch_size"]),
                     verbose=2,
                     validation_data=(self.test_data, self.test_labels),
-                    callbacks=[tensorboard, es],
+                    callbacks=[tensorboard, es1, es2],
                 ).history
         # --- Evaluate ---
         if (self.cfg.name in ("fwdPass", "hybrid")) and "gesture" in self.cfg.dataset:
