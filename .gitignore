@@ -22,4 +22,3 @@ gesture/*
 data/
 *.h5
 test_gesture/*
-model_bench/exports/*

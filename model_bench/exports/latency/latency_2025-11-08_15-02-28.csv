@@ -1,0 +1,4 @@
+Model,HW_config,Latency(s),Latency(ms)
+modello/model/best-model.keras,nv_large,0.00804318,8.043180000000001
+modello/model/best-model.keras,nv_small256,0.064398768,64.39876799999999
+modello/model/best-model.keras,nv_small,0.203825328,203.825328
