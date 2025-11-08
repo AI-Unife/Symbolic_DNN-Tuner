@@ -1,9 +1,17 @@
 import questionary
 import os
 
+from utils.training_utils import fine_tune_model
+
 class TrainingMenu:
     def __init__(self):
         pass
+
+    def start_training(self):
+        """Start the training process for a model"""
+        model_path = 'modello/best_model.py'
+        fine_tune_model(model_path)
+
 
     def run(self):
         while True:
@@ -18,7 +26,7 @@ class TrainingMenu:
             ).ask()
 
             if choice == "1: Start Training":
-                print("Starting Model Training...")
+                self.start_training()
             elif choice == "2: View Training Logs":
                 print("Displaying Training Logs...")
             elif choice == "3: Back to Main Menu":

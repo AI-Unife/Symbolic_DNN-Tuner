@@ -68,7 +68,7 @@ def multi_model_test(hw_mod, hw_choose, directory_path,  recursive=True):
     confirm = questionary.confirm(f"Proceed to test {len(model_files)} model(s)?", default=True).ask()
     if not confirm:
         print(colors.FAIL, "Operation cancelled by user.", colors.ENDC)
-        return
+        return results
     
     with tqdm(total=len(model_files), desc="Testing models", unit="model") as pbar:
         for file in model_files:

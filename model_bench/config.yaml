@@ -1,32 +1,27 @@
-# ModelBench Configuration
-# Questo file viene letto da exp_config.py quando usi model_bench
+# ModelBench Configuration - UPPERCASE keys for compatibility
 
-# Numero massimo di valutazioni (non usato direttamente da model_bench)
 eval: 100
-
-# Epoche per il training (se usi il training menu)
-epochs: 10
-
-# Lista dei moduli attivi (vuota per model_bench standalone)
+epochs: 30
 mod_list: []
+dataset: gesture
+name: model_bench
 
-# Dataset da usare per i test
-dataset: "cifar10"
+# UPPERCASE keys per gesture_dataset.py
+FRAMES: 16
+MODE: fwdPass
+NUM_CHANNELS: 2
+POLARITY: both
 
-# Nome dell'esperimento/sessione
-name: "model_bench"
-
-# Parametri per dataset gesture (se necessario)
+# Mantieni anche lowercase per compatibilità
 frames: 16
-mode: "fwdPass"
+mode: fwdPass
 channels: 2
-polarity: "both"
+polarity: both
 
-# Random seed
 seed: 42
-
-# Optimizer type (non usato da model_bench, ma richiesto da exp_config.py)
-opt: "RS"
-
-# Metadata
+opt: RS_ruled
 created_at: "2025-11-08T00:00:00"
+
+# Path corretti per dataset e cache
+dataset_path: "/Users/osamaabdouh/Documents/AIDA4Edge/data"
+cache_dir: "/Users/osamaabdouh/Documents/AIDA4Edge/tf/cache"

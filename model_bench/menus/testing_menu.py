@@ -16,7 +16,7 @@ class TestingMenu:
 
     def display_header(self):
         os.system('clear' if os.name == 'posix' else 'cls')
-        print(colors.CYAN + "+-----------------------------------+")
+        print(colors.MAGENTA + "+-----------------------------------+")
         print("|        Model Testing Menu         |")
         print("+-----------------------------------+" + colors.ENDC)
 
@@ -31,7 +31,7 @@ class TestingMenu:
 
         print(colors.OKGREEN, "\n|  ---------------- LATENCY ANALYSIS ----------------  |", colors.ENDC)
         for model, items in grouped.items():
-            print(colors.MAGENTA, f"Model: {model}", colors.ENDC)
+            print(colors.HEADER, f"Model: {model}", colors.ENDC)
             for r in items:
                 hw = r.get("HW config")
                 lat = r.get("latency(s)")
@@ -72,12 +72,12 @@ class TestingMenu:
                 models_path = "gesture/model" #Default path if not provided
                 print("Using default model(s) path:", models_path)
             models_path = os.path.abspath(os.path.expanduser(models_path))
-            
+
             # Check if it's a single model file
             if check_if_path_is_model(models_path):
                 result = single_model_test(self.hw_mod, hw_choose, models_path)
                 if result:
-                    results = [result]
+                    results = result
                 break
             # Check if it's a directory with multiple models
             elif os.path.isdir(models_path):
@@ -86,13 +86,18 @@ class TestingMenu:
                     default=True
                 ).ask()
                 results = multi_model_test(self.hw_mod, hw_choose, models_path, recursive=recursive)
+                if not results:
+                    questionary.press_any_key_to_continue().ask()
+                    return
                 break
             else:
                 print(colors.FAIL, "Invalid file/directory. Please try again.", colors.ENDC)
+                questionary.press_any_key_to_continue().ask()
                 continue
         
         if results is None:
             print(colors.FAIL, "No results returned from model test.", colors.ENDC)
+            questionary.press_any_key_to_continue().ask()
             return
         #display grouped results
         self.print_grouped_results(results)

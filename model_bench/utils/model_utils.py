@@ -19,11 +19,11 @@ from exp_config import load_cfg
 
 
 def check_if_path_is_model(path):
+    """Check if the given path is a valid model file (.keras or .h5)"""
     allowed_extensions = (".keras", ".h5")
-    if os.path.exists(path) and os.path.isfile(path) and path.endswith(allowed_extensions):
-        return True
-    else:
-        return False
+    return (os.path.exists(path) and 
+            os.path.isfile(path) and 
+            path.endswith(allowed_extensions))
 
 def call_silently(func, *args, **kwargs):
     """Executes a function while temporarily disabling stdout."""
@@ -45,7 +45,15 @@ def load_model_simple(model_path):
         return None
 
 def load_trained_model(m_path, show_info=None):
-    """Load trained model based on user configuration"""
+    """Load trained model based on user configuration
+    use the active config to load the model and dataset
+    Args:
+        m_path (str): Path to the trained model file (.keras or .h5)
+        show_info (bool, optional): Whether to display user params and model summary. 
+                                    If None, prompts the user. Defaults to None.
+    Returns:
+        model: Loaded Keras model
+    """
 
     cfg = load_cfg()
 
@@ -53,15 +61,13 @@ def load_trained_model(m_path, show_info=None):
         show_info = questionary.confirm("Want to see User params configuration and Model summary?", default=False).ask()
 
     if show_info:
-        # cfg.get_experiment_name()
-        print(colors.MAGENTA, "|  ----------- USER PARAMS CONFIGURATION ----------  |\n", colors.ENDC)
+        print(colors.OKBLUE, "|  ----------- CONFIGURATION ----------  |\n", colors.ENDC)
         print("EXPERIMENT NAME: ", cfg.name)
-        print("DATASET NAME: ", cfg.dataset)
-        print("MAX NET EVAL: ", cfg.eval)
-        print("EPOCHS FOR TRAINING: ", cfg.epochs)
+        print("DATASET: ", cfg.dataset)
+        print("EPOCHS: ", cfg.epochs)
+        print("MODE: ", cfg.mode)
         print("MODULE LIST: ", cfg.mod_list)
-        print("mode: ", cfg.mode)
-
+        print("MAX EVALUATIONS: ", cfg.eval)
         # iterate over each name in the list of folders and
         # if it doesn't exist, proceed with its creation
     
@@ -70,6 +76,7 @@ def load_trained_model(m_path, show_info=None):
     
     try:
         if show_info:
+            print(colors.OKBLUE, "\n|  ----------- DATASET SUMMARY ----------  |\n", colors.ENDC)
             X_train, Y_train, X_test, Y_test, n_classes = get_datasets(dataset_name)
         else:
             X_train, Y_train, X_test, Y_test, n_classes = call_silently(
@@ -78,41 +85,15 @@ def load_trained_model(m_path, show_info=None):
     except Exception as e:
         print(colors.FAIL, f"Errore nel caricamento del dataset '{dataset_name}': {e}", colors.ENDC)
         sys.exit(1)
-
-    """ DATASET SECTION -------------------------------------------------------------------------------------------------------- """
-    """Load dataset based on user configuration
-    if cfg.DATA_NAME == "MNIST":
-        # MNIST SECTION --------------------------------------------------------------------------------------------------------
-        if show_info:
-            X_train, X_test, Y_train, Y_test, n_classes = mnist()
-        else:
-            X_train, X_test, Y_train, Y_test, n_classes = call_silently(mnist)
-
-    elif cfg.DATA_NAME == "CIFAR-10":
-        # CIFAR-10 SECTION -----------------------------------------------------------------------------------------------------
-        # obtain images and labels from the cifar dataset
-        if show_info:
-            X_train, X_test, Y_train, Y_test, n_classes = cifar_data()
-        else:
-            X_train, X_test, Y_train, Y_test, n_classes = call_silently(cifar_data)
-    elif cfg.DATA_NAME == "gesture":
-        # GestureDVS128 SECTION -----------------------------------------------------------------------------------------------------
-        if show_info:
-            X_train, X_test, Y_train, Y_test, n_classes = gesture_data()
-        else:
-            X_train, X_test, Y_train, Y_test, n_classes = call_silently(gesture_data)
-    else:
-        print(colors.FAIL, "|  ----------- DATASET NOT FOUND ----------  |\n", colors.ENDC)
-        sys.exit()
-    """
         
-    dt = datetime.datetime.now()
-    max_evals = cfg.MAX_EVAL
-
     # LOADING ALREADY TRAINED MODEL --------------------------------------------------------------------------------------------------------
+    try:
+        model = load_model(m_path, compile=False)
+        if show_info:
+            print(colors.OKBLUE, "\n|  ----------- MODEL SUMMARY ----------  |\n", colors.ENDC)
+            model.summary()
+    except Exception as e:
+        print(colors.FAIL, f"Errore nel caricamento del modello da '{m_path}': {e}", colors.ENDC)
+        sys.exit(1)
 
-    model = load_model(m_path, compile=False)
-    if show_info:
-        model.summary()
-        
     return model
