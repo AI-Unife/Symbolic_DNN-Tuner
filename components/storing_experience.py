@@ -4,8 +4,6 @@ from sqlite3 import Error
 from exp_config import load_cfg
 import numpy as np
 
-import config as cfg
-
 
 class StoringExperience:
     """

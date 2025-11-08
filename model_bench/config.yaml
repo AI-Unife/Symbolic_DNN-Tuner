@@ -1,0 +1,32 @@
+# ModelBench Configuration
+# Questo file viene letto da exp_config.py quando usi model_bench
+
+# Numero massimo di valutazioni (non usato direttamente da model_bench)
+eval: 100
+
+# Epoche per il training (se usi il training menu)
+epochs: 10
+
+# Lista dei moduli attivi (vuota per model_bench standalone)
+mod_list: []
+
+# Dataset da usare per i test
+dataset: "cifar10"
+
+# Nome dell'esperimento/sessione
+name: "model_bench"
+
+# Parametri per dataset gesture (se necessario)
+frames: 16
+mode: "fwdPass"
+channels: 2
+polarity: "both"
+
+# Random seed
+seed: 42
+
+# Optimizer type (non usato da model_bench, ma richiesto da exp_config.py)
+opt: "RS"
+
+# Metadata
+created_at: "2025-11-08T00:00:00"

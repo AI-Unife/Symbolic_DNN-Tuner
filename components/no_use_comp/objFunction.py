@@ -1,8 +1,4 @@
-<<<<<<<< HEAD:components/objFunction.py
-import config as cfg
-========
 import myconfig as cfg
->>>>>>>> origin/efficient_BO:components/no_use_comp/objFunction.py
 
 class objFunction:
     def __init__(self, search, controller):
