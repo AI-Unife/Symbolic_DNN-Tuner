@@ -251,7 +251,7 @@ class neural_network:
             inputs = tf.keras.layers.RandomFlip("horizontal")(inputs)
             inputs = tf.keras.layers.RandomTranslation(height_factor=0.1, width_factor=0.1, fill_mode="nearest")(inputs)
 
-        x = Conv2D(params["unit_c1"], (3, 3), padding="same")(inputs)
+        x = Conv2D(params["unit_c1"] * params['num_neurons'], (3, 3), padding="same")(inputs)
         x = Activation(params["activation"])(x)
         x = BatchNormalization()(x)
         for _ in range(1, layer_x_block-1):
@@ -262,7 +262,7 @@ class neural_network:
             x = Conv2D(params["unit_c1"] * params['num_neurons'] , (3, 3), padding="same")(x)
             x = self.add_residual(inputs, x, params['unit_c1'] * params['num_neurons'], params['activation'], reg_layer)
         else:
-            x = Conv2D(params["unit_c1"] * params['num_neurons'] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
+            x = Conv2D(params["unit_c1"] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
             x = Activation(params["activation"])(x)
             x = BatchNormalization()(x)
         x = MaxPooling2D(pool_size=(2, 2))(x)
@@ -314,7 +314,8 @@ class neural_network:
         outputs = Dense(self.n_classes, kernel_regularizer=reg_layer, activation="softmax")(x)
 
         self.model = Model(inputs=inputs, outputs=outputs)
-        self.model.summary()
+        if self.cfg.verbose > 1:
+            self.model.summary()
         if "flops_module" in self.cfg.mod_list:
             # Compute FLOPs (approximate; counts MACs as 2 FLOPs)
             try:

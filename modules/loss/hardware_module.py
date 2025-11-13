@@ -6,7 +6,12 @@ import flops.flops_calculator as fc
 from pathlib import Path
 from tensorflow.keras import layers, models
 
-import nvdla.profiler as profiler
+import torch
+import tf2onnx
+import onnx
+import onnx2torch
+
+import profiler as profiler
 from exp_config import load_cfg
 
 class hardware_module(common_interface):
@@ -28,16 +33,17 @@ class hardware_module(common_interface):
         # max manifacturing cost value
         self.max_cost = 40000
         self.cfg = load_cfg()
-        nvdla_list = [{'name': "nv_small", 'path': "nv_small64_fp32.yaml", 'area': 2.824},
-                      {'name': "nv_small256", 'path': "nv_small256_fp32.yaml", 'area': 3.091},
-                      {'name': "nv_large", 'path': "nv_large2048_fp32.yaml", 'area': 3.809}]
+        nvdla_list = [
+            {'name': "nv_small", 'path': "nv_small64_int8.yaml", 'area': 2.824},
+                      {'name': "nv_small256", 'path': "nv_small256_int8.yaml", 'area': 3.091},
+                      {'name': "nv_large", 'path': "nv_large1024_int32.yaml", 'area': 3.809}]
                       
         # init list of available configurations to an empty dict
         self.nvdla = {}
         
         # iterate over each configuration
         for config in nvdla_list:
-            if os.path.exists('nvdla/specs/' + config['path']):
+            if os.path.exists('/hpc/home/bzzlca/NVDLA-EMBER/specs/' + config['path']):
                 # calculate the current manifacturing cost
                 current_cost = round(self.cost_par*config['area'], 2)
                 # inclusion of only configurations that are less expensive than the cost limit
@@ -68,7 +74,7 @@ class hardware_module(common_interface):
 
         # for each configuration calculate the latency and the total cost
         for config_key in self.nvdla:
-            config_path = self.nvdla[config_key]['path']
+            config_path = "/hpc/home/bzzlca/NVDLA-EMBER/specs/{}".format(self.nvdla[config_key]['path'])
             self.nvdla[config_key]['latency'] = self.get_model_latency(self.model, config_path) / (10**9)
             latency_temp = self.nvdla[config_key]['latency'] / self.max_latency
             cost_temp = self.nvdla[config_key]['cost'] / self.max_cost
@@ -132,72 +138,85 @@ class hardware_module(common_interface):
         :param model: model to be evaluated
         :return: model latency
         """
-        # counter to accumulate the latencies of each network layer
-        total_latency = 0
-        
-        # initialize all the variables that will be passed to the profiler and that characterize the convolutional layers
-        in_ch, out_ch, kernel, stride, padding, batch, bias = 0, 0, 0, 0, 2, 1, False
-
-        # define the configuration on which to perform the evaluation and the log file name in which to save the informations
-        nvdla_path = config_path
-        log_file = "profiler_logs.txt"
-        
-        # build the path where the configuration file is located
-        work_p = os.getcwd()
-        config_p = Path(work_p).joinpath('nvdla').joinpath('specs').joinpath(nvdla_path)
-        nvdla = profiler.nvdla(config_p)
-        
-        # build a list containing input dimensions, following the format of pytorch on which the profiler is based
-        # the list contains this informations: [number of batches, number of channels, height, width]
         input_size = model.layers[0].output.shape
-        input_size = [batch, input_size[3], input_size[1], input_size[2]]
-
-        #model = self.LENET()
-        #input_size = [batch, 1, 28, 28]
+        input_size = [1, input_size[3], input_size[1], input_size[2]]
+        X = torch.Tensor(torch.randn(input_size))
+        print(f"[INFO] Profiling model with configuration: {config_path}...")
+        onnx_model = tf2onnx.convert.from_keras(model, output_path="{}/model.onnx".format(self.cfg.name))
+        onnx_model = onnx.load("{}/model.onnx".format(self.cfg.name))
+        print("[INFO] ONNX model created.")
+        torch_model = onnx2torch.convert(onnx_model)
+        print("[INFO] PyTorch model created.")
+        print("[INFO] Starting profiling, log files will be saved in {} directory...".format(self.cfg.name))
+        total_latency = profiler.profile_network(torch_model, X, config_path, self.cfg.name+'/')
         
-        # iterate over each layer of the model
-        for i in model.layers:
-            layer_class = i.__class__.__name__
+        #### OLD IMPLEMENTATION USING THE OLDER PROFILER - TO BE DEPRECATED ####
+        # # counter to accumulate the latencies of each network layer
+        # total_latency = 0
+        
+        # # initialize all the variables that will be passed to the profiler and that characterize the convolutional layers
+        # in_ch, out_ch, kernel, stride, padding, batch, bias = 0, 0, 0, 0, 2, 1, False
 
-            # if the current layer is a convolution
-            if layer_class in ['Conv2D']:
-                
-                # build the list containing the output dimensions of the convolutional layer
-                out_size = i.output.shape
-                out_size = [batch, out_size[3], out_size[1], out_size[2]]
+        # # define the configuration on which to perform the evaluation and the log file name in which to save the informations
+        # nvdla_path = config_path
+        # log_file = "profiler_logs.txt"
+        
+        # # build the path where the configuration file is located
+        # work_p = os.getcwd()
+        # config_p = Path(work_p).joinpath('nvdla').joinpath('specs').joinpath(nvdla_path)
+        # nvdla = profiler.nvdla(config_p)
+        
+        # # build a list containing input dimensions, following the format of pytorch on which the profiler is based
+        # # the list contains this informations: [number of batches, number of channels, height, width]
+        # input_size = model.layers[0].output.shape
+        # input_size = [batch, input_size[3], input_size[1], input_size[2]]
 
-                # set the convolutional variables to pass to the profiler with values from the layer
-                in_ch = i.input.shape[-1]
-                out_ch = i.output.shape[-1]
-                kernel = i.kernel_size[0]
-                stride = i.strides[0]
-                bias = i.use_bias
+        # #model = self.LENET()
+        # #input_size = [batch, 1, 28, 28]
+        
+        # # iterate over each layer of the model
+        # for i in model.layers:
+        #     layer_class = i.__class__.__name__
 
-                # set the padding value according to the padding type of the layer
-                input_size = i.input.shape
-                input_size = [batch, input_size[3], input_size[1], input_size[2]]
-                if i.padding == 'valid':
-                    padding = 0
-                else:
-                    padding = int((kernel - 1) / 2)
+        #     # if the current layer is a convolution
+        #     if layer_class in ['Conv2D']:
+                
+        #         # build the list containing the output dimensions of the convolutional layer
+        #         out_size = i.output.shape
+        #         out_size = [batch, out_size[3], out_size[1], out_size[2]]
 
-                # build the profiler object that maps the convolutional layer and get its latency value
-                conv_obj = profiler.Conv2d(nvdla, log_file, i.name, out_size, in_ch, out_ch, kernel, stride, padding, 1, bias)
-                total_latency += conv_obj.forward(input_size)
+        #         # set the convolutional variables to pass to the profiler with values from the layer
+        #         in_ch = i.input.shape[-1]
+        #         out_ch = i.output.shape[-1]
+        #         kernel = i.kernel_size[0]
+        #         stride = i.strides[0]
+        #         bias = i.use_bias
+
+        #         # set the padding value according to the padding type of the layer
+        #         input_size = i.input.shape
+        #         input_size = [batch, input_size[3], input_size[1], input_size[2]]
+        #         if i.padding == 'valid':
+        #             padding = 0
+        #         else:
+        #             padding = int((kernel - 1) / 2)
+
+        #         # build the profiler object that maps the convolutional layer and get its latency value
+        #         conv_obj = profiler.Conv2d(nvdla, log_file, i.name, out_size, in_ch, out_ch, kernel, stride, padding, 1, bias)
+        #         total_latency += conv_obj.forward(input_size)
                 
-            elif layer_class in ['Dense']:
-                # if the layer is dense, get the input/output features information and
-                # save in the variables that will be passed to the profiler
-                in_f = i.input.shape[-1]
-                out_f = i.output.shape[-1]
-                bias = i.use_bias
+        #     elif layer_class in ['Dense']:
+        #         # if the layer is dense, get the input/output features information and
+        #         # save in the variables that will be passed to the profiler
+        #         in_f = i.input.shape[-1]
+        #         out_f = i.output.shape[-1]
+        #         bias = i.use_bias
                 
-                # build the list containing the output dimensions of the dense layer
-                out_size = [batch, out_f]
+        #         # build the list containing the output dimensions of the dense layer
+        #         out_size = [batch, out_f]
                 
-                # build the profiler object that maps the dense layer and get its latency value
-                dense_obj = profiler.Linear(nvdla, log_file, i.name, out_size, in_f, out_f, bias)
-                total_latency += dense_obj.forward([batch, in_f])
+        #         # build the profiler object that maps the dense layer and get its latency value
+        #         dense_obj = profiler.Linear(nvdla, log_file, i.name, out_size, in_f, out_f, bias)
+        #         total_latency += dense_obj.forward([batch, in_f])
 
         return total_latency
 

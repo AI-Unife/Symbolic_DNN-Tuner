@@ -229,7 +229,6 @@ class tuning_rules_symbolic:
                 if name in hp.name and hp.low > -1:
                     hp.low = max(params[hp.name] - 1, 1)
 
-
     
     def inc_batch_size(self, params):
         """
@@ -272,19 +271,17 @@ class tuning_rules_symbolic:
         # or dense layer increase the upper value of the range
         for hp in self.space:
             if 'unit_c1' in hp.name:
-                hp.high = min(params['unit_c1'] + 16, 64)
+                hp.high = min(params['unit_c1'] + 1, 4)
             if 'unit_c2' in hp.name:
-                hp.high = min(params['unit_c2'] + 16, 128)
-            if 'unit_d' in hp.name:
-                hp.high = min(params['unit_d'] + 16, 2048)
+                hp.high = min(params['unit_c2'] + 1, 8)
             if 'new_conv' in hp.name:
                 try:
-                    hp.high = min(params[hp.name] + 16, 512)
+                    hp.high = min(params[hp.name] + 1, 16)
                 except KeyError:
                     continue
             if 'new_fc' in hp.name:
                 try:
-                    hp.high = min(params[hp.name] + 16, 2048)
+                    hp.high = min(params[hp.name] + 1, 32)
                 except KeyError:
                     continue
 
@@ -328,7 +325,7 @@ class tuning_rules_symbolic:
 
     # ------------------------------- Orchestration ---------------------------
 
-    def repair(self, sym_tuning: Iterable[str], diagnosis: Iterable[str], model: Any, params: Dict[str, Any]) -> Tuple[Any, Any]:
+    def repair(self, sym_tuning: Iterable[str], diagnosis: Iterable[str], params: Dict[str, Any], const_space) -> Tuple[Any, Any]:
         """
         Execute a sequence of symbolic tuning actions produced by a diagnosis step.
 
@@ -349,6 +346,7 @@ class tuning_rules_symbolic:
         if hasattr(self.controller, "model"):
             del self.controller.model
 
+        self.space = const_space
         diag_list = list(diagnosis)
         for i, action_name in enumerate(sym_tuning):
             # Preserve original control flow semantics:
@@ -388,5 +386,5 @@ class tuning_rules_symbolic:
             else:
                 method()
 
-        return self.space, model
+        return self.space
         

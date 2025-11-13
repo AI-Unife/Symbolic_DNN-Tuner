@@ -42,7 +42,7 @@ class module:
         Creation of module instances
         """
         for module in self.modules_list:
-            try:
+            # try:
                 # each module is stored in the 'loss' folder
                 base_dir = "modules.loss." + module
 
@@ -61,12 +61,13 @@ class module:
                     self.modules_ready.append(True)
                 else:
                     print(colors.FAIL, f"|  --------- {module} DOESN'T IMPLEMENT INTERFACE  -------  |\n", colors.ENDC)
-            except AttributeError:
-                print(colors.FAIL, f"|  ----------- {module} CLASS DOESN'T EXIST ----------  |\n", colors.ENDC)
-            except ModuleNotFoundError:
-                print(colors.FAIL, f"|  ----------- FAILED TO INSTANCIATE {module} ----------  |\n", colors.ENDC)
-            except NotImplementedError:
-                print(colors.FAIL, f"|  -------------- ERROR IN {module} STRUCTURE -------------  |\n", colors.ENDC)
+            # except AttributeError:
+            #     print(colors.FAIL, f"|  ----------- {module} CLASS DOESN'T EXIST ----------  |\n", colors.ENDC)
+            # except ModuleNotFoundError:
+            #     print(colors.FAIL, f"|  ----------- FAILED TO INSTANCIATE {module} ----------  |\n", colors.ENDC)
+            #     exit()
+            # except NotImplementedError:
+            #     print(colors.FAIL, f"|  -------------- ERROR IN {module} STRUCTURE -------------  |\n", colors.ENDC)
 
 
     def ready(self):

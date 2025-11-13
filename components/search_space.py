@@ -50,7 +50,6 @@ class search_space:
             Categorical(name="skip_connection", categories=[False])
 
         ])
-
         for b in range(1, max_block + 1):
             conv_name = f'new_conv_{b}'
             self.search_space.dimensions.append(Integer(-1, 0, name=conv_name))
@@ -112,6 +111,36 @@ class search_space:
         self.search_space = Space(dims)
 
         return self.search_space
+
+    def expand_space(self, base_space, const_space: Space) -> Space:
+        """
+        Expand the current search space by expands low and high for any dimensions from `const_space`
+        that are not already present (by name).
+
+        Args:
+            const_space: reference Space whose dimensions should be added if missing.
+
+        Returns:
+            The updated `base_space` (an skopt Space).
+        """
+        idx_by_name = {dim.name: (i, dim) for i, dim in enumerate(base_space.dimensions)}
+        for dim in const_space.dimensions:
+            for base_dim in base_space.dimensions:
+                if dim.name == base_dim.name:
+                    if isinstance(dim, Categorical):
+                        if len(dim.categories) > len(base_dim.categories):
+                            idx, name = idx_by_name[dim.name]
+                            base_space.dimensions[idx] = dim
+                    else:
+                        idx, name = idx_by_name[dim.name]
+                        base_space.dimensions[idx].low = min(
+                            base_space.dimensions[idx].low, dim.low
+                        )
+                        base_space.dimensions[idx].high = max(
+                            base_space.dimensions[idx].high, dim.high
+                        )
+
+        return base_space
 
     def remove_params(self, params: Dict[str, Any]) -> Space:
         """
