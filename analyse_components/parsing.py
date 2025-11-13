@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 
-# Definiamo qui i pattern, così sono isolati
+# Define regex patterns here so they are isolated
 _META_PATTERNS: Dict[str, re.Pattern] = {
     "dataset": re.compile(r"dataset:\s+(.+)", re.IGNORECASE),
     "max_eval": re.compile(r"eval:\s+(\d+)", re.IGNORECASE),
@@ -23,10 +23,10 @@ def _get_config_data(experiment_dir: Path) -> Tuple[Optional[int], Optional[str]
     Get epochs and dataset info, trying config.yaml first, then falling
     back to parsing a .out file.
     """
-    # (Codice identico a prima)
     config_file = experiment_dir / 'config.yaml'
     epochs, dataset = None, None
 
+    # 1. Preferred method: config.yaml
     if config_file.exists():
         try:
             with open(config_file, 'r') as f:
@@ -38,6 +38,7 @@ def _get_config_data(experiment_dir: Path) -> Tuple[Optional[int], Optional[str]
         except Exception as e:
             logging.warning("Could not read %s: %s", config_file, e)
 
+    # 2. Fallback method: .out file
     try:
         out_files = list(experiment_dir.glob('*.out'))
         if not out_files:
@@ -68,7 +69,6 @@ def parse_experiment_data(experiment_dir: Path, root_path: Path) -> List[Dict[st
     Parses the core log files (acc_report.txt, hyper-neural.txt)
     for a single experiment and returns a list of all networks tested.
     """
-    # (Codice identico a prima)
     logs_dir = experiment_dir / 'algorithm_logs'
     acc_file = logs_dir / 'acc_report.txt'
     hyper_file = logs_dir / 'hyper-neural.txt'
@@ -102,6 +102,7 @@ def parse_experiment_data(experiment_dir: Path, root_path: Path) -> List[Dict[st
                 logging.warning("Row %d in %s is empty. Skipped.", i+1, hyper_file)
                 continue
             
+            # Safely evaluate the hyperparameter dictionary string
             hyper_dict = ast.literal_eval(hyper_str)
             if not isinstance(hyper_dict, dict): 
                 raise ValueError("Parsed hyperparameter data is not a dict")

@@ -3,13 +3,14 @@ import logging
 import re
 import shutil
 from pathlib import Path
+# FIX: Import 'Optional' for Python < 3.10 compatibility
 from typing import Dict, List, Optional, Tuple, Any
 
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-# Importa i moduli TF solo se necessario
+# Import TF modules only if available
 try:
     import tensorflow as tf
     from components.dataset import get_datasets
@@ -17,13 +18,13 @@ try:
 except ImportError:
     TF_AVAILABLE = False
     
-# Importa le utility e le funzioni di parsing necessarie
+# Import utility and parsing functions
 from analyse_components import utils
-from analyse_components import parsing # Per get_best_iteration_from_acc, parse_batch...
+from analyse_components import parsing # For get_best_iteration_from_acc, parse_batch...
 
 # --- Retrain Network (Full) ---
 def get_best_iteration_from_acc(aldir: Path) -> Optional[int]:
-    # (Codice identico a prima)
+    """Returns the 1-based index of the row with max accuracy in acc_report.txt."""
     acc_path = aldir / "acc_report.txt"
     if not acc_path.exists(): return None
     vals = []
@@ -37,7 +38,7 @@ def get_best_iteration_from_acc(aldir: Path) -> Optional[int]:
     return best_idx + 1
 
 def parse_batch_opt_lr_from_hyper_neural(aldir: Path, iteration: int) -> Optional[str]:
-    # (Codice identico a prima)
+    """Gets the (batch_size, optimizer, learning_rate) for a specific 1-based iteration."""
     f = aldir / "hyper-neural.txt"
     if not f.exists(): return None
     rows = []
@@ -56,12 +57,12 @@ def parse_batch_opt_lr_from_hyper_neural(aldir: Path, iteration: int) -> Optiona
     return (batch, opt, lr)
     
 def load_dataset(dataset_name: str):
-    # (Codice identico a prima)
+    """Helper to load dataset using user's components."""
     x_train, y_train, x_test, y_test, n_class = get_datasets(dataset_name.lower().replace("-", " "))
     return (x_train, y_train), (x_test, y_test)
 
 def make_optimizer_by_name(name: str, lr: float = 1e-3):
-    # (Codice identico a prima)
+    """Helper to instantiate a Keras optimizer by its string name."""
     name_low = (name or "").lower()
     if name_low == "adamw":
         try: return tf.keras.optimizers.AdamW(learning_rate=lr, weight_decay=0.0)
@@ -73,51 +74,65 @@ def make_optimizer_by_name(name: str, lr: float = 1e-3):
     return tf.keras.optimizers.Adam(learning_rate=lr)
     
 def train_best_model_if_required(exp_dir: Path):
-    # (Codice identico a prima)
+    """
+    Main function to load, compile, and re-train the best model
+    found during the search phase.
+    """
     if not TF_AVAILABLE:
-        logging.warning("Richiesto training, ma TensorFlow non è disponibile. Salto.")
+        logging.warning("Training requested, but TensorFlow is not available. Skipping.")
         return None, None
+        
     model_path = exp_dir / "Model" / "best-model.keras"
     try:
         dataset_name = exp_dir.name.split("_")[5]
     except IndexError:
-        logging.error("Impossibile estrarre il nome del dataset da %s", exp_dir.name)
+        logging.error("Could not extract dataset name from %s", exp_dir.name)
         return None, None
+        
     aldir = exp_dir / "algorithm_logs" 
     if not model_path.exists():
-        logging.warning("best-model.keras non trovato in %s", model_path)
+        logging.warning("best-model.keras not found in %s", model_path)
         return None, None
+        
     model = tf.keras.models.load_model(model_path)
     best_it = get_best_iteration_from_acc(aldir)
+    
     if not best_it:
-        logging.warning("Impossibile determinare l'iterazione migliore da acc_report.txt")
+        logging.warning("Could not determine best iteration from acc_report.txt")
         return None, None
+        
     (batch, opt_name, lr) = parse_batch_opt_lr_from_hyper_neural(aldir, best_it) or (None, None, None)
     opt_name = opt_name or "Adam"
     lr = lr or 1e-3
     batch = batch or 32
+    
     train_split, val_split = load_dataset(dataset_name)
     optimizer = make_optimizer_by_name(opt_name, lr=lr)
     loss = tf.keras.losses.CategoricalCrossentropy(label_smoothing=0.0)
     metrics = [tf.keras.metrics.CategoricalAccuracy(name="acc")]
     model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
+    
     callbacks = [tf.keras.callbacks.EarlyStopping(monitor="val_acc", mode="max", patience=30, restore_best_weights=True)]
     history = None
-    logging.info("Avvio 'refit' per %s (optimizer=%s, lr=%.3g, batch=%d)", exp_dir.name, opt_name, lr, batch)
+    
+    logging.info("Starting 'refit' for %s (optimizer=%s, lr=%.3g, batch=%d)", exp_dir.name, opt_name, lr, batch)
     if isinstance(train_split, tuple):
         (x_tr, y_tr) = train_split
         (x_va, y_va) = val_split
         history = model.fit(x_tr, y_tr, validation_data=(x_va, y_va), epochs=1000, batch_size=batch, callbacks=callbacks, verbose=2)
     else:
         history = model.fit(train_split, validation_data=val_split, epochs=1000, callbacks=callbacks, verbose=2)
+        
     finetuned_path = exp_dir / "Model" / "best-model-finetuned.keras"
     try: model.save(finetuned_path)
-    except Exception as e: logging.warning("Salvataggio modello finetuned fallito: %s", e)
+    except Exception as e: logging.warning("Failed to save fine-tuned model: %s", e)
+    
     if history is not None:
         hist_df = pd.DataFrame(history.history)
         hist_csv = exp_dir / "best_model_finetune_history.csv"
         hist_df.to_csv(hist_csv, index=False)
-    logging.info("Training best model completato.")
+        
+    logging.info("Best model training complete.")
     acc_test, loss_test = model.evaluate(val_split, verbose=2) if not isinstance(val_split, tuple) else model.evaluate(x_va, y_va, verbose=2)
     return acc_test, loss_test
 
@@ -127,7 +142,7 @@ _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 def _strip_ansi(s: str) -> str: return _ANSI_RE.sub("", s)
 
 def _iter_search_space_blocks(lines: List[str]):
-    # (Codice identico a prima)
+    """Generator for (iteration, block_lines) from 'Actual search space:' blocks."""
     iter_no = None; i = 0; n = len(lines)
     while i < n:
         line = _strip_ansi(lines[i])
@@ -145,7 +160,7 @@ def _iter_search_space_blocks(lines: List[str]):
         i += 1
 
 def _parse_dimension_line(line: str):
-    # (Codice identico a prima)
+    """Parses a single 'Dimension k: name - TYPE(...)' line."""
     m = re.match(r"Dimension\s+(\d+):\s*([^-\s]+)\s*-\s*([A-Za-z]+)\((.*)\)$", line)
     if not m: return None
     idx = int(m.group(1)); name = m.group(2); kind = m.group(3); inner = m.group(4)
@@ -158,7 +173,7 @@ def _parse_dimension_line(line: str):
     return idx, name, kind, low, high
 
 def extract_search_space_evolution(log_file: Path) -> pd.DataFrame:
-    # (Codice identico a prima)
+    """Builds a per-iteration table of the search space dimensions."""
     try:
         with log_file.open("r", encoding="utf-8", errors="ignore") as fh: lines = fh.readlines()
     except FileNotFoundError:
@@ -183,7 +198,7 @@ def extract_search_space_evolution(log_file: Path) -> pd.DataFrame:
     return df
 
 def write_search_space_evolution(exp_dir: Path, log_file: Optional[Path]) -> Optional[Path]:
-    # (Codice identico a prima)
+    """Saves the search space evolution DataFrame to a CSV."""
     if not log_file or not log_file.is_file():
         logging.warning("No representative log available for search space evolution: %s", exp_dir)
         return None
@@ -194,8 +209,13 @@ def write_search_space_evolution(exp_dir: Path, log_file: Optional[Path]) -> Opt
     logging.info("Wrote search space evolution CSV: %s", out_path)
     return out_path
 
+#
+# --- FIX APPLIED HERE ---
+#
+# Replaced 'Path | None' with 'Optional[Path]' for Python < 3.10
+#
 def build_stacked_fractional_change_plot(csv_path: Path, out_png: Path, out_csv: Optional[Path] = None) -> Path:
-    # (Codice identico a prima)
+    """Generates a stacked bar chart of the fractional change in dimension widths."""
     df = pd.read_csv(csv_path)
     def _resolve(colname: str) -> str:
         low = colname.lower()
@@ -244,12 +264,12 @@ def build_stacked_fractional_change_plot(csv_path: Path, out_png: Path, out_csv:
     plt.savefig(out_png, dpi=200, bbox_inches="tight"); plt.close()
     return out_png
 
-# --- Funzione "wrapper" per il main ---
+# --- "Wrapper" function called by main ---
 
 def run_per_experiment_analysis(experiment_dir: Path, run_train: bool = False):
     """
-    Esegue tutte le analisi per-esperimento (log, plot, train).
-    Questa è la funzione chiamata dal main se --skip-plots non è usato.
+    Runs all per-experiment analyses (log copying, plotting, training).
+    This is the function called by 'analyze.py' if --skip-plots is not used.
     """
     rep_log = utils.pick_representative_log(experiment_dir)
     output_log = None
@@ -266,9 +286,9 @@ def run_per_experiment_analysis(experiment_dir: Path, run_train: bool = False):
                     out_csv=experiment_dir / "search_space_pct_changes.csv"
                 )
         except Exception as e:
-            logging.warning("Impossibile generare analisi spazio di ricerca per %s: %s", experiment_dir.name, e)
+            logging.warning("Could not generate search space analysis for %s: %s", experiment_dir.name, e)
 
     if run_train:
         acc_test, loss_test = train_best_model_if_required(experiment_dir)
         if acc_test:
-            logging.info("Accuratezza Test (fine-tuned) per %s: %.4f", experiment_dir.name, acc_test)
+            logging.info("Test Accuracy (fine-tuned) for %s: %.4f", experiment_dir.name, acc_test)
