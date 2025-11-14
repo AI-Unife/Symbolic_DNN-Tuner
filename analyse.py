@@ -51,10 +51,10 @@ def parse_args() -> argparse.Namespace:
                         help="Output file for the grouped means (one row per tuner/dataset).")
     
     # Flags to select analyses
-    parser.add_argument("--skip-plots", action="store_true",
-                        help="Skip generating per-experiment plots and analyses.")
-    parser.add_argument("--skip-train", action="store_true",
-                        help="Skip re-training the best model.")
+    parser.add_argument("--plots", action="store_false",
+                        help="Generating per-experiment plots and analyses.")
+    parser.add_argument("--train", action="store_false",
+                        help="Re-training the best model.")
     
     # Verbosity flag
     parser.add_argument("-v", "--verbose", action="count", default=0,
@@ -83,9 +83,9 @@ def main():
         logging.info("--- Analyzing experiment: %s ---", experiment_dir.relative_to(args.base_dir))
 
         # 3. Run "heavy" analysis (optional)
-        if not args.skip_plots:
+        if not args.plots:
             analysis.run_per_experiment_analysis(experiment_dir, 
-                                                 run_train=(not args.skip_train))
+                                                 run_train=(not args.train))
         
         # 4. Parsing (always run)
         network_data_list = parsing.parse_experiment_data(experiment_dir, args.base_dir)

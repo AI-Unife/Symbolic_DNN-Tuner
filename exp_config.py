@@ -61,6 +61,7 @@ def create_config_file(exp_dir: str | Path, overrides: Optional[Dict[str, Any]] 
         "seed": schema.seed,
         "opt": schema.opt,
         "verbose": schema.verbose if hasattr(schema, "verbose") else 0,
+        "early_stop": schema.early_stop if hasattr(schema, "early_stop") else 20,
     }
     if overrides:
         base.update(overrides)
@@ -131,6 +132,7 @@ def _apply_defaults(d: Dict[str, Any]) -> Dict[str, Any]:
         "seed": d.get("seed", schema.seed),
         "opt": d.get("opt", schema.opt),
         "verbose": d.get("verbose", getattr(schema, "verbose", 0)),
+        "early_stop": d.get("early_stop", getattr(schema, "early_stop", 20)),
     }
     return merged
 

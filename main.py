@@ -1,4 +1,3 @@
-# [Imports remain the same]
 from __future__ import annotations
 import argparse
 import datetime
@@ -8,7 +7,7 @@ import os
 import copy
 import shutil
 from typing import List
-from pathlib import Path # Used for modern path management
+from pathlib import Path 
 
 from skopt import load
 from skopt.callbacks import CheckpointSaver
@@ -25,7 +24,6 @@ from exp_config import create_config_file, set_active_config, load_cfg
 
 # ------------------------------ filesystem -----------------------------------
 
-### IMPROVEMENT: Using pathlib for cleaner, OS-agnostic path handling. ###
 def create_experiment_folders() -> None:
     """
     Ensure the experiment directory structure exists.
@@ -275,6 +273,8 @@ def parse_args() -> argparse.Namespace:
 
     parser.add_argument("--eval", type=int, default=300,
                         help="Max number of evaluations")
+    parser.add_argument("--early_stop", type=int, default=20,
+                        help="Early stopping patience")
     parser.add_argument("--epochs", type=int, default=2,
                         help="Epochs for training")
     parser.add_argument(

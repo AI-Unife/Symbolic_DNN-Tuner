@@ -307,7 +307,7 @@ class controller:
                 logger.warning("Failed to save best model: %s", e)
 
         # if we have no improv in 10 iter end tuner evaluations
-        if self.iter > self.best_iter + 20:
+        if self.iter > self.best_iter + self.cfg.early_stop:
             self.convergence = True
         try:
             del self.nn.model
