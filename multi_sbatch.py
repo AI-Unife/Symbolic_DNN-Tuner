@@ -1,9 +1,9 @@
 import subprocess
 from itertools import product
 
-datasets_cifar = ['tinyimagenet','CIFAR-10', 'CIFAR-100']
-optimizers = ['filtered']
-seeds = [42, 84, 123, 7, 96]
+datasets_cifar = ['gesture']
+optimizers = ['standard', 'filtered', 'basic', 'RS', 'RS_ruled']
+seeds = [42, 84, 123]
 
 
 def generate_jobs():
@@ -20,7 +20,7 @@ def generate_jobs():
 
 
 
-def save_job_configs_to_file(job_configs, filename="params_filtered.txt"):
+def save_job_configs_to_file(job_configs, filename="params.txt"):
     # Ordina per seed
     job_configs = sorted(job_configs, key=lambda x: x["seed"])
 

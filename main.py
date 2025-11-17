@@ -297,6 +297,9 @@ def parse_args() -> argparse.Namespace:
                         help="Polarity for event-based datasets")
     parser.add_argument("--seed", type=int, default=42,
                         help="Random seed for reproducibility")
+    parser.add_argument('--quantization', action='store_true',
+                        help='quantize the network')
+
     parser.add_argument("--verbose", type=int, default=2, 
                         help="Verbosity level (0: silent, 1: print space, 2: print space and model summary)")
     parser.add_argument(

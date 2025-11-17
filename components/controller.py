@@ -9,6 +9,8 @@ from tensorflow.keras import backend as K
 import matplotlib.pyplot as plt
 import gc
 
+from quantizer.quantizer_POTQ import quantizer_module
+
 try:
     from components.colors import colors
 except Exception:  # pragma: no cover
@@ -115,7 +117,7 @@ class controller:
         self.iter: int = 0
 
         # Dynamic thresholds (updated at given epochs)
-        self.lacc: float = 0.30
+        self.lacc: float = 0.10
         self.hloss: float = np.log(n_classes)
         self.acc_w = 0.5  # weight of accuracy in combined score
         self.vanish_th = 1e-8
@@ -282,7 +284,11 @@ class controller:
             else:
                 _, _, opt_value = self.modules.optimiziation()
                 self.score = float(opt_value)-self.scoreNN[1]*self.acc_w  # combine module opt with accuracy
-
+            if self.cfg.quantization:
+                quantizer = quantizer_module(opt=params["optimizer"])
+                quantized_model = quantizer.quantizer_function(self.model)
+                self.score = quantizer.evaluate_quantized_model(self.X_test, self.Y_test)[-1]
+                quantizer.log_function()
         else:
             print(f"Model FLOPs {self.nn.flops} exceed maximum {self.flops_th}. Skipping training.")
             self.scoreNN, self.history, self.model = None, None, self.nn.model
@@ -294,7 +300,6 @@ class controller:
             self.modules.log()
 
             self.score = 1e10 #float('inf')
-            
         self.iter += 1
         # Track the best score and persist the model artifact
         if self.score < self.best_score:

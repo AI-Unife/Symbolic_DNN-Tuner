@@ -22,6 +22,7 @@ class quantizer_module(quantizer_interface):
         self.quantized_model = None
         ### ADD this part to load configuration file
         self.cfg = load_cfg()
+        self.score = 0
 
     def _potlq_quantizer_numpy(self, weights_flat, q, n_bits):
         """
@@ -152,11 +153,10 @@ class quantizer_module(quantizer_interface):
         ### ADD this part to manage gesture dataset evaluation
         if (self.cfg.mode in ("fwdPass", "hybrid")) and "gesture" in self.cfg.dataset:
             from components.custom_train import eval_model
-            score = eval_model(self.quantized_model, x_test, y_test)
+            self.score = eval_model(self.quantized_model, x_test, y_test)
         else:
-            score = self.quantized_model.evaluate(x_test, y_test, verbose=2)
-        return score
-        return score
+            self.score = self.quantized_model.evaluate(x_test, y_test, verbose=2)
+        return self.score
 
     def save_quantized_model(self, path="quantized_model_potq.keras"):
         if self.quantized_model:
@@ -170,7 +170,9 @@ class quantizer_module(quantizer_interface):
         pass
 
     def log_function(self):
-        pass
+        f = open("{}/algorithm_logs/quantization_report.txt".format(self.cfg.name), "a")
+        f.write(str(self.score[0]) + ","+ str(self.score[1])+ "\n")
+        f.close()
 
 
 if __name__ == "__main__":
