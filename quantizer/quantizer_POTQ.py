@@ -1,16 +1,13 @@
-
-from quantizer_interface import quantizer_interface
-
 import tensorflow as tf
 
 #### Define here your quantizer class, inheriting from quantizer_interface
 #### rename this file with the name of your quantizer 
 
 
-from quantizer_interface import quantizer_interface
+from quantizer.quantizer_interface import quantizer_interface
 import tensorflow as tf
 import numpy as np
-
+from exp_config import load_cfg
 
 class quantizer_module(quantizer_interface):
 
@@ -23,6 +20,8 @@ class quantizer_module(quantizer_interface):
         self.opt = opt
         self.n_bits = n_bits
         self.quantized_model = None
+        ### ADD this part to load configuration file
+        self.cfg = load_cfg()
 
     def _potlq_quantizer_numpy(self, weights_flat, q, n_bits):
         """
@@ -149,7 +148,14 @@ class quantizer_module(quantizer_interface):
     def evaluate_quantized_model(self, x_test, y_test):
         if self.quantized_model is None:
             raise ValueError("Quantized model is not available. Please run quantize_function first.")
-        score = self.quantized_model.evaluate(x_test, y_test, verbose=0)
+                
+        ### ADD this part to manage gesture dataset evaluation
+        if (self.cfg.mode in ("fwdPass", "hybrid")) and "gesture" in self.cfg.dataset:
+            from components.custom_train import eval_model
+            score = eval_model(self.quantized_model, x_test, y_test)
+        else:
+            score = self.quantized_model.evaluate(x_test, y_test, verbose=2)
+        return score
         return score
 
     def save_quantized_model(self, path="quantized_model_potq.keras"):

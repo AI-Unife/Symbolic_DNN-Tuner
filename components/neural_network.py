@@ -227,7 +227,7 @@ class neural_network:
         x = Activation(activation)(x)
         return x
 
-    def build_network(self, params: Dict[str, Any], layer_x_block) -> None:
+    def build_network(self, params: Dict[str, Any], layer_x_block=2) -> None:
         """
         Define (or reload) the network architecture from params.
 
@@ -440,20 +440,10 @@ class neural_network:
                     callbacks=[tensorboard, es1, es2],
                 ).history
         # --- Evaluate ---
-        if (self.cfg.name in ("fwdPass", "hybrid")) and "gesture" in self.cfg.dataset:
-            if "debug" in self.cfg.name:
-                score = [random.uniform(0.1, 0.5), random.uniform(0.1, 1.0)]
-            else:
-                score = eval_model(self.model, self.test_data, self.test_labels)
-        else:
-            if "debug" in self.cfg.name:
-                score = [random.uniform(0.1, 0.5), random.uniform(0.1, 1.0)]
-            else:
-                score = self.model.evaluate(self.test_data, self.test_labels, verbose=2)
-
+        score = self.eval_model()
         # --- Save weights and canonical dashboard model ---
-        weights_tmp = f"{self.cfg.name}/Weights/weights-{model_name_id}.weights.h5"
-        self.model.save_weights(weights_tmp)
+        # weights_tmp = f"{self.cfg.name}/Weights/weights-{model_name_id}.weights.h5"
+        # self.model.save_weights(weights_tmp)
 
         try:
             dash_model_path = f"{self.cfg.name}/dashboard/model/model.keras"
@@ -466,16 +456,29 @@ class neural_network:
             pass
 
         # Cleanup temp artifacts
-        try:
-            os.remove(weights_tmp)
-        except OSError:
-            pass
+        # try:
+        #     os.remove(weights_tmp)
+        # except OSError:
+        #     pass
         try:
             os.remove(model_json_path)
         except OSError:
             pass
 
         return score, history, self.model
+    
+    def eval_model(self):
+        if (self.cfg.mode in ("fwdPass", "hybrid")) and "gesture" in self.cfg.dataset:
+            if "debug" in self.cfg.name:
+                score = [random.uniform(0.1, 0.5), random.uniform(0.1, 1.0)]
+            else:
+                score = eval_model(self.model, self.test_data, self.test_labels)
+        else:
+            if "debug" in self.cfg.name:
+                score = [random.uniform(0.1, 0.5), random.uniform(0.1, 1.0)]
+            else:
+                score = self.model.evaluate(self.test_data, self.test_labels, verbose=2)
+        return score
 
 
 # ------------------------------ Standalone test ------------------------------

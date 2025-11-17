@@ -62,6 +62,8 @@ def create_config_file(exp_dir: str | Path, overrides: Optional[Dict[str, Any]] 
         "opt": schema.opt,
         "verbose": schema.verbose if hasattr(schema, "verbose") else 0,
         "early_stop": schema.early_stop if hasattr(schema, "early_stop") else 20,
+        "dataset_path": schema.dataset_path if hasattr(schema, "dataset_path") else "./data",
+        "cache_dataset": schema.cache_dataset if hasattr(schema, "chache_dataset") else "./cache",
     }
     if overrides:
         base.update(overrides)
@@ -92,7 +94,8 @@ def _validate(d: Dict[str, Any]) -> None:
         raise ValueError(f"Invalid polarity '{d.get('polarity')}'. Choose from: {sorted(_VALID_POLARITY)}")
     # opt
     if d.get("opt") not in _VALID_OPT:
-        raise ValueError(f"Invalid opt '{d.get('opt')}'. Choose from: {sorted(_VALID_OPT)}")
+        print(f"Invalid opt '{d.get('opt')}'. Choose from: {sorted(_VALID_OPT)}. Set RS_ruled")
+        d['opt'] = 'RS_ruled'
 
 # ---------------- Loader + discovery ----------------
 _ENV_KEY = "EXP_CONFIG"   # puoi impostarlo per puntare al config della run
@@ -133,6 +136,8 @@ def _apply_defaults(d: Dict[str, Any]) -> Dict[str, Any]:
         "opt": d.get("opt", schema.opt),
         "verbose": d.get("verbose", getattr(schema, "verbose", 0)),
         "early_stop": d.get("early_stop", getattr(schema, "early_stop", 20)),
+        "dataset_path": d.get("dataset_path", getattr(schema, "dataset_path", "./data")),
+        "cache_dataset": d.get("cache_dataset", getattr(schema, "cache_dataset", "./cache")),
     }
     return merged
 

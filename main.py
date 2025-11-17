@@ -31,7 +31,7 @@ def create_experiment_folders() -> None:
     # Use the 'cfg.name' Path object from the main script
     base_path = Path(cfg.name)
     required_dirs = [
-        "Model", "Weights", "database", "checkpoints", "log_folder",
+        "Model", "database", "log_folder",
         "algorithm_logs", "dashboard", "dashboard/model", "symbolic"
     ]
     
@@ -304,6 +304,12 @@ def parse_args() -> argparse.Namespace:
         choices=["standard", "filtered", "basic", "RS", "RS_ruled"],
         help="Optimizer type for the analysis"
     )
+    
+    parser.add_argument("--dataset_path", type=str, default="/hpc/home/bzzlca/AIDA4Edge/data/",
+                        help="Gesture Dataset Dir name")
+    
+    parser.add_argument("--cache_dataset", type=str, default="/hpc/home/bzzlca/AIDA4Edge/tf/",
+                        help="Gesture Dataset Cache Dir name")
 
     args = parser.parse_args()
 
