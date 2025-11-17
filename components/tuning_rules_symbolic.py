@@ -98,13 +98,23 @@ class tuning_rules_symbolic:
                 new_categories = [True, False]
                 self.space.dimensions[i] = Categorical(new_categories, name='skip_connection')
         logger.info("Enabled residual connection")
+        
+    def remove_residual(self) -> None:
+        """
+        Disable residual connection in the controller.
+        """
+        for i, hp in enumerate(self.space):
+            if hp.name == "skip_connection":
+                new_categories = [False]
+                self.space.dimensions[i] = Categorical(new_categories, name='skip_connection')
+        logger.info("Disabled residual connection")
     # -------------------------- Architecture edits ---------------------------
 
     def new_fc_layer(self) -> None:
         """
         Add a fully-connected (dense) layer, respecting a soft upper bound to avoid bloat.
         """
-        if self.controller.count_new_fc > self.controller.max_fc:
+        if self.controller.count_new_fc >= self.controller.max_fc:
             print(
                 colors.FAIL,
                 "Max number of dense layers reached",
@@ -112,10 +122,8 @@ class tuning_rules_symbolic:
             )
             print(
                 colors.FAIL,
-                "start dense layers: ",
-                self.controller.start_fc,
                 " Dense layers: ",
-                self.controller.count_new_fc + self.controller.start_fc,
+                self.controller.count_new_fc,
                 " Max dense layers: ",
                 self.controller.max_fc,
                 colors.ENDC,
