@@ -1,7 +1,7 @@
 import subprocess
 from itertools import product
 
-datasets_cifar = ['gesture']
+datasets_cifar = ['CIFAR-10', 'CIFAR-100']
 optimizers = ['standard', 'filtered', 'basic', 'RS', 'RS_ruled']
 seeds = [42, 84, 123]
 

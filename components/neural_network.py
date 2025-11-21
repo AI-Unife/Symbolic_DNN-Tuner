@@ -20,6 +20,7 @@ from tensorflow.keras.layers import (
     Dense,
     GlobalAveragePooling2D,
     BatchNormalization,
+    Flatten,
     MaxPooling2D,
     Dropout,
     Input,
@@ -253,32 +254,32 @@ class neural_network:
 
         x = Conv2D(params["unit_c1"] * params['num_neurons'], (3, 3), padding="same")(inputs)
         x = Activation(params["activation"])(x)
-        x = BatchNormalization()(x)
+        # x = BatchNormalization()(x)
         for _ in range(1, layer_x_block-1):
             x = Conv2D(params["unit_c1"] * params['num_neurons'], (3, 3), padding="same")(x)
             x = Activation(params["activation"])(x)
-            x = BatchNormalization()(x)
+            # x = BatchNormalization()(x)
         if self.residual:
             x = Conv2D(params["unit_c1"] * params['num_neurons'] , (3, 3), padding="same")(x)
             x = self.add_residual(inputs, x, params['unit_c1'] * params['num_neurons'], params['activation'], reg_layer)
         else:
             x = Conv2D(params["unit_c1"] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
             x = Activation(params["activation"])(x)
-            x = BatchNormalization()(x)
+            # x = BatchNormalization()(x)
         x = MaxPooling2D(pool_size=(2, 2))(x)
 
         shortcut = x
         for _ in range(layer_x_block-1):
             x = Conv2D(params["unit_c2"] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
             x = Activation(params["activation"])(x)
-            x = BatchNormalization()(x)
+            # x = BatchNormalization()(x)
         if self.residual:
             x = Conv2D(params["unit_c2"] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
             x = self.add_residual(shortcut, x, params['unit_c2'] * params['num_neurons'], params['activation'], reg_layer)
         else:
             x = Conv2D(params["unit_c2"] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
             x = Activation(params["activation"])(x)
-            x = BatchNormalization()(x)
+            # x = BatchNormalization()(x)
         x = MaxPooling2D(pool_size=(2, 2))(x)
 
 
@@ -289,17 +290,18 @@ class neural_network:
             for _ in range(layer_x_block-1):
                 x = Conv2D(params[layer_key] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
                 x = Activation(params["activation"])(x)
-                x = BatchNormalization()(x)
+                # x = BatchNormalization()(x)
             if self.residual:
                 x = Conv2D(params[layer_key] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
                 x = self.add_residual(shortcut, x, params[layer_key] * params['num_neurons'], params['activation'], reg_layer)
             else:
                 x = Conv2D(params[layer_key] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
                 x = Activation(params["activation"])(x)
-                x = BatchNormalization()(x)
+                # x = BatchNormalization()(x)
             x = MaxPooling2D(pool_size=(2, 2))(x)
 
-        x = GlobalAveragePooling2D()(x)
+        # x = GlobalAveragePooling2D()(x)
+        x = Flatten()(x)
         # x = Dense(params["unit_d"], kernel_regularizer=reg_layer)(x)
         # x = Activation(params["activation"])(x)
         # x = Dropout(params["dr_f"])(x)
@@ -388,10 +390,8 @@ class neural_network:
         opt = LayerWiseLR(base_opt, multiplier, learning_rate=float(params["learning_rate"]))
 
         # --- Callbacks ---
-        es1 = EarlyStopping(monitor="val_loss", min_delta=0.005, patience=20, verbose=1,
+        es = EarlyStopping(monitor="val_loss", min_delta=0.005, patience=20, verbose=1,
                             mode="min", restore_best_weights=True)
-        es2 = EarlyStopping(monitor="val_accuracy", min_delta=0.005, patience=20, verbose=1,
-                            mode="max", restore_best_weights=True)
         # reduce_lr = ReduceLROnPlateau(monitor="val_loss", factor=0.2, patience=30,
         #                               verbose=1, min_lr=1e-4)
         # gm = GradientMonitor()
@@ -420,7 +420,7 @@ class neural_network:
                     self.train_data, self.train_labels,
                     self.test_data, self.test_labels,
                     self.epochs, params,
-                    [tensorboard, es1, es2]
+                    [tensorboard, es]
                 )
         else:
             if "debug" in self.cfg.name:
@@ -437,7 +437,7 @@ class neural_network:
                     batch_size=int(params["batch_size"]),
                     verbose=2,
                     validation_data=(self.test_data, self.test_labels),
-                    callbacks=[tensorboard, es1, es2],
+                    callbacks=[tensorboard, es],
                 ).history
         # --- Evaluate ---
         score = self.eval_model()

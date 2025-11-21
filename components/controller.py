@@ -117,7 +117,13 @@ class controller:
         self.iter: int = 0
 
         # Dynamic thresholds (updated at given epochs)
-        self.lacc: float = 0.10
+        lacc_dict: dict = {
+            'cifar10': 0.10,
+            'cifar100': 0.40,
+            'tiniimagenet': 0.30,
+            'gesture': 0.10
+        }
+        self.lacc: float = lacc_dict.get(self.cfg.dataset, 0.20)
         self.hloss: float = np.log(n_classes)
         self.acc_w = 0.5  # weight of accuracy in combined score
         self.vanish_th = 1e-8
