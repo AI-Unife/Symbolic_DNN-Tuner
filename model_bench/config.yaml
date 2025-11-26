@@ -1,27 +1,11 @@
-# ModelBench Configuration - UPPERCASE keys for compatibility
-
-eval: 100
-epochs: 30
+eval: 30
+epochs: 2
 mod_list: []
 dataset: gesture
-name: model_bench
-
-# UPPERCASE keys per gesture_dataset.py
-FRAMES: 16
-MODE: fwdPass
-NUM_CHANNELS: 2
-POLARITY: both
-
-# Mantieni anche lowercase per compatibilità
+name: ciao
 frames: 16
 mode: fwdPass
 channels: 2
 polarity: both
-
 seed: 42
-opt: RS_ruled
-created_at: "2025-11-08T00:00:00"
-
-# Path corretti per dataset e cache
-dataset_path: "/Users/osamaabdouh/Documents/AIDA4Edge/data"
-cache_dir: "/Users/osamaabdouh/Documents/AIDA4Edge/tf/cache"
+opt: filtered

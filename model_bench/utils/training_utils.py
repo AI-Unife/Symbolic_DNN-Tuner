@@ -39,7 +39,6 @@ def fine_tune_model(model_path):
     params = {'batch_size': 32}
 
     history = None
-    epochs = 200
 
     if (cfg.mode == "fwdPass" or cfg.mode == "hybrid") and cfg.dataset == "gesture":
         print("Modalità 'hybrid' o 'fwdPass' rilevata. Uso train_model custom.")
@@ -94,7 +93,10 @@ def fine_tune_model(model_path):
     print(f"  Test Accuracy: {test_acc:.4f}")
 
 
-    model.save("fine-tuning/best-model-finetuned.keras")
+    model.save("best-model-finetuned.keras")
 
-
-    input("Press Enter to continue...")
+    # Salva la history se disponibile
+    if history is not None:
+        import json
+        with open("training_history.json", "w") as f:
+            json.dump(history if isinstance(history, dict) else history.history, f, indent=2)

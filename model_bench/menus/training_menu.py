@@ -25,9 +25,11 @@ class TrainingMenu:
                 ]
             ).ask()
 
-            if choice == "1: Start Training":
+            choice_num = choice[0] if choice else ""
+
+            if choice_num == "1":
                 self.start_training()
-            elif choice == "2: View Training Logs":
+            elif choice_num == "2":
                 print("Displaying Training Logs...")
             elif choice == "3: Back to Main Menu":
                 break

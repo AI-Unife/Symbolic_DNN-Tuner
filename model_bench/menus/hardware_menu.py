@@ -19,7 +19,8 @@ class HardwareMenu:
     
     def view_hardware_configurations(self):
         if not self.hw_mod or not self.hw_mod.nvdla:
-            print(colors.WARNING + "No hardware configurations found." + colors.ENDC)
+            print(colors.WARNING + "No hardware configurations found.\n" + colors.ENDC)
+            questionary.press_any_key_to_continue().ask()
             return
         
         print(colors.OKBLUE + "+----------- AVAILABLE HARDWARE -----------+" + colors.ENDC)  
@@ -31,6 +32,7 @@ class HardwareMenu:
     def add_hardware_configuration(self):
         print(colors.OKBLUE + "+----------- ADD NEW HARDWARE -----------+" + colors.ENDC)
         add_hw_config()
+
         # Refresh hardware module configurations
         self.hw_mod = hardware_module()
         print(colors.OKBLUE + "+------------------------------------------+" + colors.ENDC)
@@ -39,7 +41,8 @@ class HardwareMenu:
 
     def remove_hardware_configuration(self):
         if not self.hw_mod or not self.hw_mod.nvdla:
-            print(colors.FAIL + "No hardware configurations available to remove." + colors.ENDC)
+            print(colors.FAIL + "No hardware configurations available to remove.\n" + colors.ENDC)
+            questionary.press_any_key_to_continue().ask()
             return
         print(colors.OKBLUE + "+----------- REMOVE HARDWARE -----------+" + colors.ENDC)
         removed = rm_hw_config(self.hw_mod)

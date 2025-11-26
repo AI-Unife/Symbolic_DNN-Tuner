@@ -7,33 +7,49 @@ import questionary
 from utils.model_utils import load_trained_model
 from tqdm import tqdm
 
-# create json configuration 
+
 def load_or_create_nvdla_configs(path="nvdla/nvdla_configs.json"):
-    if not os.path.exists(path):
-        with open(path, 'w') as f:
-            json.dump([], f, indent=4)
-    with open(path, 'r') as f:
-        return json.load(f)
+    """
+    Load or create the nvdla configurations JSON file for hardware configurations.
+    :param path: Path to the nvdla configurations JSON file
+    :return: List of nvdla configurations
+    """
+    try: 
+        if not os.path.exists(path):
+            with open(path, 'w') as f:
+                json.dump([], f, indent=4)
+        with open(path, 'r') as f:
+            return json.load(f)
+    except (IOError, json.JSONDecodeError) as e:
+        print(colors.FAIL, f"Error loading nvdla configurations: {e}", colors.ENDC)
+        return []
     
-# list of available hardware
 def hw_visualizzer(hw_mod):
+    """Display the available hardware configurations."""
+
     for config_name, config in hw_mod.nvdla.items():
         print(f"- {config_name} | Path: {config['path']} | Cost: {config['cost']:.2f}")
 
-# Add a new configuration to the available configurations
 def add_hw_config():
-    nvdla_list = load_or_create_nvdla_configs()
+    """Add a new hardware configuration to the available configurations."""
 
+    nvdla_list = load_or_create_nvdla_configs()
     path=questionary.path("Enter the path of the hardware configuration to add:").ask()
+
+    if path:
+        path = os.path.expanduser(path)
+        path = os.path.abspath(path)
     if not path or not os.path.exists(path) or not path.endswith(".yaml"):
         print(colors.FAIL, "Invalid path or file does not exist.", colors.ENDC)
         return
 
-    # Copy the file to nvdla/specs directory
+    # Copy the .yaml file to nvdla/specs directory
     dest_dir = "nvdla/specs"
     os.makedirs(dest_dir, exist_ok=True)
     base_name = os.path.basename(path)
     dest_path = os.path.join(dest_dir, base_name)
+    
+    # Handle name conflicts by appending a number to the filename
     if os.path.exists(dest_path):
         name, ext = os.path.splitext(base_name)
         counter = 1
@@ -86,8 +102,13 @@ def add_hw_config():
     
     print(colors.OKGREEN,f"Added configuration: {new_config['name']}", colors.ENDC)
 
-# Select hardware configuration(s) from available ones
 def select_hw_config(hw_mod):
+    """
+    Select hardware configuration(s) from available ones.
+    :param hw_mod: Hardware module
+    :return: list of selected hardware configuration names
+    """
+
     while True:
         if not hw_mod or not hw_mod.nvdla:
             print(colors.FAIL, "No hardware configurations available.", colors.ENDC)
@@ -102,8 +123,12 @@ def select_hw_config(hw_mod):
             break
     return hw_choices
 
-# Remove hardware configuration(s) from available ones
 def remove_hw_config(hw_mod):
+    """
+    Remove hardware configuration(s) from available ones.
+    :param hw_mod: Hardware module
+    :return: list of removed hardware configuration names
+    """
     nvdla=load_or_create_nvdla_configs()
     if not nvdla:
         print(colors.FAIL, "No hardware configurations available to remove.", colors.ENDC)
