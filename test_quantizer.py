@@ -9,7 +9,7 @@ from pathlib import Path
 
 args = {
     "epochs": 50,
-    "dataset": "gesture", # choose between "tinyimagenet", "cifar10", "cifar100", "gesture"
+    "dataset": "cifar10", # choose between "tinyimagenet", "cifar10", "cifar100", "gesture"
     "name": "test", # experiment dir name 
     "frames": 16,
     "mode": "fwdPass",
@@ -17,8 +17,8 @@ args = {
     "polarity": "both",
     "seed": 42,
     "verbose": 2,
-    "dataset_path": "/hpc/home/bzzlca/AIDA4Edge/data/", ## Choose your dataset path
-    "cache_dataset": "/hpc/home/bzzlca/AIDA4Edge/tf/"
+    "dataset_path": "./data", ## Choose your dataset path
+    "cache_dataset": "./"
 }
 
 exp_dir = Path(args["name"])
