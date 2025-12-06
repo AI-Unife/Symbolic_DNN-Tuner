@@ -1,8 +1,8 @@
 [
-  {
-    "name": "nv_small",
-    "path": "nv_small64_fp32.yaml",
-    "area": 2.824,
-    "C/mm2": 10000.0
-  }
+    {
+        "name": "nv_small",
+        "path": "nv_small64_fp32.yaml",
+        "area": 2.824,
+        "C/mm2": 10000.0
+    }
 ]
