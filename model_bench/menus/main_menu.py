@@ -9,14 +9,15 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from components.colors import colors
 from model_bench.menus.testing_menu import TestingMenu
 from model_bench.menus.conversion_menu import ConversionMenu
-from model_bench.menus.training_menu import TrainingMenu
 from model_bench.menus.settings_menu import SettingsMenu
+from utils.training_utils import fine_tune_model
+from exp_config import load_cfg
+
 
 class MainMenu:
     def __init__(self):
         self.testing_menu = TestingMenu()
         self.conversion_menu = ConversionMenu()
-        self.training_menu = TrainingMenu()
         self.settings_menu = SettingsMenu()
 
     def display_header(self):
@@ -24,6 +25,27 @@ class MainMenu:
         print(colors.HEADER + "+-----------------------------------+")
         print("|            Model Bench            |")
         print("+-----------------------------------+" + colors.ENDC)
+
+    def start_fine_tuning(self):
+        """Start the fine-tuning process for a model"""
+        cfg = load_cfg()
+        self.settings_menu.show_current_config()
+        if not questionary.confirm("Proceed the fine-tuning with this configuration?").ask():
+            questionary.press_any_key_to_continue().ask()
+            return
+        while True:
+            model_path = questionary.path("Enter the path to the model file:").ask()
+            if model_path is None:
+                questionary.press_any_key_to_continue().ask()
+                return
+            
+            model_path = Path(model_path).expanduser().resolve()
+            if model_path.exists() and model_path.suffix == '.keras':
+                break
+            else:
+                print(colors.FAIL + "Invalid model path or unsupported file type. Please try again." + colors.ENDC)
+        fine_tune_model(model_path)
+
 
     def run(self):
         while True:
@@ -34,7 +56,7 @@ class MainMenu:
                 choices=[
                     "1: Model testing",
                     "2: Model conversion",
-                    "3: Model training",
+                    "3: Model fine-tuning",
                     "4: Settings",
                     "5: Exit"
                 ]
@@ -50,7 +72,7 @@ class MainMenu:
             elif choice_num == "2":
                 self.conversion_menu.run()
             elif choice_num == "3":
-                self.training_menu.run()
+                self.start_fine_tuning()
             elif choice_num == "4":
                 self.settings_menu.run()
             elif choice_num == "5":

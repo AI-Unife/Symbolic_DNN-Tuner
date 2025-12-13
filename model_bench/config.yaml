@@ -1,8 +1,8 @@
 eval: 30
-epochs: 2
+epochs: 4
 mod_list: []
 dataset: gesture
-name: ciao
+name: fine_tuning
 frames: 16
 mode: fwdPass
 channels: 2

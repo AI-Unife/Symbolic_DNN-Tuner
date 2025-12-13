@@ -41,6 +41,9 @@ class SettingsMenu:
                 ]
             ).ask()
             
+            if choice is None:
+                return
+
             if not choice:
                 break
 
@@ -77,10 +80,14 @@ class SettingsMenu:
         print(f"  Name: {cfg.name}")
         print(f"  Dataset: {cfg.dataset}")
         print(f"  Epochs: {cfg.epochs}")
+        print(f"  Max Evaluations: {cfg.eval}")
+        print(f"  Frames: {cfg.frames}")
+        print(f"  Channels: {cfg.channels}")
+        print(f"  Polarity: {cfg.polarity}")
+        print(f"  Mode: {cfg.mode}")
         print(f"  Seed: {cfg.seed}")
         print(f"  Modules: {cfg.mod_list}")
         print(f"  Optimizer: {cfg.opt}")
-        input("\nPress Enter to continue...")
 
     def change_dataset(self):
         datasets = [
@@ -243,11 +250,27 @@ class SettingsMenu:
         reload_cfg()
 
     def load_config_file(self):
+        """Load configuration from a user-selected YAML file"""
         file_path = questionary.path(
             "Enter the path to the configuration file:",
             only_files=True
         ).ask()
+
+        if file_path is None:
+            return
         
+        file_path = Path(file_path).expanduser().resolve()
+
+        if not file_path.is_file() or not file_path.suffix in ['.yaml', '.yml']:
+            print(colors.FAIL + "Invalid file path or unsupported file type. Please try again." + colors.ENDC)
+            questionary.press_any_key_to_continue().ask()
+            return
+        
+        try:
+            with open(file_path, 'r') as f:
+                new_config = 
+
+
         if file_path and Path(file_path).is_file():
             try:
                 # Leggi il contenuto del file selezionato
@@ -292,9 +315,10 @@ class SettingsMenu:
 
             if choice_num == "1":
                 self.show_current_config()
+                questionary.press_any_key_to_continue().ask()
             elif choice_num == "2":
                 self.modify_configuration_menu()
             elif choice_num == "3":
-                pass
+                self.load_config_file()
             elif choice_num == "4":
                 break

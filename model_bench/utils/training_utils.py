@@ -8,6 +8,7 @@ from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 import components.neural_network
+from components.colors import colors
 from exp_config import load_cfg
 from components.dataset import get_datasets
 
@@ -15,15 +16,12 @@ def fine_tune_model(model_path):
     """Fine-tune a pre-trained model"""
 
     cfg = load_cfg()
-    print("Fine-tuning model with the following configuration:")
-    for key, value in cfg.items():
-        print(f"  {key}: {value}")
 
     dataset_name = cfg.dataset.strip().lower().replace("-", "")
 
     X_train, Y_train, X_test, Y_test, n_classes = get_datasets(dataset_name)
 
-    model = tf.keras.models.load_model('/Users/osamaabdouh/Downloads/results/25_10_21_12_49650_gesture_filtered_100_30_fwdPass_32_2_2/Model/best-model.keras')
+    model = tf.keras.models.load_model(model_path)
 
     print(model.optimizer.get_config())
 
@@ -41,32 +39,28 @@ def fine_tune_model(model_path):
     history = None
 
     if (cfg.mode == "fwdPass" or cfg.mode == "hybrid") and cfg.dataset == "gesture":
-        print("Modalità 'hybrid' o 'fwdPass' rilevata. Uso train_model custom.")
+        print(colors.OKGREEN + "Modalità 'hybrid' o 'fwdPass' rilevata. Uso train_model custom." + colors.ENDC)
 
         opt = model.optimizer
 
         if opt is None:
-            print("Nessun ottimizzatore trovato nel modello caricato.")
+            print(colors.FAIL + "Nessun ottimizzatore trovato nel modello caricato." + colors.ENDC)
             return
-        
-        # Il problema è che opt._learning_rate (del wrapper) è None dopo il caricamento.
-        # Il learning rate che vogliamo (0.000211...) è salvato dentro 
-        # l'ottimizzatore *interno* (Adam).
-        
+
+
         if hasattr(opt, '_learning_rate') and opt._learning_rate is None:
             try:
-                # Estraiamo il LR (come valore numpy) dall'ottimizzatore interno
+                # Extract the LR (as a numpy value) from the internal optimizer
+                # to prevent crashes in apply_gradients().
                 inner_lr_value = opt._optimizer.learning_rate.numpy()
                 
-                print(f"ATTENZIONE: opt._learning_rate (wrapper) è None.")
-                print(f"Ripristino il valore leggendolo dall'ottimizzatore interno (Adam): {inner_lr_value}")
+                print(colors.WARNING + f"ATTENZIONE: opt._learning_rate (wrapper) è None." + colors.ENDC)
+                print(colors.WARNING + f"Ripristino il valore leggendolo dall'ottimizzatore interno (Adam): {inner_lr_value}" + colors.ENDC)
                 
-                # Assegniamo questo valore al campo _learning_rate del wrapper.
-                # Questo previene il crash in apply_gradients.
                 opt._learning_rate = inner_lr_value
                 
             except Exception as e:
-                print(f"Errore nel tentativo di patchare il LR. Uso un default. Errore: {e}")
+                print(colors.FAIL + f"Errore nel tentativo di patchare il LR. Uso un default. Errore: {e}" + colors.ENDC)
                 opt._learning_rate = 1e-4 # Fallback di emergenza
 
         history = components.neural_network.train_model(model, opt, X_train, Y_train, X_test, Y_test, cfg.epochs, params, callbacks)
@@ -81,11 +75,7 @@ def fine_tune_model(model_path):
                             callbacks=callbacks).history
         
     print("Fine-tuning completed.")
-
-    # --- 8. VALUTAZIONE FINALE (Come suggerito dall'email) ---
-    print("Valutazione del modello sul set di test...")
     
-    # Assicurati di aver importato 'eval_model' da 'components.custom_train'
     test_loss, test_acc = components.neural_network.eval_model(model, X_test, Y_test)
 
     print(f"--- RISULTATI FINALI SUL TEST SET ---")
@@ -95,7 +85,7 @@ def fine_tune_model(model_path):
 
     model.save("best-model-finetuned.keras")
 
-    # Salva la history se disponibile
+    # Save the training history if available
     if history is not None:
         import json
         with open("training_history.json", "w") as f:
