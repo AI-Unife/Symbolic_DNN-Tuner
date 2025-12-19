@@ -249,10 +249,39 @@ class SettingsMenu:
         # Ricarica la configurazione
         reload_cfg()
 
+    def export_configuration(self):
+        """Esporta la configurazione corrente in un file YAML"""
+        cfg = load_cfg()
+        default_name = f"config_export_{cfg.name}.yaml"
+        
+        file_path = questionary.text(
+            "Nome del file da esportare:",
+            default=default_name
+        ).ask()
+        
+        if file_path is None:
+            return
+        
+        try:
+            dest_path = Path(file_path).expanduser().resolve()
+
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+
+            config_dict = dict(cfg)
+
+            with open(dest_path, 'w') as f:
+                yaml.safe_dump(config_dict, f, sort_keys=False, allow_unicode=True)
+
+                print(colors.OKGREEN + f"Configurazione esportata con successo in:\n {dest_path}" + colors.ENDC)
+                questionary.press_any_key_to_continue().ask()
+        except Exception as e:
+            print(colors.FAIL + f"Errore durante l'esportazione:: {e}" + colors.ENDC)
+            questionary.press_any_key_to_continue().ask()
+
     def load_config_file(self):
-        """Load configuration from a user-selected YAML file"""
+        """Import configuration from a YAML file and overwrite current config.yaml"""
         file_path = questionary.path(
-            "Enter the path to the configuration file:",
+            "Inserisci il path del file di configurazione:",
             only_files=True
         ).ask()
 
@@ -262,37 +291,46 @@ class SettingsMenu:
         file_path = Path(file_path).expanduser().resolve()
 
         if not file_path.is_file() or not file_path.suffix in ['.yaml', '.yml']:
-            print(colors.FAIL + "Invalid file path or unsupported file type. Please try again." + colors.ENDC)
+            print(colors.FAIL + "Percorso file non valido o tipo di file non supportato. Riprova." + colors.ENDC)
             questionary.press_any_key_to_continue().ask()
             return
         
         try:
             with open(file_path, 'r') as f:
-                new_config = 
+                new_config = yaml.safe_load(f)
 
-
-        if file_path and Path(file_path).is_file():
-            try:
-                # Leggi il contenuto del file selezionato
-                with open(file_path, 'r') as f:
-                    new_config = yaml.safe_load(f)
-                
-                # Sovrascrivi il config.yaml corrente
-                with open(self.config_path, 'w') as f:
-                    yaml.safe_dump(new_config, f, sort_keys=False, allow_unicode=True)
-                
-                # Aggiorna la variabile d'ambiente e ricarica
-                exp_config.set_active_config(self.config_path)
-                reload_cfg()
-                
-                print(colors.OKGREEN + f"Configuration loaded from: {file_path}" + colors.ENDC)
-                input("Press Enter to continue...")
-            except Exception as e:
-                print(colors.FAIL + f"Error loading file: {e}" + colors.ENDC)
-                input("Press Enter to continue...")
-        else:
-            print(colors.FAIL + "Invalid path. Try again." + colors.ENDC)
-            input("Press Enter to continue...")
+            if not isinstance(new_config, dict):
+                raise ValueError("Il file YAML deve contenere un dizionario di configurazione.")
+            
+            # Valida i campi critici prima di applicare
+            if "mod_list" in new_config:
+                bad_mods = [m for m in new_config.get("mod_list", []) if m not in exp_config._VALID_MODULES]
+                if bad_mods:
+                    raise ValueError(f"Moduli non validi: {bad_mods}")
+            
+            if "mode" in new_config and new_config["mode"] not in exp_config._VALID_MODES:
+                raise ValueError(f"Mode non valido: {new_config['mode']}")
+            
+            if "polarity" in new_config and new_config["polarity"] not in exp_config._VALID_POLARITY:
+                raise ValueError(f"Polarity non valida: {new_config['polarity']}")
+            
+            if "opt" in new_config and new_config["opt"] not in exp_config._VALID_OPT:
+                raise ValueError(f"Optimizer non valido: {new_config['opt']}")
+            
+            # Sovrascrivi il config.yaml locale
+            with open(self.config_path, 'w') as f:
+                yaml.safe_dump(new_config, f, sort_keys=False, allow_unicode=True)
+            
+            # Aggiorna la variabile d'ambiente e ricarica
+            exp_config.set_active_config(self.config_path)
+            reload_cfg()
+            
+            print(colors.OKGREEN + f"✓ Configurazione importata con successo da:\n  {file_path}" + colors.ENDC)
+            input("\nPress Enter to continue...")
+            
+        except Exception as e:
+            print(colors.FAIL + f"✗ Errore durante l'importazione: {e}" + colors.ENDC)
+            input("\nPress Enter to continue...")
     
     def run(self):
         while True:
@@ -301,10 +339,11 @@ class SettingsMenu:
             choice = questionary.select(
                 "Settings:",
                 choices=[
-                    "1: View  configuration",
+                    "1: View configuration",
                     "2: Modify configuration",
-                    "3: Load configuration file",
-                    "4: Back to main menu"
+                    "3: Import configuration file",
+                    "4: Export configuration file",
+                    "5: Back to main menu"
                 ]
             ).ask()
         
@@ -321,4 +360,6 @@ class SettingsMenu:
             elif choice_num == "3":
                 self.load_config_file()
             elif choice_num == "4":
+                self.export_configuration()
+            elif choice_num == "5":
                 break
