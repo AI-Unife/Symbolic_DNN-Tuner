@@ -2,6 +2,25 @@
   <img src="https://github.com/micheleFraccaroli/Symbolic_DNN-Tuner/blob/ai@edge/logo/DNN-Tuner_icon.png?raw=true" width=450>
 </p>
 
+# Model Bench Utility
+**Model Bench** is a benchmarking API designed to: measure the performance of models, focusing on **latency** and **FLOPs**; **conversion** of models; **fine-tuning** processes.
+
+## Setup and Usage
+Follow these steps to get the API running:
+
+1. **Install Dependencies**: Install the required packages based on your Operating System:
+   ```bash
+   pip install -r requirements.txt
+   ```
+2. **Configure Paths**: Set the local paths for your dataset in components/gesture_dataset.py:
+- Edit dataset_path (line 257)
+- Edit cache_dir (line 260)
+3. **Run the API**: Start the service by executing:
+```bash
+python model_bench/run.py
+```
+
+#
 # Symbolic DNN-Tuner
 Symbolic DNN-Tuner is a system to drive the training of a Deep Neural Network, analysing the performance of each training experiment and automatizing the choice of HPs to obtain a network with better performance.
 
