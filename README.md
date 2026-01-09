@@ -16,9 +16,9 @@ Follow these steps to get the API running:
 - Edit dataset_path (line 257)
 - Edit cache_dir (line 260)
 3. **Run the API**: Start the service by executing:
-```bash
-python model_bench/run.py
-```
+  ```bash
+  python model_bench/run.py
+  ```
 
 #
 # Symbolic DNN-Tuner
