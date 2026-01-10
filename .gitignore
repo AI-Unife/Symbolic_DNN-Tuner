@@ -19,7 +19,6 @@ slurm-*.out
 prova.py
 *.keras
 gesture/*
-data/
 *.h5
 test_gesture/*
 training_history.json

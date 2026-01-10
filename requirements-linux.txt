@@ -1,0 +1,15 @@
+scikit-optimize
+tensorflow==2.15.0
+matplotlib
+pytest
+tonic
+problog
+numpy
+typer
+questionary
+torch
+tf2onnx
+onnx
+onnx2torch
+torchinfo
+tqdm

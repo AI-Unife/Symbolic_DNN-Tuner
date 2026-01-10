@@ -1,0 +1,16 @@
+scikit-optimize
+tensorflow-macos==2.15.0
+tensorflow-metal
+matplotlib
+pytest
+tonic
+problog
+numpy
+typer
+questionary
+torch
+tf2onnx
+onnx
+onnx2torch
+torchinfo
+tqdm

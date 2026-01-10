@@ -61,11 +61,31 @@ def fine_tune_model(model_path):
                 
             except Exception as e:
                 print(colors.FAIL + f"Errore nel tentativo di patchare il LR. Uso un default. Errore: {e}" + colors.ENDC)
-                opt._learning_rate = 1e-4 # Fallback di emergenza
-
+                return
         history = components.neural_network.train_model(model, opt, X_train, Y_train, X_test, Y_test, cfg.epochs, params, callbacks)
     else:
         print("Modalità standard rilevata. Uso model.fit di Keras.")
+
+        opt = model.optimizer
+
+        if opt is None:
+            print(colors.FAIL + "Nessun ottimizzatore trovato nel modello caricato." + colors.ENDC)
+            return
+
+        if hasattr(opt, '_learning_rate') and opt._learning_rate is None:
+            try:
+                # Extract the LR (as a numpy value) from the internal optimizer
+                # to prevent crashes in apply_gradients().
+                inner_lr_value = opt._optimizer.learning_rate.numpy()
+                
+                print(colors.WARNING + f"ATTENZIONE: opt._learning_rate (wrapper) è None." + colors.ENDC)
+                print(colors.WARNING + f"Ripristino il valore leggendolo dall'ottimizzatore interno (Adam): {inner_lr_value}" + colors.ENDC)
+                
+                opt._learning_rate = inner_lr_value
+                
+            except Exception as e:
+                print(colors.FAIL + f"Errore nel tentativo di patchare il LR. Uso un default. Errore: {e}" + colors.ENDC)
+                return
 
         history = model.fit(X_train, Y_train,
                             epochs=cfg.epochs,
