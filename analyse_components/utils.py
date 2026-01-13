@@ -59,7 +59,7 @@ def parse_experiment_name(exp_name: str) -> Dict[str, Any]:
         'Epochs': None
     }
     
-    if len(parts) >= 11:
+    if len(parts) >= 10:
         try:
             parsed_data['Dataset'] = parts[5]
             if parts[7] == 'ruled':

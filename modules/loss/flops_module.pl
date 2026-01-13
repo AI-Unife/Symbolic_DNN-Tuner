@@ -19,7 +19,6 @@ t(0.70)::action(dec_conv_block, latency).
 t(0.70)::action(dec_conv_block, model_size).
 t(0.70)::action(dec_conv_layers, latency).
 t(0.70)::action(dec_conv_layers, model_size).
-t(0.70)::action(dec_fc,model_size).
 t(0.50)::action(remove_residual,latency).
 t(0.50)::action(remove_residual,model_size).
 
@@ -36,6 +35,5 @@ t(0.50)::action(remove_residual,model_size).
 0.70::action(dec_conv_block, model_size):- problem(model_size).
 0.70::action(dec_conv_layers, latency):- problem(latency).
 0.70::action(dec_conv_layers, model_size):- problem(model_size).
-0.70::action(dec_fc,model_size):- problem(model_size).
 0.50::action(remove_residual,latency):- problem(latency), \+problem(gradient).
 0.50::action(remove_residual,model_size):- problem(model_size), \+problem(gradient).

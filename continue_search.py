@@ -125,17 +125,44 @@ def _load_previous_results(cfg_name: str, base_space: Space) -> (list, list):
 
     # --- Load scores (y0) ---
     try:
-        with open(acc_log_path, "r") as f:
-            for line in f:
-                line = line.strip()
-                if not line: continue
+        # Costruiamo il percorso per il file dei flops basandoci su quello dell'accuracy
+        # Assumiamo che acc_log_path sia un oggetto Path (pathlib), dato che usi .name
+        flops_log_path = Path(cfg_name) / "flops_report.txt"
+        
+        with open(acc_log_path, "r") as f_acc, open(flops_log_path, "r") as f_flops:
+            # Leggiamo tutte le righe pulite dai due file
+            acc_lines = [line.strip() for line in f_acc if line.strip()]
+            flops_lines = [line.strip() for line in f_flops if line.strip()]
+
+            # Iteriamo accoppiando le righe (zip si ferma alla lista più corta)
+            for acc_line, flops_line in zip(acc_lines, flops_lines):
                 try:
-                    score = float(line)
+                    # Gestione caso "None" o stringa vuota per l'accuracy
+                    if acc_line == "None" or not acc_line:
+                        score = 100000.0
+                    else:
+                        accuracy = float(acc_line)
+                        
+                        # Parse della riga flops: prendiamo la seconda colonna
+                        # Esempio riga: "Net_0 123456" -> parts[1] è 123456
+                        flops_parts = flops_line.split()
+                        if len(flops_parts) < 2:
+                            print(colors.WARNING, f"Invalid format in flops file: {flops_line}", colors.ENDC)
+                            continue
+                            
+                        n_flops = float(flops_parts[1])
+                        
+                        # Calcolo dello score secondo la formula richiesta
+                        # Score = -0.77*accuracy - 0.33*(1 - NFlops/150000000)
+                        score = -0.77 * accuracy - 0.33 * (1 - n_flops / 150000000.0)
+
                     y0.append(score)
+
                 except ValueError:
-                    print(colors.WARNING, f"Invalid score value in {acc_log_path.name}: {line}", colors.ENDC)
-    except FileNotFoundError:
-        print(colors.WARNING, f"{acc_log_path.name} not found. Assuming no prior data.", colors.ENDC)
+                    print(colors.WARNING, f"Value Error processing: Acc='{acc_line}', Flops='{flops_line}'", colors.ENDC)
+
+    except FileNotFoundError as e:
+        print(colors.WARNING, f"File not found: {e}. Assuming no prior data.", colors.ENDC)
         return [], [] # No scores, so no points
 
     # --- Synchronize x0 and y0 ---
@@ -182,7 +209,10 @@ def _restore_symbolic_space(cfg_name: str, ctrl: controller, base_space: Space, 
                     sym_tuning, diagnosis, params, const_space
                 )
                 # Expand the *base* space if new dimensions were added
-                first_ss.expand_space(base_space, const_space)
+                if cfg.opt == 'basic':
+                    base_space = const_space
+                else:
+                    base_space = first_ss.expand_space(base_space, const_space)
         
         # Return the final space, reconstructed from all log entries
         return const_space
@@ -303,7 +333,10 @@ def run_optimization(base_space: Space, first_ss: search_space, ctrl: controller
             next_space = copy.deepcopy(base_space)
         else:
             next_space = ctrl.diagnosis(const_space)
-            first_ss.expand_space(base_space, next_space)
+            if cfg.opt == 'basic':
+                base_space = next_space
+            else:
+                base_space = first_ss.expand_space(base_space, next_space)
 
         const_space = copy.deepcopy(next_space) # Set space for *next* iteration
         
@@ -326,6 +359,8 @@ def parse_args() -> argparse.Namespace:
 
     parser.add_argument("--eval", type=int, default=300,
                         help="Max number of evaluations")
+    parser.add_argument("--early_stop", type=int, default=60,
+                        help="Early stopping patience")
     parser.add_argument("--epochs", type=int, default=2,
                         help="Epochs for training")
     parser.add_argument(
@@ -438,34 +473,7 @@ if __name__ == "__main__":
     base_args = parse_args()
 
     # --- Experiment Loop ---
-    try:
-        with open("list_experiments.txt", "r") as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith("#"): # Skip empty lines/comments
-                    continue
-                
-                parts = line.split(",")
-                if len(parts) < 4:
-                    print(colors.WARNING, f"Skipping malformed line in list_experiments.txt: {line}", colors.ENDC)
-                    continue
-
-                # Create a *copy* of the base args to modify
-                exp_args = copy.deepcopy(base_args)
-                
-                # Override args with values from the file
-                exp_args.name = parts[0].strip()
-                exp_args.dataset = parts[1].strip()
-                exp_args.opt = parts[2].strip()
-                exp_args.seed = int(parts[3].strip())
-                
-                # Run the complete experiment with these settings
-                run_single_experiment(exp_args)
-
-    except FileNotFoundError:
-        print(colors.FAIL, "Error: 'list_experiments.txt' not found.", colors.ENDC)
-        print("Running a single experiment based on command-line arguments.")
-        run_single_experiment(base_args)
+    run_single_experiment(base_args)
     # except Exception as e:
     #     print(colors.FAIL, f"An error occurred during the experiment batch: {e}", colors.ENDC)
     #     sys.exit(1)

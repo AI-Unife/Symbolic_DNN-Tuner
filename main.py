@@ -187,8 +187,10 @@ def run_optimization(base_space: Space, first_ss: search_space, ctrl: controller
         const_fn = ConstraintsWrapper(const_space)
 
         if cfg.verbose > 0:
-            print("Actual search space for this iteration:")
+            print("Actual constrained space for this iteration:")
             print_space(const_space)
+            print("Actual base space for this iteration:")
+            print_space(base_space)
 
         # --- 3. Run One Step of Optimization ---
         try:
@@ -241,7 +243,10 @@ def run_optimization(base_space: Space, first_ss: search_space, ctrl: controller
             # 'with_rules' means the controller diagnoses and mutates the space
             next_space = ctrl.diagnosis(const_space)
             # Expand the base_space if the controller added new dimensions
-            first_ss.expand_space(base_space, next_space)
+            if cfg.opt == 'basic':
+                base_space = next_space
+            else:
+                base_space = first_ss.expand_space(base_space, next_space)
 
         # --- 5. Check for Space Change (This is the critical bug fix) ---
         if len(next_space.dimensions) != len(const_space.dimensions):
@@ -273,7 +278,7 @@ def parse_args() -> argparse.Namespace:
 
     parser.add_argument("--eval", type=int, default=300,
                         help="Max number of evaluations")
-    parser.add_argument("--early_stop", type=int, default=20,
+    parser.add_argument("--early_stop", type=int, default=30,
                         help="Early stopping patience")
     parser.add_argument("--epochs", type=int, default=2,
                         help="Epochs for training")

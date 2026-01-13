@@ -1,9 +1,9 @@
 import subprocess
 from itertools import product
 
-datasets_cifar = ['CIFAR-10', 'CIFAR-100']
-optimizers = ['standard', 'filtered', 'basic', 'RS', 'RS_ruled']
-seeds = [42, 84, 123]
+datasets_cifar = ['tinyimagenet']
+optimizers = ['basic', 'filtered','RS_ruled']
+seeds = [7, 96, 42, 84, 123]
 
 
 def generate_jobs():

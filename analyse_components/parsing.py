@@ -27,7 +27,7 @@ _META_PATTERNS: Dict[str, re.Pattern] = {
     "epochs_out": re.compile(r"EPOCHS FOR TRAINING:\s+(\d+)", re.IGNORECASE),
     "total_time": re.compile(r"TOTAL TIME -------->\s*([0-9]*\.?[0-9]+)", re.IGNORECASE),
     # Changed to capture the group directly in findall
-    "score": re.compile(r"Score:\s+\.?-*([0-9]*\.?[0-9]+)") 
+    "score": re.compile(r"Score:\s+\.?(-*[0-9]*\.?[0-9]+)")
 }
 
 def _get_config_metadata(experiment_dir: Path) -> Tuple[Optional[int], Optional[str]]:
@@ -140,14 +140,9 @@ def parse_experiment_data(experiment_dir: Path, root_path: Path) -> List[Dict[st
     """
     logs_dir = experiment_dir / 'algorithm_logs'
     acc_file = logs_dir / 'acc_report.txt'
-    hyper_file = logs_dir / 'hyper-neural.txt'
     quantize = logs_dir / 'quantization_report.txt'
     flop_params_file = experiment_dir / 'flops_report.txt'
 
-    if not (acc_file.exists() and hyper_file.exists()):
-        logging.debug("Core log files missing in %s, skipping.", experiment_dir.name)
-        return []
-    
     # --- 1. METADATA (Epochs/Dataset) ---
     # Try parsing from folder name first
     parsed_name_data = utils.parse_experiment_name(experiment_dir.name)
@@ -173,8 +168,6 @@ def parse_experiment_data(experiment_dir: Path, root_path: Path) -> List[Dict[st
         log_file = out_files[0]
         # Extract Losses
         losses = parse_final_losses_from_log(log_file)
-        # Extract Scores
-        scores = parse_scores_from_log(log_file)
     else:
         logging.warning("No .out/.log file found in %s. Losses/Scores will be None.", experiment_dir.name)
 
@@ -182,13 +175,10 @@ def parse_experiment_data(experiment_dir: Path, root_path: Path) -> List[Dict[st
     try:
         with open(acc_file, 'r') as f_acc:
             acc_lines = f_acc.readlines()
-        with open(hyper_file, 'r') as f_hyper:
-            hyper_lines = f_hyper.readlines()
         flops_params = []
         if flop_params_file.exists():
             with open(flop_params_file) as f_flops:
-                flops_params = f_flops.readlines()
-        
+                flops_params = f_flops.readlines()    
         quantize_lines = []
         if quantize.exists():
             with open(quantize, 'r') as f_quantize:
@@ -197,24 +187,18 @@ def parse_experiment_data(experiment_dir: Path, root_path: Path) -> List[Dict[st
         logging.error("Could not read log files in %s: %s", logs_dir, e)
         return []
 
-    if len(acc_lines) != len(hyper_lines):
-        logging.warning("%s: Log file line mismatch (acc: %d, hyper: %d). Processing minimum.",
-                        experiment_dir.name, len(acc_lines), len(hyper_lines))
-    
     experiment_networks = []
     
     # Iterate using index to safely access all lists (handling different lengths)
-    min_len = min(len(acc_lines), len(hyper_lines))
+    min_len = len(acc_lines)
     
     for i in range(min_len):
         try:
             acc_line = acc_lines[i]
-            hyper_line = hyper_lines[i]
             if acc_line.strip() == 'None':
                 accuracy = 0.0
             else:
                 accuracy = float(acc_line.strip())
-            hyper_str = hyper_line.strip()
             
             # Handle Quantization
             acc_quant = accuracy # Default to normal accuracy
@@ -237,22 +221,13 @@ def parse_experiment_data(experiment_dir: Path, root_path: Path) -> List[Dict[st
             loss_val = losses[i] if i < len(losses) else None
             
             # Handle Scores (safe access)
-            score_val = scores[i] if i < len(scores) else None
+            score_val = -0.77*accuracy-0.33*(1-flops/150000000) if accuracy > 0.0 else 100000 # Default scoring formula
 
-            if not hyper_str:
-                logging.warning("Row %d in %s is empty. Skipped.", i+1, hyper_file)
-                continue
-            
-            hyper_dict = ast.literal_eval(hyper_str)
-            if not isinstance(hyper_dict, dict): 
-                raise ValueError("Parsed hyperparameter data is not a dict")
-
-            # Collate all data for this single network
             network_data = {
                 'epochs': epochs,
                 'dataset': dataset,
                 'accuracy': accuracy,
-                'hyperparams': hyper_dict,
+                # 'hyperparams': hyper_dict,
                 'experiment_source': str(experiment_dir.relative_to(root_path)), 
                 'accuracy_quantization': acc_quant,
                 'flops': flops,
@@ -263,6 +238,5 @@ def parse_experiment_data(experiment_dir: Path, root_path: Path) -> List[Dict[st
             
         except Exception as e:
             logging.error("Failed to parse row %d in %s: %s", i+1, experiment_dir.name, e)
-            logging.error("   Problematic hyper-line: %s", hyper_line.strip())
 
     return experiment_networks

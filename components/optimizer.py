@@ -295,7 +295,7 @@ class Optimizer:
         if acq_optimizer_kwargs is None:
             acq_optimizer_kwargs = dict()
 
-        self.n_points = acq_optimizer_kwargs.get("n_points", 10000)
+        self.n_points = acq_optimizer_kwargs.get("n_points", 1000000)
         self.n_restarts_optimizer = acq_optimizer_kwargs.get("n_restarts_optimizer", 5)
         self.n_jobs = acq_optimizer_kwargs.get("n_jobs", 1)
         self.acq_optimizer_kwargs = acq_optimizer_kwargs

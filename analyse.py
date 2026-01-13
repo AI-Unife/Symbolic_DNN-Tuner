@@ -189,11 +189,10 @@ def main():
     # 1. Load the existing 'tested_model.csv' database
     # This DB stores *every* network configuration ever tested,
     # mapping a unique key (params) to its best-known accuracy.
-    db, all_hyper_keys = database.load_existing_db(args.tested_model_csv)
+    # db, all_hyper_keys = database.load_existing_db(args.tested_model_csv)
 
     # Lists to hold the results from the *current run*
     total_experiment_summaries = []
-    total_networks_scanned = 0
 
     # 2. Scan directories
     # We look for 'algorithm_logs' as the anchor for an experiment dir
@@ -217,13 +216,15 @@ def main():
             logging.warning("No network data found in %s, skipped.", experiment_dir.name)
             continue
         
-        total_networks_scanned += len(network_data_list)
 
         # 5. Update DB and create 'total' summary row
         # - db is the global dict of all unique networks
         # - summary_row is just the best network *from this experiment*
-        summary_row, updated_count, new_count = database.update_model_db(db, network_data_list, all_hyper_keys)
-        
+        # try:
+        summary_row = database.update_model_db(network_data_list)
+        # except Exception as e:
+        #     logging.error("Failed to update DB for %s: %s", experiment_dir.name, e)
+        #     continue
         if summary_row:
             # Add to the list for the *current run's* total.csv
             total_experiment_summaries.append(summary_row)
@@ -231,38 +232,25 @@ def main():
             # --- NEW: Write individual results.csv ---
             try:
                 individual_summary_path = experiment_dir / "results.csv"
-                database.write_individual_experiment_summary(summary_row, individual_summary_path)
+                database.write_individual_experiment_summary(network_data_list, individual_summary_path)
                 logging.info("Wrote individual summary: %s", individual_summary_path.name)
             except Exception as e:
                 logging.error("Failed to write individual results.csv for %s: %s", experiment_dir.name, e)
             # --- End New ---
-            
-        if updated_count or new_count:
-             logging.info("Merging 'tested_model.csv': %d new, %d updated from %s",
-                          new_count, updated_count, experiment_dir.name)
+        
 
     # 6. Final file writing
-    
-    # --- File 1: tested_model.csv ---
-    # This is the master database of *all* unique networks
-    db_records = list(db.values())
-    database.write_tested_model_file(args.tested_model_csv, db_records, all_hyper_keys)
-    print(f"✅ Created tested models file: {args.tested_model_csv}")
 
-    # --- File 2: total.csv ---
+    # --- File 1: total.csv ---
     # This is the summary of *this run's* best models
     df_total = database.write_total_file(args.total_csv, total_experiment_summaries)
     print(f"✅ Created total summary file: {args.total_csv}")
 
-    # --- File 3: mean.csv ---
+    # --- File 2: mean.csv ---
     # This aggregates the total.csv from *this run*
     database.write_mean_file(args.mean_csv, df_total)
     print(f"✅ Created mean summary file: {args.mean_csv}")
     
-    # --- Console Summary ---
-    print("\n--- Execution Summary ---")
-    print(f"Total networks scanned in log files (current run): {total_networks_scanned}")
-    print(f"Unique networks (total, after merge and filter):    {len(db_records)}")
 
 if __name__ == "__main__":
     main()

@@ -125,7 +125,7 @@ class controller:
         }
         self.lacc: float = lacc_dict.get(self.cfg.dataset, 0.20)
         self.hloss: float = np.log(n_classes)
-        self.acc_w = 0.5  # weight of accuracy in combined score
+        self.acc_w = 0.77  # weight of accuracy in combined score
         self.vanish_th = 1e-8
         self.exploding_th = 100.0
 

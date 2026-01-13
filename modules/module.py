@@ -184,7 +184,7 @@ class module:
 
         # Normalise the values of the weights dividing each of them
         # by the sum of all the accumulated weights
-        norm_weights = [w / np.sum(weights) for w in weights]
+        norm_weights = [w for w in weights]
 
         # The final value is the sum of the products of the weights by the corresponding values
         final_opt = np.sum([w*v for w,v in zip(norm_weights,values)])

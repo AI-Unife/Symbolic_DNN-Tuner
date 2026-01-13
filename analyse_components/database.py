@@ -143,7 +143,7 @@ def load_existing_db(csv_path: Path) -> Tuple[Dict[str, Dict], Set[str]]:
     logging.info("Loaded %d existing unique records.", len(db))
     return db, all_hyper_keys
 
-def update_model_db(db: Dict[str, Dict], network_data_list: List[Dict], all_hyper_keys: Set[str]) -> Tuple[Dict, int, int]:
+def update_model_db(network_data_list: List[Dict]) -> Tuple[Dict, int, int]:
     """
     Updates the in-memory DB with a list of new networks from one experiment.
     
@@ -163,34 +163,13 @@ def update_model_db(db: Dict[str, Dict], network_data_list: List[Dict], all_hype
     """
     if not network_data_list:
         return {}, 0, 0
-        
-    update_count = 0
-    new_count = 0
-    
+
     # Find the best network *in this specific list* (from one experiment)
-    best_network = max(network_data_list, key=lambda x: x['accuracy'])
-    
-    # Update the global database (db) with all networks from this run
-    for network_data in network_data_list:
-        # Ensure all_hyper_keys set is complete
-        all_hyper_keys.update(network_data['hyperparams'].keys())
+    # x[0] è l'indice, x[1] è il dizionario vero e proprio
+    idx, best_network = min(enumerate(network_data_list), key=lambda x: x[1]['score'])
+
         
-        key = create_key_from_record(network_data)
-        new_accuracy = network_data['accuracy']
-        
-        if key in db:
-            # This configuration has been seen before
-            stored_accuracy = db[key]['accuracy']
-            if new_accuracy > stored_accuracy:
-                # We found a better accuracy for it
-                db[key] = network_data
-                update_count += 1
-        else:
-            # This is a brand new network configuration
-            db[key] = network_data
-            new_count += 1
-            
-    # --- MODIFIED SUMMARY ROW CREATION ---
+   
     # Create the summary row for total.csv
     # This row is based *only* on the best network from this experiment,
     # but metadata (Tuner, Dataset, Epochs) comes from the FOLDER NAME.
@@ -201,19 +180,16 @@ def update_model_db(db: Dict[str, Dict], network_data_list: List[Dict], all_hype
         'Experiment Name': exp_name,
         'Tuner': parsed_name_data.get('Tuner'),     # From folder name
         'Dataset': parsed_name_data.get('Dataset'), # From folder name
-        'Epochs': parsed_name_data.get('Epochs'),   # From folder name
-        'Eval Count': len(network_data_list),     # How many models this experiment tested
+        'Eval Count': idx,     # How many models this experiment tested
         'Best Score': best_network['score'],
         'Best Accuracy': best_network['accuracy'],
-        'Best Quantized': best_network.get('accuracy_quantization', None),
         'Best FLOPs': best_network.get('flops', 0),
+        'Best Quantized': best_network.get('accuracy_quantization', None),
         'Best Latency': best_network.get('latency', 0)
     }
-    # Flatten the best network's hyperparameters into the summary row
-    summary_row.update(best_network['hyperparams'])
-    # --- END MODIFICATION ---
+
     
-    return summary_row, update_count, new_count
+    return summary_row
 
 def _get_ordered_headers(data: List[Dict], static_cols: List[str]) -> List[str]:
     """Helper to get a consistent column order for CSVs."""
@@ -327,7 +303,7 @@ def write_mean_file(csv_path: Path, df_total: pd.DataFrame):
         logging.error("Failed to write mean file (%s): %s", csv_path.name, e)
 
 # --- NEW FUNCTION ---
-def write_individual_experiment_summary(summary_row: Dict, csv_path: Path):
+def write_individual_experiment_summary(data: Dict, csv_path: Path):
     """
     Writes the single summary row for one experiment to its
     own 'results.csv' file.
@@ -336,15 +312,15 @@ def write_individual_experiment_summary(summary_row: Dict, csv_path: Path):
         summary_row: The summary dictionary created in update_model_db.
         csv_path: The full path to the output file (e.g., .../exp_name/results.csv).
     """
-    if not summary_row:
+    if not data:
         logging.warning("No summary row provided, cannot write %s", csv_path)
         return
-        
-    data = [summary_row]
-    
-    # Define a consistent column order
-    static_cols = ['Experiment Name', 'Tuner', 'Dataset', 'Epochs', 'Eval Count', 'score', 'accuracy', 'quantized','params', 'latency']
-    headers = _get_ordered_headers(data, static_cols)
-    
+
     # Use the internal _write_file helper to get both CSV and XLSX
-    _write_file(csv_path, data, headers)
+    try:
+        xlsx_path = csv_path.with_suffix('.xlsx')
+        df_out = pd.DataFrame(data)
+        df_out.to_csv(csv_path, index=False)
+        df_out.to_excel(xlsx_path, index=False)
+    except IOError as e:
+        logging.error("Failed to write output files (%s): %s", csv_path.name, e)

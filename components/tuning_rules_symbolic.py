@@ -55,7 +55,7 @@ class tuning_rules_symbolic:
         """
         for i, hp in enumerate(self.space):
             if hp.name == "reg_l2":
-                new_categories = [True, False]
+                new_categories = [True]
                 self.space.dimensions[i] = Categorical(new_categories, name='reg_l2')
         logger.info("Enabled L2 regularization")
 
@@ -75,7 +75,7 @@ class tuning_rules_symbolic:
         """
         for i, hp in enumerate(self.space):
             if hp.name == "data_augmentation":
-                new_categories = [True, False]
+                new_categories = [True]
                 self.space.dimensions[i] = Categorical(new_categories, name='data_augmentation')
         logger.info("Enabled data augmentation")
 
@@ -95,7 +95,7 @@ class tuning_rules_symbolic:
         """
         for i, hp in enumerate(self.space):
             if hp.name == "skip_connection":
-                new_categories = [True, False]
+                new_categories = [True]
                 self.space.dimensions[i] = Categorical(new_categories, name='skip_connection')
         logger.info("Enabled residual connection")
         
@@ -110,7 +110,7 @@ class tuning_rules_symbolic:
         logger.info("Disabled residual connection")
     # -------------------------- Architecture edits ---------------------------
 
-    def new_fc_layer(self) -> None:
+    def new_fc_layers(self) -> None:
         """
         Add a fully-connected (dense) layer, respecting a soft upper bound to avoid bloat.
         """
@@ -135,7 +135,7 @@ class tuning_rules_symbolic:
         self.space = self.ss.add_params(new_p)
         logger.info("Added dense layer #%d", self.controller.count_new_fc)
 
-    def dec_fc_layer(self) -> None:
+    def dec_fc_layers(self) -> None:
         """
         Remove one dense layer if present.
         """
@@ -191,13 +191,13 @@ class tuning_rules_symbolic:
         logger.info("Removed one conv section; remaining added sections: %d", self.controller.count_new_cv)
         self.controller.count_new_cv -= 1
 
-    def inc_conv_layer(self) -> None:
+    def inc_conv_layers(self) -> None:
         if self.controller.layer_x_block < self.controller.max_layer_x_block:
             self.controller.layer_x_block += 1
             logger.info("Add one conv layer per section; new layers per sections: %d", self.controller.layer_x_block)
         logger.info("No more convolutional layers per section to add")
 
-    def dec_conv_layer(self) -> None:
+    def dec_conv_layers(self) -> None:
         if self.controller.layer_x_block < self.controller.max_layer_x_block:
             self.controller.layer_x_block -= 1
             logger.info("Removed one conv layer per section; remaining layers per sections: %d", self.controller.layer_x_block)

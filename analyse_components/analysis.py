@@ -117,7 +117,9 @@ def train_best_model_if_required(exp_dir: Path):
     model_path = exp_dir / "Model" / "best-model.keras"
     try:
         # Heuristic to get dataset name from folder
-        dataset_name = exp_dir.name.split("_")[5]
+        dataset_name = exp_dir.name.split("_")[5].strip().lower().replace("-", "")
+        if dataset_name == 'tinyimagenet':
+            return None, None 
     except IndexError:
         logging.error("Could not extract dataset name from %s", exp_dir.name)
         return None, None
@@ -138,29 +140,36 @@ def train_best_model_if_required(exp_dir: Path):
     if not best_it:
         logging.warning("Could not determine best iteration from acc_report.txt")
         return None, None
-        
-    (batch, opt_name, lr) = parse_batch_opt_lr_from_hyper_neural(aldir, best_it) or (None, None, None)
+    
+    best_params = pd.read_csv(exp_dir / "results.csv")
+    batch, opt_name, lr, aug = best_params["batch_size"][0], best_params["optimizer"][0], best_params["learning_rate"][0], best_params["data_augmentation"][0]
     
     # Provide sensible defaults if parsing failed
     opt_name = opt_name or "Adam"
     lr = lr or 1e-3
     batch = batch or 32
-    
+    aug = True
     try:
         train_split, val_split = load_dataset(dataset_name)
     except Exception as e:
         logging.error("Failed to load dataset '%s': %s", dataset_name, e)
         return None, None
+    
+    model.summary()
+    if aug:
+        inputs = tf.keras.layers.Input(train_split[0].shape[1:])
+        inputs = tf.keras.layers.RandomFlip("horizontal")(inputs)
+        inputs = tf.keras.layers.RandomTranslation(height_factor=0.1, width_factor=0.1, fill_mode="nearest")(inputs)
+        model = tf.keras.Model(inputs=inputs, outputs=model(inputs))
 
     optimizer = make_optimizer_by_name(opt_name, lr=lr)
-    loss = tf.keras.losses.CategoricalCrossentropy(label_smoothing=0.0)
-    metrics = [tf.keras.metrics.CategoricalAccuracy(name="acc")]
-    model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
-    
-    callbacks = [tf.keras.callbacks.EarlyStopping(monitor="val_acc", mode="max", patience=30, restore_best_weights=True)]
+    # loss = tf.keras.losses.CategoricalCrossentropy(label_smoothing=0.0)
+    # metrics = [tf.keras.metrics.CategoricalAccuracy(name="acc")]
+    model.compile(loss="categorical_crossentropy", optimizer=optimizer, metrics=["accuracy"])
+    callbacks = [tf.keras.callbacks.EarlyStopping(monitor="val_accuracy", mode="max", patience=50, restore_best_weights=True)]
     history = None
     
-    logging.info("Starting 'refit' for %s (optimizer=%s, lr=%.3g, batch=%d)", exp_dir.name, opt_name, lr, batch)
+    print(f"Starting 'refit' for {exp_dir.name} (optimizer={opt_name}, lr={lr}, batch={batch}, aug={aug})")
     try:
         if isinstance(train_split, tuple):
             (x_tr, y_tr) = train_split
