@@ -18,8 +18,8 @@ def ensure_directories():
     directories = [
         base_dir / "exports" / "latency",
         base_dir / "exports" / "flops",
+        base_dir / "exports" / "configurations",
         base_dir / "fine_tuned",
-        base_dir / "config_presets",
     ]
 
     for directory in directories:
