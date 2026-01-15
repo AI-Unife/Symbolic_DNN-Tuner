@@ -326,7 +326,7 @@ def dataset_to_numpy(dataset, cfg) -> Tuple[np.ndarray, np.ndarray]:
             if pos_reshaped is not None:
                 # Example analysis: compute center of mass of ROI position map in first frame
                 # A.shape = (16, 32, 32, 1)
-                A = pos_reshaped[..., 0]  # -> (16, 32, 32)
+                A = np.squeeze(pos_reshaped, axis=1)  # -> (16, 32, 32)
 
                 H, W = A.shape[1], A.shape[2]
 
@@ -447,7 +447,8 @@ def get_ROI_numpy(cfg):
     dataset_path = "rois_and_coordinates/datasets"
     polarity = cfg.polarity
     n_pol = 2 if polarity == "both" else 1
-    cache_dir = f"/hpc/home/bzzlca/AIDA4Edge/tf/cache/DVS_ROI_{cfg.mode}_{polarity}_{cfg.frames}_{cfg.channels}_{n_pol}/"
+    # cache_dir = f"/hpc/home/bzzlca/AIDA4Edge/tf/cache/DVS_ROI_{cfg.mode}_{polarity}_{cfg.frames}_{cfg.channels}_{n_pol}/"
+    cache_dir = f"cache/DVS_ROI_{cfg.mode}_{polarity}_{cfg.frames}_{cfg.channels}_{n_pol}/"
     _ensure_cache_dir(cache_dir)
     print("cache_dir:", cache_dir)
 
