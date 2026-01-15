@@ -23,3 +23,4 @@ gesture/*
 test_gesture/*
 training_history.json
 model_bench/exports/*
+model_bench/fine_tuned/*

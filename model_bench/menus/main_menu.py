@@ -1,11 +1,7 @@
-import questionary
-from questionary import Style
 import sys
 import os
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
+import questionary
 from components.colors import colors
 from model_bench.menus.testing_menu import TestingMenu
 from model_bench.menus.conversion_menu import ConversionMenu
@@ -27,12 +23,20 @@ class MainMenu:
         print("+-----------------------------------+" + colors.ENDC)
 
     def start_fine_tuning(self):
-        """Start the fine-tuning process for a model"""
-        cfg = load_cfg()
+        """Start the fine-tuning process for a model(s)"""
         self.settings_menu.show_current_config()
-        if not questionary.confirm("Proceed the fine-tuning with this configuration?").ask():
+
+        modify = questionary.confirm("Do you want to modify the current configuration before fine-tuning?").ask()
+        if modify:
+            self.settings_menu.run()
+            self.settings_menu.show_current_config()
+        
+        cfg = load_cfg()
+
+        if not questionary.confirm("Proceed with fine-tuning using this configuration?").ask():
             questionary.press_any_key_to_continue().ask()
             return
+        
         while True:
             model_path = questionary.path("Enter the path to the model file:").ask()
             if model_path is None:
@@ -44,13 +48,14 @@ class MainMenu:
                 break
             else:
                 print(colors.FAIL + "Invalid model path or unsupported file type. Please try again." + colors.ENDC)
+        
         fine_tune_model(model_path)
+        questionary.press_any_key_to_continue().ask()
 
 
     def run(self):
         while True:
             self.display_header()
-            
             choice = questionary.select(
                 "Select a tool:",
                 choices=[
@@ -66,7 +71,6 @@ class MainMenu:
                 break
 
             choice_num = choice[0] if choice else ""
-
             if choice_num == "1":
                 self.testing_menu.run()
             elif choice_num == "2":

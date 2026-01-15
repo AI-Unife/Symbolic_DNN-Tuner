@@ -1,14 +1,10 @@
-import questionary
-import sys
 import os
 from pathlib import Path
 import yaml
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
 from components.colors import colors
 from exp_config import load_cfg, reload_cfg
 import exp_config
+import questionary
 
 class SettingsMenu:
     def __init__(self):
@@ -37,18 +33,13 @@ class SettingsMenu:
                     "9: Polarity",
                     "10: Seed",
                     "11: Optimizer",
-                    "12: Back to Settings Menu"
+                    "12: Back"
                 ]
             ).ask()
             
             if choice is None:
                 return
-
-            if not choice:
-                break
-
             choice_num = choice.split(":")[0]
-
             if choice_num == "1":
                 self.change_experiment_name()
             elif choice_num == "2":
@@ -90,13 +81,7 @@ class SettingsMenu:
         print(f"  Optimizer: {cfg.opt}")
 
     def change_dataset(self):
-        datasets = [
-            "cifar10", 
-            "mnist", 
-            "fashion-mnist",
-            "imagenet16120",
-            "gesture"
-        ]
+        datasets = sorted(exp_config._VALID_DATASETS)
         choice = questionary.select(
             "Select dataset:",
             choices=datasets
@@ -246,7 +231,6 @@ class SettingsMenu:
         with open(self.config_path, 'w') as f:
             yaml.safe_dump(config, f, sort_keys=False)
         
-        # Ricarica la configurazione
         reload_cfg()
 
     def export_configuration(self):
@@ -303,6 +287,9 @@ class SettingsMenu:
                 raise ValueError("Il file YAML deve contenere un dizionario di configurazione.")
             
             # Valida i campi critici prima di applicare
+            if "dataset" in new_config and new_config["dataset"] not in exp_config._VALID_DATASETS:
+                raise ValueError(f"Dataset non valido: {new_config['dataset']}")
+
             if "mod_list" in new_config:
                 bad_mods = [m for m in new_config.get("mod_list", []) if m not in exp_config._VALID_MODULES]
                 if bad_mods:
@@ -343,7 +330,7 @@ class SettingsMenu:
                     "2: Modify configuration",
                     "3: Import configuration file",
                     "4: Export configuration file",
-                    "5: Back to main menu"
+                    "5: Back"
                 ]
             ).ask()
         

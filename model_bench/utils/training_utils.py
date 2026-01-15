@@ -1,6 +1,7 @@
 import sys
 import os
 from pathlib import Path
+import questionary
 
 import tensorflow as tf
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
@@ -11,32 +12,41 @@ import components.neural_network
 from components.colors import colors
 from exp_config import load_cfg
 from components.dataset import get_datasets
+from components.custom_train import eval_model
 
 def fine_tune_model(model_path):
     """Fine-tune a pre-trained model"""
 
     cfg = load_cfg()
 
-    dataset_name = cfg.dataset.strip().lower().replace("-", "")
-
-    X_train, Y_train, X_test, Y_test, n_classes = get_datasets(dataset_name)
+    X_train, Y_train, X_test, Y_test, n_classes = get_datasets(cfg.dataset)
 
     model = tf.keras.models.load_model(model_path)
 
+    def do_eval(tag: str):
+        if (cfg.mode == "fwdPass" or cfg.mode == "hybrid") and cfg.dataset == "gesture":
+            score = eval_model(model, X_test, Y_test)
+        else:
+            score = model.evaluate(X_test, Y_test, verbose=0)
+        print(f"{tag} - Loss: {score[0]:.4f}, Accuracy: {score[1]:.4f}")
+        return score
+
     print(model.optimizer.get_config())
 
-    es1 = EarlyStopping(monitor="val_loss", min_delta=0.005, patience=20, verbose=1,
+    es1 = EarlyStopping(monitor="val_loss", min_delta=0.001, patience=10, verbose=1,
                             mode="min", restore_best_weights=True)
-    es2 = EarlyStopping(monitor="val_accuracy", min_delta=0.005, patience=20, verbose=1,
+    es2 = EarlyStopping(monitor="val_accuracy", min_delta=0.001, patience=10, verbose=1,
                             mode="max", restore_best_weights=True)
-    reduce_lr = ReduceLROnPlateau(monitor="val_loss", factor=0.2, patience=30, verbose=1,
-                            min_lr=1e-4)
+    reduce_lr = ReduceLROnPlateau(monitor="val_loss", factor=0.2, patience=5, verbose=1,
+                            min_lr=1e-5)
     
     callbacks = [es1, es2, reduce_lr]
 
     params = {'batch_size': 32}
 
     history = None
+
+    before = do_eval("Before fine-tuning")
 
     if (cfg.mode == "fwdPass" or cfg.mode == "hybrid") and cfg.dataset == "gesture":
         print(colors.OKGREEN + "Modalità 'hybrid' o 'fwdPass' rilevata. Uso train_model custom." + colors.ENDC)
@@ -95,18 +105,30 @@ def fine_tune_model(model_path):
                             callbacks=callbacks).history
         
     print("Fine-tuning completed.")
-    
-    test_loss, test_acc = components.neural_network.eval_model(model, X_test, Y_test)
 
-    print(f"--- RISULTATI FINALI SUL TEST SET ---")
-    print(f"  Test Loss: {test_loss:.4f}")
-    print(f"  Test Accuracy: {test_acc:.4f}")
+    after = do_eval("After fine-tuning")
+    print(f"Delta acc: {after[1] - before[1]:+.4f}")
+    print("Last val_acc:", history.get("val_accuracy", [])[-1])
+    print("Last val_loss:", history.get("val_loss", [])[-1])
 
+    out_dir = Path(cfg.name)
+    out_dir.mkdir(parents=True, exist_ok=True)
 
-    model.save("best-model-finetuned.keras")
+    try:
+        model.save(str(out_dir / "best-model-finetuned.keras"))
+    except:
+        pass
 
     # Save the training history if available
     if history is not None:
         import json
-        with open("training_history.json", "w") as f:
-            json.dump(history if isinstance(history, dict) else history.history, f, indent=2)
+
+        hystory_clean = {}
+        h_dict = history if isinstance(history, dict) else history.history
+        for key, val in h_dict.items():
+            hystory_clean[key] = [float(v) for v in val]
+            
+        hystory_path = out_dir / "training_history.json"
+        with open(hystory_path, "w") as f:
+            json.dump(hystory_clean, f, indent=2)
+    print(f"Model and training history saved to {out_dir}")

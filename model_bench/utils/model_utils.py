@@ -10,9 +10,6 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 from tensorflow.keras import backend as K
 from tensorflow.keras.models import load_model
 import questionary
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
 from components.colors import colors
 from components.dataset import get_datasets
 from exp_config import load_cfg
@@ -68,8 +65,6 @@ def load_trained_model(m_path, show_info=None):
         print("MODE: ", cfg.mode)
         print("MODULE LIST: ", cfg.mod_list)
         print("MAX EVALUATIONS: ", cfg.eval)
-        # iterate over each name in the list of folders and
-        # if it doesn't exist, proceed with its creation
     
     # Carica dataset usando il nome normalizzato
     dataset_name = cfg.dataset.strip().lower().replace("-", "")
