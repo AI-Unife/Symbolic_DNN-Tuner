@@ -321,12 +321,12 @@ def dataset_to_numpy(dataset, cfg) -> Tuple[np.ndarray, np.ndarray]:
             events = x["data"]
             pos = x.get("pos", None)
             arr = np.array(events)
-            x_reshaped, pos_reshaped = reshape_x_pos(arr, np.array(pos) if pos is not None else None, cfg)
+            x_reshaped, _ = reshape_x_pos(arr, np.array(pos) if pos is not None else None, cfg)
             pos_mean = None
-            if pos_reshaped is not None:
+            if pos is not None:
                 # Example analysis: compute center of mass of ROI position map in first frame
                 # A.shape = (16, 32, 32, 1)
-                A = np.squeeze(pos_reshaped, axis=1)  # -> (16, 32, 32)
+                A = np.squeeze(pos, axis=1)  # -> (16, 32, 32)
 
                 H, W = A.shape[1], A.shape[2]
 
