@@ -177,6 +177,7 @@ def update_model_db(network_data_list: List[Dict]) -> Tuple[Dict, int, int]:
     parsed_name_data = utils.parse_experiment_name(exp_name)
     
     summary_row = {
+        'Base Dir': str(Path(best_network['experiment_source']).parent),
         'Experiment Name': exp_name,
         'Tuner': parsed_name_data.get('Tuner'),     # From folder name
         'Dataset': parsed_name_data.get('Dataset'), # From folder name
@@ -253,7 +254,7 @@ def write_total_file(csv_path: Path, total_summaries: List[Dict]) -> pd.DataFram
         return pd.DataFrame()
         
     # Define a consistent column order for the 'total' summary
-    static_cols = ['Experiment Name', 'Tuner', 'Dataset', 'Epochs', 'Eval Count', 'Best Accuracy']
+    static_cols = ['Base Dir', 'Experiment Name', 'Tuner', 'Dataset', 'Epochs', 'Eval Count', 'Best Accuracy']
     total_headers = _get_ordered_headers(total_summaries, static_cols)
     
     # Pass the data and headers to the writer

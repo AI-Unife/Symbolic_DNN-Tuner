@@ -207,7 +207,7 @@ if __name__ == "__main__":
     #   - datasets/DVSGesture/ibmGestureTrain/user23_fluorescent/9.npy
     #   - datasets/DVSGestureROI/train/user23_fluorescent/9.npy
 
-    DVSGESTURE_PATH = "datasets"
+    DVSGESTURE_PATH = "rois_and_coordinates/datasets"
 
     # N.B. This can be changed but then you will see many ROIs overlapping in one frame.
 
@@ -216,7 +216,7 @@ if __name__ == "__main__":
     
     dvs_training = DVSGesture(
         DVSGESTURE_PATH,
-        train=True,
+        train=False,
         transform=ToFrame(n_time_bins=n_time_bins, time_window=time_window, sensor_size=(128, 128, 2)),
     )
 
@@ -226,7 +226,9 @@ if __name__ == "__main__":
         transform=ToFrame(n_time_bins=n_time_bins, time_window=time_window, sensor_size=(32, 32, 2)),
         position_transform=ROIMapTransform(n_time_bins=32),
     )
-    
+    print("Length of training dataset:", len(dvs_training))
+    print("Length of training ROI dataset:", len(dvs_training_roi))
+    exit()
     for target in range(5):
         index = dvs_training.targets.index(target)
 

@@ -129,7 +129,9 @@ def aggregate_results_from_csvs(args: argparse.Namespace) -> None:
             hyper_cols = [c for c in df_exp.columns if c not in static_cols]
 
             # 5. Build the summary row for total.csv
+            parent_dir = str(experiment_dir.parent.relative_to('../'))
             summary_row = {
+                'Base Dir': parent_dir,
                 'Experiment Name': exp_name,
                 'Tuner': parsed_name_data.get('Tuner'),
                 'Dataset': parsed_name_data.get('Dataset'),

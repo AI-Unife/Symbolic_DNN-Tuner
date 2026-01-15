@@ -189,10 +189,33 @@ class neural_network:
         residual: bool,
     ) -> None:
         # Store dataset (ensure dtype for Keras)
-        self.train_data = X_train.astype("float32")
+        # Handle ROI datasets: X may be an object array of dicts with "data" and "pos" keys
+        if X_train.dtype == object and isinstance(X_train[0], dict):
+            # ROI dataset: extract "data" and store separately
+            self.train_data = np.array([item["data"] for item in X_train]).astype("float32")
+            self.train_pos = np.array([item["pos"] for item in X_train])
+            self.is_roi = True
+        else:
+            # Regular dataset: use as-is
+            self.train_data = X_train.astype("float32")
+            self.train_pos = None
+            self.is_roi = False
+        
+        if X_test.dtype == object and isinstance(X_test[0], dict):
+            self.test_data = np.array([item["data"] for item in X_test]).astype("float32")
+            self.test_pos = np.array([item["pos"] for item in X_test])
+        else:
+            self.test_data = X_test.astype("float32")
+            self.test_pos = None
+
         self.train_labels = Y_train
-        self.test_data = X_test.astype("float32")
         self.test_labels = Y_test
+        
+        # Validate labels for None values
+        if self.train_labels is None:
+            raise ValueError("train_labels is None")
+        if self.test_labels is None:
+            raise ValueError("test_labels is None")
 
         self.cfg = load_cfg()
         self.n_classes = n_classes
@@ -227,6 +250,25 @@ class neural_network:
     
         x = Activation(activation)(x)
         return x
+
+    def _validate_labels(self, train_labels, test_labels):
+        """
+        Validate that labels are not None and contain valid data.
+        Critical for catching issues in ROI depth mode.
+        """
+        if train_labels is None:
+            raise ValueError("train_labels is None - data loading failed in ROI depth mode")
+        if test_labels is None:
+            raise ValueError("test_labels is None - data loading failed in ROI depth mode")
+        
+        # Check for object arrays containing None
+        if isinstance(train_labels, np.ndarray) and train_labels.dtype == object:
+            if any(x is None for x in train_labels.flat):
+                raise ValueError("train_labels contains None values")
+        
+        if isinstance(test_labels, np.ndarray) and test_labels.dtype == object:
+            if any(x is None for x in test_labels.flat):
+                raise ValueError("test_labels contains None values")
 
     def build_network(self, params: Dict[str, Any], layer_x_block=2) -> None:
         """
@@ -302,6 +344,16 @@ class neural_network:
             x = MaxPooling2D(pool_size=(2, 2))(x)
 
         x = GlobalAveragePooling2D()(x) if batch else Flatten()(x)
+        
+        # If ROI dataset, concatenate flattened pos with x
+        pos_input = None
+        if self.is_roi and self.train_pos is not None:
+            # Create a position input branch
+            pos_input = Input(shape=self.train_pos.shape[1:])
+            pos_flat = Flatten()(pos_input)
+            # Concatenate with main branch
+            x = tf.keras.layers.Concatenate()([x, pos_flat])
+        
         # x = Flatten()(x)
         # x = Dense(params["unit_d"], kernel_regularizer=reg_layer)(x)
         # x = Activation(params["activation"])(x)
@@ -316,7 +368,11 @@ class neural_network:
 
         outputs = Dense(self.n_classes, kernel_regularizer=reg_layer, activation="softmax")(x)
 
-        self.model = Model(inputs=inputs, outputs=outputs)
+        # Build model with appropriate inputs
+        if pos_input is not None:
+            self.model = Model(inputs=[inputs, pos_input], outputs=outputs)
+        else:
+            self.model = Model(inputs=inputs, outputs=outputs)
         if self.cfg.verbose > 1:
             self.model.summary()
         if "flops_module" in self.cfg.mod_list:
@@ -416,10 +472,18 @@ class neural_network:
                     history["loss"].append(random.uniform(0.1, 0.5))
                     history["accuracy"].append(random.uniform(0.1, 1.0))
             else:
+                # For ROI datasets, pass pos data as second input
+                if self.is_roi and self.train_pos is not None:
+                    train_input = [self.train_data, self.train_pos]
+                    test_input = [self.test_data, self.test_pos]
+                else:
+                    train_input = self.train_data
+                    test_input = self.test_data
+                
                 history = train_model(
                     self.model, opt,
-                    self.train_data, self.train_labels,
-                    self.test_data, self.test_labels,
+                    train_input, self.train_labels,
+                    test_input, self.test_labels,
                     self.epochs, params,
                     [tensorboard, es]
                 )
@@ -432,12 +496,23 @@ class neural_network:
                     history["loss"].append(random.uniform(0.1, 0.5))
                     history["accuracy"].append(random.uniform(0.1, 1.0))
             else:
+                # For ROI datasets, pass pos data as second input
+                if self.is_roi and self.train_pos is not None:
+                    train_input = [self.train_data, self.train_pos]
+                    test_input = [self.test_data, self.test_pos]
+                else:
+                    train_input = self.train_data
+                    test_input = self.test_data
+                
+                # Validate labels before model.fit() - critical for ROI depth mode
+                self._validate_labels(self.train_labels, self.test_labels)
+                
                 history = self.model.fit(
-                    self.train_data, self.train_labels,
+                    train_input, self.train_labels,
                     epochs=self.epochs,
                     batch_size=int(params["batch_size"]),
                     verbose=2,
-                    validation_data=(self.test_data, self.test_labels),
+                    validation_data=(test_input, self.test_labels),
                     callbacks=[tensorboard, es],
                 ).history
         # --- Evaluate ---
@@ -473,12 +548,22 @@ class neural_network:
             if "debug" in self.cfg.name:
                 score = [random.uniform(0.1, 0.5), random.uniform(0.1, 1.0)]
             else:
-                score = eval_model(self.model, self.test_data, self.test_labels)
+                # For ROI datasets, pass pos data as second input
+                if self.is_roi and self.test_pos is not None:
+                    test_input = [self.test_data, self.test_pos]
+                else:
+                    test_input = self.test_data
+                score = eval_model(self.model, test_input, self.test_labels)
         else:
             if "debug" in self.cfg.name:
                 score = [random.uniform(0.1, 0.5), random.uniform(0.1, 1.0)]
             else:
-                score = self.model.evaluate(self.test_data, self.test_labels, verbose=2)
+                # For ROI datasets, pass pos data as second input
+                if self.is_roi and self.test_pos is not None:
+                    test_input = [self.test_data, self.test_pos]
+                else:
+                    test_input = self.test_data
+                score = self.model.evaluate(test_input, self.test_labels, verbose=2)
         return score
 
 
