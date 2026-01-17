@@ -254,15 +254,14 @@ def get_datasets_numpy(cfg):
     Returns:
         ((x_train, y_train), (x_test, y_test))
     """
-    dataset_path = "/Users/osamaabdouh/Documents/AIDA4Edge/data/"
+    dataset_path = "/mnt/Users/Osama/Documents/AIDA4Edge/data/"
     polarity = cfg.polarity
     n_pol = 2 if polarity == "both" else 1
-    cache_dir = f"/Users/osamaabdouh/Documents/AIDA4Edge/tf/cache/DVSGesture_{cfg.mode}_{polarity}_{cfg.frames}_{cfg.channels}_{n_pol}/"
+    cache_dir = f"/mnt/Users/Osama/Documents/AIDA4Edge/tf/cache/DVSGesture_{cfg.mode}_{polarity}_{cfg.frames}_{cfg.channels}_{n_pol}/"
     # resolve with fallback
     dataset_path, cache_dir = _resolve_paths(dataset_path, cache_dir)
     _ensure_cache_dir(cache_dir)
-    print("dataset_path:", dataset_path)
-    print("cache_dir:", cache_dir)
+
 
     # Base framing to [T, 2, H, W] with H=W=64
     tfms: List = [

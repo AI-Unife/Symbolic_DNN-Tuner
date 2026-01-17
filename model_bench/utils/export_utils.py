@@ -4,7 +4,6 @@ Export utility functions for saving test results to CSV files.
 This module provides functions to export latency and FLOPs analysis results
 to CSV format for easier analysis and reporting.
 """
-
 import csv
 import questionary
 from datetime import datetime
@@ -43,18 +42,17 @@ def ensure_export_directory(export_type):
 
         try:
             custom_path.mkdir(parents=True, exist_ok=True)
-            print(colors.OKGREEN + f"✓ Export directory set to: {custom_path}" + colors.ENDC)
+            print(colors.OKGREEN + f"Export directory set to: {custom_path}" + colors.ENDC)
             return custom_path
         except Exception as e:
-            print(colors.FAIL + f"✗ Cannot create directory: {e}" + colors.ENDC)
-            retry = questionary.confirm("Try another directory?").ask()
-            if not retry:
+            print(colors.FAIL + f"Cannot create directory: {e}" + colors.ENDC)
+            use_default = questionary.confirm("Use default directory instead?", default=True).ask()
+            if use_default:
                 default_dir.mkdir(parents=True, exist_ok=True)
                 return default_dir
 
 def generate_filename(prefix, extension="csv"):
     """Generate a timestamped filename with the given prefix and extension."""
-
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     return f"{prefix}_{timestamp}.{extension}"
 
@@ -67,7 +65,7 @@ def export_latency_results(results):
     """
 
     if not results:
-        print(colors.WARNING, "No latency results to export.", colors.ENDC)
+        print(colors.WARNING + "No latency results to export." + colors.ENDC)
         return
 
     export_dir = ensure_export_directory("latency")
@@ -90,12 +88,11 @@ def export_latency_results(results):
                 }
                 writer.writerow(row)
         
-        print(colors.OKGREEN + f"✓ Latency results exported to: {filepath}" + colors.ENDC)
+        print(colors.OKGREEN + f"Latency results exported to: {filepath}" + colors.ENDC)
         return str(filepath)
     except Exception as e:
-        print(colors.FAIL + f"✗ Error exporting latency results: {e}" + colors.ENDC)
+        print(colors.FAIL + f"Error exporting latency results: {e}" + colors.ENDC)
         return None
-
 
 def export_flops_results(results):
     """
@@ -129,8 +126,8 @@ def export_flops_results(results):
                 }
                 writer.writerow(row)
 
-        print(colors.OKGREEN + f"✓ FLOPs results exported to: {filepath}" + colors.ENDC)
+        print(colors.OKGREEN + f"FLOPs results exported to: {filepath}" + colors.ENDC)
         return str(filepath)
     except Exception as e:
-        print(colors.FAIL + f"✗ Error exporting FLOPs results: {e}" + colors.ENDC)
+        print(colors.FAIL + f"Error exporting FLOPs results: {e}" + colors.ENDC)
         return None

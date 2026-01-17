@@ -45,7 +45,6 @@ class HardwareMenu:
         print(colors.OKBLUE + "+------------------------------------------+" + colors.ENDC)
         questionary.press_any_key_to_continue().ask()
 
-
     def remove_hardware_configuration(self):
         if not self.hw_mod or not hasattr(self.hw_mod, "nvdla") or not self.hw_mod.nvdla:
             print(colors.FAIL + "No hardware configurations available to remove.\n" + colors.ENDC)
@@ -67,38 +66,29 @@ class HardwareMenu:
         questionary.press_any_key_to_continue().ask()
 
     def run(self):
-        try: 
-            while True:
-                self.display_header()
 
-                try:
-                    choice = questionary.select(
-                        "Select an option:",
-                        choices=[
-                            "1: View Hardware Configurations",
-                            "2: Add New Hardware",
-                            "3: Remove Hardware",
-                            "4: Back"
-                        ]
-                    ).ask()
-                except KeyboardInterrupt:
-                    print(colors.WARNING + "\nOperation cancelled by user." + colors.ENDC)
-                    break
+        while True:
+            self.display_header()
 
-                if not choice:
-                    break
+            choice = questionary.select(
+                "Select an option:",
+                choices=[
+                    "1: View Hardware Configurations",
+                    "2: Add New Hardware",
+                    "3: Remove Hardware",
+                    "4: Back"
+                ]
+            ).ask()
+            if not choice:
+                break
 
-                choice_num = choice[0]
+            choice_num = choice[0]
 
-                if choice_num == "1":
-                    self.view_hardware_configurations()
-                elif choice_num == "2":
-                    self.add_hardware_configuration()
-                elif choice_num == "3":
-                    self.remove_hardware_configuration()
-                elif choice_num == "4":
-                    break
-        except KeyboardInterrupt:
-            print(colors.WARNING + "\nOperation cancelled by user." + colors.ENDC)
-        except Exception as e:
-            print(colors.FAIL + f"Unexpected error in menu: {e}" + colors.ENDC)
+            if choice_num == "1":
+                self.view_hardware_configurations()
+            elif choice_num == "2":
+                self.add_hardware_configuration()
+            elif choice_num == "3":
+                self.remove_hardware_configuration()
+            elif choice_num == "4":
+                break

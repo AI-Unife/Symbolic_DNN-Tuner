@@ -1,13 +1,9 @@
-import sys
-import os
+"""
+Training utility function for model fine-tuning.
+"""
 from pathlib import Path
-import questionary
-
 import tensorflow as tf
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
 import components.neural_network
 from components.colors import colors
 from exp_config import load_cfg

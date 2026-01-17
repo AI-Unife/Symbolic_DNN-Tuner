@@ -1,4 +1,6 @@
-import datetime
+"""
+Model utility functions for checking and loading TensorFlow models.
+"""
 import sys
 import os
 from pathlib import Path
@@ -7,7 +9,6 @@ os.system("")
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
-from tensorflow.keras import backend as K
 from tensorflow.keras.models import load_model
 import questionary
 from components.colors import colors
@@ -17,10 +18,9 @@ from exp_config import load_cfg
 
 def check_if_path_is_model(path):
     """Check if the given path is a valid model file (.keras or .h5)"""
-    allowed_extensions = (".keras", ".h5")
-    return (os.path.exists(path) and 
-            os.path.isfile(path) and 
-            path.endswith(allowed_extensions))
+    path = Path(path)
+    return path.is_file() and path.suffix in (".keras", ".h5")
+
 
 def call_silently(func, *args, **kwargs):
     """Executes a function while temporarily disabling stdout."""
@@ -35,12 +35,13 @@ def call_silently(func, *args, **kwargs):
 def load_model_simple(model_path):
     """Load model for analysis (no dataset, no folders)"""
     try:
-        model = load_model(model_path, compile=False)
+        model = load_model(str(model_path), compile=False)
         return model
     except Exception as e:
-        print(colors.FAIL, f"Error loading model from {model_path}: {e}", colors.ENDC)
+        print(colors.FAIL + f"Error loading model from {model_path}: {e}" + colors.ENDC)
         return None
 
+##### DA CANCELLARE? #####
 def load_trained_model(m_path, show_info=None):
     """Load trained model based on user configuration
     use the active config to load the model and dataset
@@ -58,7 +59,7 @@ def load_trained_model(m_path, show_info=None):
         show_info = questionary.confirm("Want to see User params configuration and Model summary?", default=False).ask()
 
     if show_info:
-        print(colors.OKBLUE, "|  ----------- CONFIGURATION ----------  |\n", colors.ENDC)
+        print(colors.OKBLUE + "|  ----------- CONFIGURATION ----------  |\n" + colors.ENDC)
         print("EXPERIMENT NAME: ", cfg.name)
         print("DATASET: ", cfg.dataset)
         print("EPOCHS: ", cfg.epochs)
@@ -71,24 +72,24 @@ def load_trained_model(m_path, show_info=None):
     
     try:
         if show_info:
-            print(colors.OKBLUE, "\n|  ----------- DATASET SUMMARY ----------  |\n", colors.ENDC)
+            print(colors.OKBLUE + "\n|  ----------- DATASET SUMMARY ----------  |\n" + colors.ENDC)
             X_train, Y_train, X_test, Y_test, n_classes = get_datasets(dataset_name)
         else:
             X_train, Y_train, X_test, Y_test, n_classes = call_silently(
                 get_datasets, dataset_name
             )
     except Exception as e:
-        print(colors.FAIL, f"Errore nel caricamento del dataset '{dataset_name}': {e}", colors.ENDC)
+        print(colors.FAIL + f"Errore nel caricamento del dataset '{dataset_name}': {e}" + colors.ENDC)
         sys.exit(1)
         
     # LOADING ALREADY TRAINED MODEL --------------------------------------------------------------------------------------------------------
     try:
-        model = load_model(m_path, compile=False)
+        model = load_model(str(m_path), compile=False)
         if show_info:
-            print(colors.OKBLUE, "\n|  ----------- MODEL SUMMARY ----------  |\n", colors.ENDC)
+            print(colors.OKBLUE + "\n|  ----------- MODEL SUMMARY ----------  |\n" + colors.ENDC)
             model.summary()
     except Exception as e:
-        print(colors.FAIL, f"Errore nel caricamento del modello da '{m_path}': {e}", colors.ENDC)
+        print(colors.FAIL + f"Errore nel caricamento del modello da '{m_path}': {e}" + colors.ENDC)
         sys.exit(1)
 
     return model

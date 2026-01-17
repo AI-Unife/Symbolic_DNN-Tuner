@@ -275,25 +275,21 @@ class SettingsMenu:
                 "Enter filename:",
                 default=default_name
             ).ask()
-            if filename is "":
+            if filename == "":
                 print(colors.FAIL + "Filename cannot be empty. Please try again." + colors.ENDC)
                 continue
-            if not filename:
+            if filename is None:
                 questionary.press_any_key_to_continue().ask()
                 return
-            if not filename.endswith(('.yaml', '.yml')) :
-                if '.' in filename:
-                    #check if has extension but wrong one
-                    print(colors.FAIL + "Only .yaml or .yml extensions are allowed." + colors.ENDC)
-                    continue
-                else:
-                    filename = filename + ".yaml"
-            name_without_ext = filename.rsplit('.', 1)[0]
-            if '.' in name_without_ext:
+        
+            file_path = Path(filename)
+
+            if '.' in file_path.stem:
                 print(colors.FAIL + "Filename cannot contain dots except for the .yaml/.yml extension." + colors.ENDC)
                 continue
-            break
 
+            filename = file_path.stem + ".yaml"
+            break
         try:
             dest_path = Path(dir_path).expanduser().resolve() / filename
 

@@ -1,13 +1,16 @@
-import os
+"""
+Hardware utility functions for managing hardware configurations.
+
+This module provides functions to view, add, delete 
+and make selections of hardware configurations.
+"""
 import json
 import shutil
 import filecmp
+from pathlib import Path
 
 from components.colors import colors
 import questionary
-from utils.model_utils import load_trained_model
-from tqdm import tqdm
-
 
 def load_or_create_nvdla_configs(path="nvdla/nvdla_configs.json"):
     """
@@ -16,11 +19,12 @@ def load_or_create_nvdla_configs(path="nvdla/nvdla_configs.json"):
     :return: List of nvdla configurations
     """
     try: 
-        if not os.path.exists(path):
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            with open(path, 'w') as f:
+        config_path = Path(path)
+        if not config_path.exists():
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(config_path, 'w') as f:
                 json.dump([], f, indent=4)
-        with open(path, 'r') as f:
+        with open(config_path, 'r') as f:
             return json.load(f)
     except (IOError, json.JSONDecodeError) as e:
         print(colors.FAIL + f"Error loading nvdla configurations: {e}" + colors.ENDC)
@@ -46,34 +50,30 @@ def add_hw_config():
     """Add a new hardware configuration to the available configurations."""
     try: 
         nvdla_list = load_or_create_nvdla_configs()
-        path=questionary.path("Enter the path of the hardware configuration to add:").ask()
+        config_path=questionary.path("Enter the path of the hardware configuration to add:").ask()
 
         # Handle Ctrl+C 
-        if path is None:
+        if config_path is None:
             return
 
-        if path:
-            path = os.path.expanduser(path)
-            path = os.path.abspath(path)
+        config_path = Path(config_path).expanduser().resolve()
 
-        if not path or not os.path.exists(path) or not path.endswith(".yaml"):
+        if not config_path.exists() or not config_path.suffix == ".yaml":
             print(colors.FAIL + "Invalid path or file does not exist." + colors.ENDC)
             return
 
         # Copy the .yaml file to nvdla/specs directory
-        dest_dir = "nvdla/specs"
-        os.makedirs(dest_dir, exist_ok=True)
-        base_name = os.path.basename(path)
-        dest_path = os.path.join(dest_dir, base_name)
+        dest_dir = Path("nvdla/specs")
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        base_name = config_path.name
+        dest_path = dest_dir / base_name
 
         # Check if identical file already exists
         identical_file = None
-        for existing_file in os.listdir(dest_dir):
-            if existing_file.endswith(".yaml"):
-                existing_path = os.path.join(dest_dir, existing_file)
-                if filecmp.cmp(path, existing_path, shallow=False):
-                    identical_file = existing_file
-                    break
+        for existing_file in dest_dir.glob("*.yaml"):
+            if filecmp.cmp(str(config_path), str(existing_file), shallow=False):
+                identical_file = existing_file.name
+                break
 
         if identical_file:
             # Check if this file is already used by an existing configuration
@@ -96,18 +96,18 @@ def add_hw_config():
                     return
                 
                 # Create duplicate with new name
-                name, ext = os.path.splitext(base_name)
+                name, ext = config_path.stem, config_path.suffix
                 counter = 1
                 while True:
                     new_name = f"{name}_{counter}{ext}"
-                    new_dest = os.path.join(dest_dir, new_name)
-                    if not os.path.exists(new_dest):
+                    new_dest = dest_dir / new_name
+                    if not new_dest.exists( ):
                         dest_path = new_dest
                         base_name = new_name
                         break
                     counter += 1
                 
-                shutil.copy2(path, dest_path)
+                shutil.copy2(str(config_path), str(dest_path))
                 print(colors.OKGREEN + f"Successfully copied to {dest_path}" + colors.ENDC)
             else:
                 # File exists but not used by any configuration
@@ -122,23 +122,23 @@ def add_hw_config():
 
                 if not overwrite:
                     # Create with new name
-                    name, ext = os.path.splitext(base_name)
+                    name, ext = config_path.stem, config_path.suffix
                     counter = 1
                     while True:
                         new_name = f"{name}_{counter}{ext}"
-                        new_dest = os.path.join(dest_dir, new_name)
-                        if not os.path.exists(new_dest):
+                        new_dest = dest_dir / new_name
+                        if not new_dest.exists():
                             dest_path = new_dest
                             base_name = new_name
                             break
                         counter += 1
 
-                shutil.copy2(path, dest_path)
+                shutil.copy2(str(config_path), str(dest_path))
                 print(colors.OKGREEN + f"Successfully copied to {dest_path}" + colors.ENDC)
 
         else:
             # No identical file, check for name conflict
-            if os.path.exists(dest_path):
+            if dest_path.exists():
                 # Check if this filename is already used
                 existing_config = next((cfg for cfg in nvdla_list if cfg.get("path") == base_name), None)
                 
@@ -159,18 +159,18 @@ def add_hw_config():
 
                 if not overwrite:
                     # Rename with counter
-                    name, ext = os.path.splitext(base_name)
+                    name, ext = config_path.stem, config_path.suffix
                     counter = 1
                     while True:
                         new_name = f"{name}_{counter}{ext}"
-                        new_dest = os.path.join(dest_dir, new_name)
-                        if not os.path.exists(new_dest):
+                        new_dest = dest_dir / new_name
+                        if not new_dest.exists():
                             dest_path = new_dest
                             base_name = new_name
                             break
                         counter += 1
 
-            shutil.copy2(path, dest_path)
+            shutil.copy2(str(config_path), str(dest_path))
             print(colors.OKGREEN + f"Successfully copied to {dest_path}" + colors.ENDC)
 
         # get configuration name
@@ -259,8 +259,6 @@ def select_hw_config(hw_mod):
             else:
                 break
         return hw_choices
-    except KeyboardInterrupt:
-        print(colors.WARNING + "\nOperation cancelled by user." + colors.ENDC)
     except Exception as e:
         print(colors.FAIL + f"Error selecting hardware configuration: {e}" + colors.ENDC)
         return []
@@ -290,12 +288,13 @@ def remove_hw_config(hw_mod):
             return []
     
         # Remove selected configurations
+        specs_dir = Path("nvdla/specs")
         for cfg in nvdla:
             if cfg.get("name") in hw_choices:
-                file_path = os.path.join("nvdla/specs", cfg.get("path", ""))
+                file_path = specs_dir / cfg.get("path", "")
                 try:
-                    if os.path.exists(file_path):
-                        os.remove(file_path)
+                    if file_path.exists():
+                        file_path.unlink()
                         print(colors.OKGREEN + f"Deleted file: {file_path}" + colors.ENDC)
                 except OSError as e:
                     print(colors.FAIL + f"Could not delete file {file_path}: {e}" + colors.ENDC)

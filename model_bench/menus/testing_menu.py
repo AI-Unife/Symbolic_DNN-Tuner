@@ -1,5 +1,6 @@
 import questionary
 import os
+from pathlib import Path
 from components.colors import colors
 from modules.loss.hardware_module import hardware_module
 from menus.hardware_menu import HardwareMenu
@@ -65,35 +66,39 @@ class TestingMenu:
 
         while True:
             models_path=questionary.path(
-                "Enter the model path or directory path containing multiple models:"
+                "Enter the model path or directory path containing multiple models:",
+                default="gesture/model"
                 ).ask()
+            
+            if models_path is None:
+                questionary.press_any_key_to_continue().ask()
+                return
 
-            if not models_path:
-                models_path = "gesture/model" #Default path if not provided
-                print("Using default model(s) path:", models_path)
-            models_path = os.path.abspath(os.path.expanduser(models_path))
+            models_path = Path(models_path).expanduser().resolve()
 
             # Check if it's a single model file
             if check_if_path_is_model(models_path):
-                result = single_model_test(self.hw_mod, hw_choose, models_path)
+                result = single_model_test(self.hw_mod, hw_choose, str(models_path))
                 if result:
                     results = result
                 break
             # Check if it's a directory with multiple models
-            elif os.path.isdir(models_path):
+            elif models_path.is_dir():
                 recursive = questionary.confirm(
                     "Search recursively in subdirectories?",
                     default=True
                 ).ask()
-                results = multi_model_test(self.hw_mod, hw_choose, models_path, recursive=recursive)
+                results = multi_model_test(self.hw_mod, hw_choose, str(models_path), recursive=recursive)
                 if not results:
                     questionary.press_any_key_to_continue().ask()
                     return
                 break
             else:
                 print(colors.FAIL, "Invalid file/directory. Please try again.", colors.ENDC)
-                questionary.press_any_key_to_continue().ask()
                 continue
+
+
+
         
         if results is None:
             print(colors.FAIL, "No results returned from model test.", colors.ENDC)
@@ -108,7 +113,6 @@ class TestingMenu:
         ).ask()
         if export_choice:
             export_latency_results(results)
-
         questionary.press_any_key_to_continue().ask()
 
     def test_model_flops(self):
@@ -117,33 +121,28 @@ class TestingMenu:
         
         while True:
             models_path = questionary.path(
-                "Enter the model path or directory path containing multiple models:"
+                "Enter the model path or directory path containing multiple models:",
+                default="gesture/model"
             ).ask()
 
-            if not models_path:
-                print(colors.WARNING, "No path provided. Using default.", colors.ENDC)
-                models_path = "gesture/model"
-                print("Using default model(s) path:", models_path)
-
-            
-            models_path = os.path.abspath(os.path.expanduser(models_path))
+            models_path = Path(models_path).expanduser().resolve()
 
             # Check if it's a single model file
             if check_if_path_is_model(models_path):
                 print(f"\n{colors.CYAN}Analyzing single model...{colors.ENDC}")
-                result = calculate_model_flops(models_path)
+                result = calculate_model_flops(str(models_path))
                 if result:
                     results = [result]
                 break
             
             # Check if it's a directory with multiple models
-            elif os.path.isdir(models_path):
+            elif models_path.is_dir():
                 recursive = questionary.confirm(
                     "Search recursively in subdirectories?",
                     default=True
                 ).ask()
                 print(f"\n{colors.CYAN}Analyzing multiple models in directory...{colors.ENDC}")
-                results = calculate_multiple_models_flops(models_path, recursive=recursive)
+                results = calculate_multiple_models_flops(str(models_path), recursive=recursive)
                 break
             
             else:
@@ -173,9 +172,7 @@ class TestingMenu:
         ).ask()
         if export_choice:
             export_flops_results(results)
-
         questionary.press_any_key_to_continue().ask()
-
 
     def run(self):
         while True:
