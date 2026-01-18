@@ -190,13 +190,13 @@ def dataset_to_numpy(dataset, cfg) -> Tuple[np.ndarray, np.ndarray]:
             # Expect BothPolarity OR a prior framing such that arr has shape [T, 2, H, W]
             # We reshape into groups of NUM_CHANNELS along time and stack polarities as channels.
             T, C, H, W = arr.shape  # C should be 2
-            assert T % cfg.NUM_CHANNELS == 0, f"T={T} not divisible by NUM_CHANNELS={cfg.NUM_CHANNELS}"
+            assert T % cfg.channels == 0, f"T={T} not divisible by NUM_CHANNELS={cfg.channels}"
             # Group frames: (T//NUM_CHANNELS, NUM_CHANNELS, C, H, W)
-            grouped = arr.reshape(T // cfg.NUM_CHANNELS, cfg.NUM_CHANNELS, C, H, W)
+            grouped = arr.reshape(T // cfg.channels, cfg.channels, C, H, W)
             # Move to (T', H, W, NUM_CHANNELS, C)
             transposed = grouped.transpose(0, 3, 4, 1, 2)
             # Merge channel dims -> (T', H, W, NUM_CHANNELS*C) == (T', H, W, 2*NUM_CHANNELS)
-            x_final = transposed.reshape(T // cfg.NUM_CHANNELS, H, W, cfg.NUM_CHANNELS * C)
+            x_final = transposed.reshape(T // cfg.channels, H, W, cfg.channels * C)
             x_list.append(x_final)
 
         else:  # "depth" or any other single-frame mode
@@ -254,27 +254,26 @@ def get_datasets_numpy(cfg):
     Returns:
         ((x_train, y_train), (x_test, y_test))
     """
-    dataset_path = "/Users/osamaabdouh/Documents/AIDA4Edge/data/"
+    dataset_path = "/mnt/d/Users/Osama/Documents/AIDA4Edge/data/"
     polarity = cfg.polarity
     n_pol = 2 if polarity == "both" else 1
-    cache_dir = f"/Users/osamaabdouh/Documents/AIDA4Edge/tf/cache/DVSGesture_{cfg.mode}_{polarity}_{cfg.frames}_{cfg.channels}_{n_pol}/"
+    cache_dir = f"/mnt/d/Users/Osama/Documents/AIDA4Edge/tf/cache/DVSGesture_{cfg.mode}_{polarity}_{cfg.frames}_{cfg.channels}_{n_pol}/"
     # resolve with fallback
     dataset_path, cache_dir = _resolve_paths(dataset_path, cache_dir)
     _ensure_cache_dir(cache_dir)
-
 
     # Base framing to [T, 2, H, W] with H=W=64
     tfms: List = [
         transforms.Denoise(filter_time=10000),
         transforms.Downsample(sensor_size=tonic.datasets.DVSGesture.sensor_size, target_size=(64, 64)),
-        transforms.ToFrame(sensor_size=(64, 64, 2), n_time_bins=cfg.FRAMES),
+        transforms.ToFrame(sensor_size=(64, 64, 2), n_time_bins=cfg.frames),
     ]
 
     # Labels repeated across time if the model expects temporal supervision
-    if cfg.MODE == "fwdPass":
-        target_transform = ToOneHotTimeCoding(n_classes=11, n_frames=cfg.FRAMES)
-    elif cfg.MODE == "hybrid":
-        target_transform = ToOneHotTimeCoding(n_classes=11, n_frames=cfg.FRAMES // cfg.NUM_CHANNELS)
+    if cfg.mode == "fwdPass":
+        target_transform = ToOneHotTimeCoding(n_classes=11, n_frames=cfg.frames)
+    elif cfg.mode == "hybrid":
+        target_transform = ToOneHotTimeCoding(n_classes=11, n_frames=cfg.frames // cfg.channels)
     else:
         # For single-frame modes, optionally apply a polarity transform to images
         tfms.append(select_polarity_transform(polarity))
@@ -306,24 +305,23 @@ def get_ROI_numpy(cfg):
         ((x_train, y_train), (x_test, y_test))
     """
     dataset_path = "datasets/DVS_ROI/"
-    polarity = cfg.POLARITY
+    polarity = cfg.polarity
     n_pol = 2 if polarity == "both" else 1
-    cache_dir = f"/hpc/home/bzzlca/AIDA4Edge/tf/cache/DVS_ROI_{cfg.MODE}_{polarity}_{cfg.FRAMES}_{cfg.NUM_CHANNELS}_{n_pol}/"
+    cache_dir = f"/mnt/d/Users/Osama/Documents/AIDA4Edge/tf/cache/DVS_ROI_{cfg.mode}_{polarity}_{cfg.frames}_{cfg.channels}_{n_pol}/"
     _ensure_cache_dir(cache_dir)
-    print("cache_dir:", cache_dir)
 
     tfms: List = [
         transforms.Denoise(filter_time=10000),
         # Reuse DVSGesture sensor size only as a (H,W) hint for downsampling,
         # since we target a fixed (64, 64) output anyway.
         transforms.Downsample(sensor_size=tonic.datasets.DVSGesture.sensor_size, target_size=(64, 64)),
-        transforms.ToFrame(sensor_size=(64, 64, 2), n_time_bins=cfg.FRAMES),
+        transforms.ToFrame(sensor_size=(64, 64, 2), n_time_bins=cfg.frames),
     ]
 
     if cfg.MODE == "fwdPass":
-        target_transform = ToOneHotTimeCoding(n_classes=11, n_frames=cfg.FRAMES)
+        target_transform = ToOneHotTimeCoding(n_classes=11, n_frames=cfg.frames)
     elif cfg.MODE == "hybrid":
-        target_transform = ToOneHotTimeCoding(n_classes=11, n_frames=cfg.FRAMES // cfg.NUM_CHANNELS)
+        target_transform = ToOneHotTimeCoding(n_classes=11, n_frames=cfg.frames // cfg.channels)
     else:
         tfms.append(select_polarity_transform(polarity))
         target_transform = None

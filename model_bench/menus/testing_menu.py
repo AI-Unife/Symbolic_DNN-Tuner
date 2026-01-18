@@ -30,14 +30,14 @@ class TestingMenu:
                 grouped[model] = []
             grouped[model].append(res)
 
-        print(colors.OKGREEN, "\n|  ---------------- LATENCY ANALYSIS ----------------  |", colors.ENDC)
+        print(colors.OKBLUE, "\n|  ---------------- LATENCY ANALYSIS ----------------  |", colors.ENDC)
         for model, items in grouped.items():
             print(colors.HEADER, f"Model: {model}", colors.ENDC)
             for r in items:
                 hw = r.get("HW config")
                 lat = r.get("latency(s)")
                 print(f"Configuration: {hw} | Latency: {lat:.6f} seconds")
-        print(colors.OKGREEN, "\n|  --------------------------------------------------  |\n", colors.ENDC)
+        print(colors.OKBLUE, "\n|  --------------------------------------------------  |\n", colors.ENDC)
 
     def print_flops_results(self, results):
         """Print FLOPs results in a formatted way"""
@@ -45,7 +45,7 @@ class TestingMenu:
             print(colors.FAIL, "No FLOPs results to display.", colors.ENDC)
             return
         
-        print(colors.OKGREEN + "\n|  ---------------------- FLOPS ANALYSIS ----------------------  |" + colors.ENDC)
+        print(colors.OKBLUE + "\n|  ---------------------- FLOPS ANALYSIS ----------------------  |" + colors.ENDC)
         
         for result in results:
             print(colors.MAGENTA + f"\nModel: {result['model']}" + colors.ENDC)
@@ -54,12 +54,13 @@ class TestingMenu:
             print(f"  GFLOPs: {result['gflops']:.4f}")
             print(f"  MFLOPs: {result['mflops']:.4f}")
         
-        print(colors.OKGREEN + "\n|  ------------------------------------------------------------  |\n" + colors.ENDC)
+        print(colors.OKBLUE + "\n|  ------------------------------------------------------------  |\n" + colors.ENDC)
 
     def test_hw_latency(self):
         """Test hardware latency for single or multiple models"""
         hw_choose = select_hw_config(self.hw_mod)
         if not hw_choose:
+            questionary.press_any_key_to_continue().ask()
             return
 
         results = []
@@ -67,7 +68,6 @@ class TestingMenu:
         while True:
             models_path=questionary.path(
                 "Enter the model path or directory path containing multiple models:",
-                default="gesture/model"
                 ).ask()
             
             if models_path is None:
@@ -97,9 +97,6 @@ class TestingMenu:
                 print(colors.FAIL, "Invalid file/directory. Please try again.", colors.ENDC)
                 continue
 
-
-
-        
         if results is None:
             print(colors.FAIL, "No results returned from model test.", colors.ENDC)
             questionary.press_any_key_to_continue().ask()
@@ -122,35 +119,38 @@ class TestingMenu:
         while True:
             models_path = questionary.path(
                 "Enter the model path or directory path containing multiple models:",
-                default="gesture/model"
             ).ask()
+
+            if models_path is None:
+                questionary.press_any_key_to_continue().ask()
+                return
 
             models_path = Path(models_path).expanduser().resolve()
 
             # Check if it's a single model file
             if check_if_path_is_model(models_path):
-                print(f"\n{colors.CYAN}Analyzing single model...{colors.ENDC}")
                 result = calculate_model_flops(str(models_path))
                 if result:
-                    results = [result]
+                    results = result
                 break
-            
             # Check if it's a directory with multiple models
             elif models_path.is_dir():
                 recursive = questionary.confirm(
                     "Search recursively in subdirectories?",
                     default=True
                 ).ask()
-                print(f"\n{colors.CYAN}Analyzing multiple models in directory...{colors.ENDC}")
                 results = calculate_multiple_models_flops(str(models_path), recursive=recursive)
+                if not results:
+                    questionary.press_any_key_to_continue().ask()
+                    return
                 break
-            
             else:
                 print(colors.FAIL, "Invalid file/directory. Please try again.", colors.ENDC)
                 continue
 
-        if not results:
+        if results is None:
             print(colors.FAIL, "No FLOPs results obtained.", colors.ENDC)
+            questionary.press_any_key_to_continue().ask()
             return
         
         # Display results
@@ -163,7 +163,7 @@ class TestingMenu:
             ).ask()
             
             if show_details and results[0].get('details'):
-                print("\n" + colors.CYAN + "Detailed Operations:" + colors.ENDC)
+                print("\n" + colors.OKBLUE + "Detailed Operations:" + colors.ENDC)
                 print(results[0]['details'])
 
         export_choice = questionary.confirm(

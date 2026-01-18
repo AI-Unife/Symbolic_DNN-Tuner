@@ -26,7 +26,7 @@ def ensure_export_directory(export_type):
 
     if use_default:
         default_dir.mkdir(parents=True, exist_ok=True)
-        print(colors.CYAN + f"Using default directory: {default_dir}" + colors.ENDC)
+        print(colors.CYAN + f"Using default directory: {default_dir}\n" + colors.ENDC)
         return default_dir
 
     while True:

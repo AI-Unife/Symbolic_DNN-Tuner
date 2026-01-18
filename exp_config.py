@@ -29,6 +29,7 @@ class ConfigSchema:
     polarity: str = "both"           # both | sum | sub | drop
     seed: int = 42
     opt: str = "RS_ruled"            # standard | filtered | basic | RS | RS_ruled
+    batch_size: int = 32             # aggiunto per completezza
 
 # ---------------- Validazione (stesse regole del tuo parser) ----------------
 _VALID_MODULES = {"hardware_module", "flops_module"}
@@ -60,6 +61,7 @@ def create_config_file(exp_dir: str | Path, overrides: Optional[Dict[str, Any]] 
         "polarity": schema.polarity,
         "seed": schema.seed,
         "opt": schema.opt,
+        "batch_size": schema.batch_size,
     }
     if overrides:
         base.update(overrides)
@@ -129,6 +131,7 @@ def _apply_defaults(d: Dict[str, Any]) -> Dict[str, Any]:
         "polarity": d.get("polarity", schema.polarity),
         "seed": d.get("seed", schema.seed),
         "opt": d.get("opt", schema.opt),
+        "batch_size": d.get("batch_size", schema.batch_size),
     }
     return merged
 

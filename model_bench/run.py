@@ -52,6 +52,7 @@ def ensure_config():
         "polarity": schema.polarity,
         "seed": schema.seed,
         "opt": schema.opt,
+        "batch_size": schema.batch_size, # New parameter added on exp_config.py
     }
     
     with open(config_path, 'w', encoding='utf-8') as f:

@@ -35,7 +35,8 @@ class SettingsMenu:
                     "9: Polarity",
                     "10: Seed",
                     "11: Optimizer",
-                    "12: Back"
+                    "12: Batch Size",
+                    "13: Back"
                 ]
             ).ask()
             
@@ -65,6 +66,8 @@ class SettingsMenu:
             elif choice_num == "11":
                 self.change_optimizer()
             elif choice_num == "12":
+                self.change_batch_size()
+            elif choice_num == "13":
                 break
 
     def show_current_config(self):
@@ -74,6 +77,7 @@ class SettingsMenu:
         print(f"  Name: {cfg.name}")
         print(f"  Dataset: {cfg.dataset}")
         print(f"  Epochs: {cfg.epochs}")
+        print(f"  Batch Size: {cfg.batch_size}")
         print(f"  Max Evaluations: {cfg.eval}")
         print(f"  Frames: {cfg.frames}")
         print(f"  Channels: {cfg.channels}")
@@ -120,6 +124,19 @@ class SettingsMenu:
         if epochs and epochs.isdigit():
             self._update_config_field("epochs", int(epochs))
             print(colors.OKGREEN + f"Epochs set to: {epochs}" + colors.ENDC)
+            questionary.press_any_key_to_continue().ask()
+
+    def change_batch_size(self):
+        """Change batch size configuration"""
+        current = load_cfg().batch_size
+        batch_size = questionary.text(
+            "Batch size:",
+            default=str(current)
+        ).ask()
+        
+        if batch_size and batch_size.isdigit():
+            self._update_config_field("batch_size", int(batch_size))
+            print(colors.OKGREEN + f"Batch size set to: {batch_size}" + colors.ENDC)
             questionary.press_any_key_to_continue().ask()
 
     def change_frames(self):
@@ -365,7 +382,7 @@ class SettingsMenu:
             if "opt" in new_config and new_config["opt"] not in exp_config._VALID_OPT:
                 raise ValueError(f"Invalid optimizer: {new_config['opt']}")
 
-            for field in ["eval", "epochs", "frames", "channels", "seed"]:
+            for field in ["eval", "epochs", "frames", "channels", "seed", "batch_size"]:
                 if field in new_config and not isinstance(new_config[field], int):
                     raise ValueError(f"Field '{field}' must be an integer.")
 

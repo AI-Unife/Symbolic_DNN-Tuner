@@ -50,17 +50,19 @@ def add_hw_config():
     """Add a new hardware configuration to the available configurations."""
     try: 
         nvdla_list = load_or_create_nvdla_configs()
-        config_path=questionary.path("Enter the path of the hardware configuration to add:").ask()
+        while True:
+            config_path=questionary.path("Enter the path of the hardware configuration to add:").ask()
 
-        # Handle Ctrl+C 
-        if config_path is None:
-            return
+            # Handle Ctrl+C 
+            if config_path is None:
+                return
 
-        config_path = Path(config_path).expanduser().resolve()
+            config_path = Path(config_path).expanduser().resolve()
 
-        if not config_path.exists() or not config_path.suffix == ".yaml":
-            print(colors.FAIL + "Invalid path or file does not exist." + colors.ENDC)
-            return
+            if not config_path.exists() or not config_path.suffix == ".yaml":
+                print(colors.FAIL + "Invalid path or file does not exist." + colors.ENDC)
+                continue
+            break
 
         # Copy the .yaml file to nvdla/specs directory
         dest_dir = Path("nvdla/specs")

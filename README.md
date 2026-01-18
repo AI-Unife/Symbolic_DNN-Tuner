@@ -12,9 +12,13 @@ Follow these steps to get the API running:
    ```bash
    pip install -r requirements.txt
    ```
-2. **Configure Paths**: Set the local paths for your dataset in components/gesture_dataset.py:
+2. **Configure Paths**: Set the local paths for your dataset in:
+./components/gesture_dataset.py:
 - Edit dataset_path (line 257)
 - Edit cache_dir (line 260)
+- Edit cache_dir (line 311)
+./components/dataset.py
+- Edit root (line 26)
 3. **Run the API**: Start the service by executing:
   ```bash
   python model_bench/run.py

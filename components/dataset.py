@@ -23,7 +23,7 @@ Dataset2Class = {
 }
 
 # imagenet root
-root = "./ImageNet16"
+root = "/mnt/d/Users/Osama/Documents/AIDA4Edge/data/ImageNet16"
 
 
 def get_datasets(name):

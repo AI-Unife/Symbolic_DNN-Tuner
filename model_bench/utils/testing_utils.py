@@ -10,7 +10,6 @@ from utils.model_utils import check_if_path_is_model, load_model_simple
 from components.colors import colors
 import questionary
 
-
 def single_model_test(hw_mod, hw_choose, path):
     """
     Calculate hardware latency for a single model
@@ -35,7 +34,6 @@ def single_model_test(hw_mod, hw_choose, path):
             pbar.update(1)  # update progress bar
     return results
 
-
 def multi_model_test(hw_mod, hw_choose, directory_path,  recursive=True):
     """
     Calculate hardware latency for multiple models in a directory
@@ -50,7 +48,7 @@ def multi_model_test(hw_mod, hw_choose, directory_path,  recursive=True):
     directory_path = Path(directory_path)
     
     if not directory_path.is_dir():
-        print(colors.FAIL + f"Error: {directory_path} is not a directory" + colors.ENDC)
+        print(colors.FAIL + f"{directory_path} is not a directory" + colors.ENDC)
         return results
     
     model_files = []
@@ -59,18 +57,18 @@ def multi_model_test(hw_mod, hw_choose, directory_path,  recursive=True):
         print(colors.CYAN + f"Scanning directory recursively: {directory_path}" + colors.ENDC)
         for file_path in directory_path.rglob('*'):
             if file_path.is_file() and check_if_path_is_model(str(file_path)):
-                model_files.append(str(file_path))
+                model_files.append(file_path)
     else:
         print(colors.CYAN + f"Scanning directory: {directory_path}" + colors.ENDC)
         for file_path in directory_path.iterdir():
             if file_path.is_file() and check_if_path_is_model(str(file_path)):
-                model_files.append(str(file_path))
+                model_files.append(file_path)
 
     print(colors.OKGREEN + f"Found {len(model_files)} model(s) in the directory." + colors.ENDC)
 
     if not model_files:
-        print(colors.FAIL + "No models found in the specified directory." + colors.ENDC)
-        return 
+        print(colors.FAIL + f"No models files found in {directory_path}" + colors.ENDC)
+        return results
     confirm = questionary.confirm(f"Proceed to test {len(model_files)} model(s)?", default=True).ask()
     if not confirm:
         print(colors.FAIL + "Operation cancelled by user." + colors.ENDC)
@@ -78,7 +76,7 @@ def multi_model_test(hw_mod, hw_choose, directory_path,  recursive=True):
     
     with tqdm(total=len(model_files), desc="Testing models", unit="model") as pbar:
         for file_path in model_files:
-            relative_path = file_path.relative_to(directory_path)
+            relative_path = str(file_path.relative_to(directory_path))
             model = load_model_simple(str(file_path))
             if model is None:
                 pbar.update(1)  # update progress bar
