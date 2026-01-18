@@ -19,7 +19,8 @@ def ensure_directories():
         base_dir / "exports" / "latency",
         base_dir / "exports" / "flops",
         base_dir / "exports" / "configurations",
-        base_dir / "fine_tuned",
+        base_dir / "exports" / "converted_models",
+        base_dir / "exports" / "fine_tuned_models",
     ]
 
     for directory in directories:

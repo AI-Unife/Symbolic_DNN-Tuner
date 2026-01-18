@@ -1,11 +1,11 @@
-eval: 30
-epochs: 2
+eval: 1000
+epochs: 1
 mod_list: []
-dataset: gesture
+dataset: cifar10
 name: debug
 frames: 16
 mode: fwdPass
 channels: 2
 polarity: both
 seed: 42
-opt: RS_ruled
+opt: filtered

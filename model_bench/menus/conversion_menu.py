@@ -1,8 +1,8 @@
-
 import os
 import sys
 from pathlib import Path
 import tensorflow as tf
+from tensorflow.keras.optimizers.legacy import Adam, SGD, RMSprop, Adagrad, Adadelta, Adamax, Nadam
 import torch
 import tf2onnx
 import onnx
@@ -12,6 +12,7 @@ import tempfile
 import warnings
 from components.colors import colors
 import questionary
+from components.neural_network import LayerWiseLR
 
 
 
@@ -36,7 +37,8 @@ class ConversionMenu:
         while True:
             dir_path = questionary.path(
                 "Select the directory to save the PyTorch model:",
-                only_directories=True
+                only_directories=True,
+                default=str(Path(__file__).parent.parent / "exports" / "converted_models")
             ).ask()
             if dir_path is None:
                 questionary.press_any_key_to_continue().ask()
@@ -69,9 +71,7 @@ class ConversionMenu:
 
             if dest_path.exists():
                 print(colors.WARNING + f"File {dest_path} already exists." + colors.ENDC)
-                overwrite = questionary.confirm(
-                    "Overwrite?"
-                ).ask()
+                overwrite = questionary.confirm("Overwrite?").ask()
                 if not overwrite:
                     questionary.press_any_key_to_continue().ask()
                     return
@@ -90,12 +90,24 @@ class ConversionMenu:
                 temp_h5 = Path(tmpdirname) / "temp_model.h5"
                 temp_onnx = Path(tmpdirname) / "temp_model.onnx"
 
-                tf_model = tf.keras.models.load_model(model_path)
-                tf_model.save(temp_h5)
+                # Define custom objects for TensorFlow Keras 2.15
+                custom_objects = {
+                    'LayerWiseLR': LayerWiseLR,
+                    'Adam': Adam,
+                    'SGD': SGD,
+                    'RMSprop': RMSprop,
+                    'Adagrad': Adagrad,
+                    'Adadelta': Adadelta,
+                    'Adamax': Adamax,
+                    'Nadam': Nadam
+                }
 
-                tf_model = tf.keras.models.load_model(temp_h5)
+                with tf.keras.utils.custom_object_scope(custom_objects):
+                    tf_model = tf.keras.models.load_model(model_path)
+                    tf_model.save(temp_h5)
+                    tf_model = tf.keras.models.load_model(temp_h5)
 
-                #redirect stdout
+                # Redirect stdout
                 old_stdout = sys.stdout
                 sys.stdout = open(os.devnull, 'w')
                 try:
@@ -106,9 +118,8 @@ class ConversionMenu:
                 onnx_model = onnx.load(str(temp_onnx))
                 pytorch_model = onnx2torch.convert(onnx_model)
                 
-                
                 torch.save(pytorch_model, str(dest_path))
-                print(f"✓ PyTorch model saved to {dest_path}")
+                print(colors.OKGREEN + f"PyTorch model saved to {dest_path}" + colors.ENDC)
 
                 loaded_model = torch.load(str(dest_path), weights_only=False)
                 confirm = questionary.confirm("Do you want to display the model summary?", default=True).ask()

@@ -2,12 +2,12 @@
 Training utility function for model fine-tuning.
 """
 from pathlib import Path
-import tensorflow as tf
+from datetime import datetime
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 import components.neural_network
+from utils.model_utils import load_model_dataset
 from components.colors import colors
 from exp_config import load_cfg
-from components.dataset import get_datasets
 from components.custom_train import eval_model
 
 def fine_tune_model(model_path):
@@ -15,19 +15,15 @@ def fine_tune_model(model_path):
 
     cfg = load_cfg()
 
-    X_train, Y_train, X_test, Y_test, n_classes = get_datasets(cfg.dataset)
-
-    model = tf.keras.models.load_model(model_path)
+    model, X_train, Y_train, X_test, Y_test, n_classes = load_model_dataset(model_path)
 
     def do_eval(tag: str):
         if (cfg.mode == "fwdPass" or cfg.mode == "hybrid") and cfg.dataset == "gesture":
             score = eval_model(model, X_test, Y_test)
         else:
             score = model.evaluate(X_test, Y_test, verbose=0)
-        print(f"{tag} - Loss: {score[0]:.4f}, Accuracy: {score[1]:.4f}")
+        print(f"{tag} - Loss: {score[0]:.4f}, Accuracy: {score[1]:.4f}\n")
         return score
-
-    print(model.optimizer.get_config())
 
     es1 = EarlyStopping(monitor="val_loss", min_delta=0.001, patience=10, verbose=1,
                             mode="min", restore_best_weights=True)
@@ -45,12 +41,12 @@ def fine_tune_model(model_path):
     before = do_eval("Before fine-tuning")
 
     if (cfg.mode == "fwdPass" or cfg.mode == "hybrid") and cfg.dataset == "gesture":
-        print(colors.OKGREEN + "Modalità 'hybrid' o 'fwdPass' rilevata. Uso train_model custom." + colors.ENDC)
+        print(colors.OKGREEN + "mode 'hybrid' or 'fwdPass' detected. Using custom train_model." + colors.ENDC)
 
         opt = model.optimizer
 
         if opt is None:
-            print(colors.FAIL + "Nessun ottimizzatore trovato nel modello caricato." + colors.ENDC)
+            print(colors.FAIL + "No optimizer found in the loaded model." + colors.ENDC)
             return
 
 
@@ -60,22 +56,21 @@ def fine_tune_model(model_path):
                 # to prevent crashes in apply_gradients().
                 inner_lr_value = opt._optimizer.learning_rate.numpy()
                 
-                print(colors.WARNING + f"ATTENZIONE: opt._learning_rate (wrapper) è None." + colors.ENDC)
-                print(colors.WARNING + f"Ripristino il valore leggendolo dall'ottimizzatore interno (Adam): {inner_lr_value}" + colors.ENDC)
+                print(colors.WARNING + f"WARNING: opt._learning_rate (wrapper) is None." + colors.ENDC)
+                print(colors.WARNING + f"Restoring value by reading from internal optimizer (Adam): {inner_lr_value}" + colors.ENDC)
                 
                 opt._learning_rate = inner_lr_value
                 
             except Exception as e:
-                print(colors.FAIL + f"Errore nel tentativo di patchare il LR. Uso un default. Errore: {e}" + colors.ENDC)
+                print(colors.FAIL + f"Error attempting to patch LR. Error: {e}" + colors.ENDC)
                 return
         history = components.neural_network.train_model(model, opt, X_train, Y_train, X_test, Y_test, cfg.epochs, params, callbacks)
     else:
-        print("Modalità standard rilevata. Uso model.fit di Keras.")
-
+        print("Standard mode detected. Using Keras model.fit.")
         opt = model.optimizer
 
         if opt is None:
-            print(colors.FAIL + "Nessun ottimizzatore trovato nel modello caricato." + colors.ENDC)
+            print(colors.FAIL + "No optimizer found in the loaded model." + colors.ENDC)
             return
 
         if hasattr(opt, '_learning_rate') and opt._learning_rate is None:
@@ -84,13 +79,13 @@ def fine_tune_model(model_path):
                 # to prevent crashes in apply_gradients().
                 inner_lr_value = opt._optimizer.learning_rate.numpy()
                 
-                print(colors.WARNING + f"ATTENZIONE: opt._learning_rate (wrapper) è None." + colors.ENDC)
-                print(colors.WARNING + f"Ripristino il valore leggendolo dall'ottimizzatore interno (Adam): {inner_lr_value}" + colors.ENDC)
+                print(colors.WARNING + f"WARNING: opt._learning_rate (wrapper) is None." + colors.ENDC)
+                print(colors.WARNING + f"Restoring value by reading from internal optimizer (Adam): {inner_lr_value}" + colors.ENDC)
                 
                 opt._learning_rate = inner_lr_value
                 
             except Exception as e:
-                print(colors.FAIL + f"Errore nel tentativo di patchare il LR. Uso un default. Errore: {e}" + colors.ENDC)
+                print(colors.FAIL + f"Error attempting to patch LR. Error: {e}" + colors.ENDC)
                 return
 
         history = model.fit(X_train, Y_train,
@@ -100,14 +95,16 @@ def fine_tune_model(model_path):
                             validation_data=(X_test, Y_test),
                             callbacks=callbacks).history
         
-    print("Fine-tuning completed.")
-
+    print(colors.OKGREEN + "Fine-tuning completed.\n" + colors.ENDC)
+    print("_________________________________________________________________")
     after = do_eval("After fine-tuning")
     print(f"Delta acc: {after[1] - before[1]:+.4f}")
     print("Last val_acc:", history.get("val_accuracy", [])[-1])
     print("Last val_loss:", history.get("val_loss", [])[-1])
 
-    out_dir = Path(cfg.name)
+    timestamp = datetime.now().strftime("%Y_%m_%d__%H%M")
+    base_dir = Path(__file__).parent.parent / "exports" / "fine_tuned_models"
+    out_dir = base_dir / f"{timestamp}_{cfg.name}"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     try:
@@ -127,4 +124,4 @@ def fine_tune_model(model_path):
         hystory_path = out_dir / "training_history.json"
         with open(hystory_path, "w") as f:
             json.dump(hystory_clean, f, indent=2)
-    print(f"Model and training history saved to {out_dir}")
+    print(colors.OKGREEN + f"\nModel and training history saved to:\n" + colors.ENDC + f"{out_dir}")

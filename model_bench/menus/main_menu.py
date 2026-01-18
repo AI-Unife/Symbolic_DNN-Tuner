@@ -7,8 +7,6 @@ from model_bench.menus.testing_menu import TestingMenu
 from model_bench.menus.conversion_menu import ConversionMenu
 from model_bench.menus.settings_menu import SettingsMenu
 from utils.training_utils import fine_tune_model
-from exp_config import load_cfg
-
 
 class MainMenu:
     def __init__(self):
@@ -26,16 +24,13 @@ class MainMenu:
         """Start the fine-tuning process for a model(s)"""
         self.settings_menu.show_current_config()
 
-        modify = questionary.confirm("Do you want to modify the current configuration before fine-tuning?").ask()
+        modify = questionary.confirm(
+            "Do you want to modify the current configuration before fine-tuning?",
+            default=False
+            ).ask()
         if modify:
             self.settings_menu.run()
             self.settings_menu.show_current_config()
-        
-        cfg = load_cfg()
-
-        if not questionary.confirm("Proceed with fine-tuning using this configuration?").ask():
-            questionary.press_any_key_to_continue().ask()
-            return
         
         while True:
             model_path = questionary.path("Enter the path to the model file:").ask()
