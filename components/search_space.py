@@ -50,7 +50,6 @@ class search_space:
             Categorical(name="skip_connection", categories=[False])
 
         ])
-
         for b in range(1, max_block + 1):
             conv_name = f'new_conv_{b}'
             self.search_space.dimensions.append(Integer(-1, 0, name=conv_name))
@@ -113,6 +112,70 @@ class search_space:
 
         return self.search_space
 
+    def expand_space(self, base_space, next_space):
+        """
+        Unisce next_space in base_space.
+        - Se una dimensione esiste (stesso nome): allarga i bounds o le categorie.
+        - Se una dimensione è nuova: la aggiunge alla fine.
+        """
+        
+        # 1. Creiamo un dizionario delle dimensioni attuali del base_space per accesso rapido
+        # Chiave: nome dimensione, Valore: oggetto dimensione
+        base_dims_map = {d.name: d for d in base_space.dimensions}
+        
+        # Lista per tracciare i nomi delle dimensioni nuove trovate
+        new_dims_to_add = []
+
+        # 2. Iteriamo sulle dimensioni del nuovo spazio proposto (next_space)
+        for next_dim in next_space.dimensions:
+            name = next_dim.name
+            
+            if name in base_dims_map:
+                # --- CASO A: La dimensione ESISTE -> AGGIORNAMENTO (Merge) ---
+                base_dim = base_dims_map[name]
+                
+                if isinstance(next_dim, Categorical) and isinstance(base_dim, Categorical):
+                    # Uniamo le categorie
+                    current_cats = set(base_dim.categories)
+                    new_cats = set(next_dim.categories)
+                    if not new_cats.issubset(current_cats):
+                        # Uniamo e riconvertiamo in tupla (mantenendo un ordine stabile se possibile)
+                        combined_cats = list(current_cats.union(new_cats))
+                        new_categorical_dim = Categorical(
+                            categories=combined_cats,
+                            name=base_dim.name,
+                            prior=None,          # <--- FONDAMENTALE per evitare l'errore di shape
+                        )
+                        
+                        # Sostituiamo l'oggetto vecchio con quello nuovo nella mappa
+                        # Così quando ricostruiremo la lista finale, prenderemo questo aggiornato
+                        base_dims_map[name] = new_categorical_dim
+                        print(f"DEBUG: Categorie estese per {name}: {new_categorical_dim}")
+
+                elif isinstance(next_dim, (Integer, Real)) and isinstance(base_dim, (Integer, Real)):
+                    # Allarghiamo i bounds (minimo più basso, massimo più alto)
+                    base_dim.low = min(base_dim.low, next_dim.low)
+                    base_dim.high = max(base_dim.high, next_dim.high)
+                    # print(f"DEBUG: Bounds estesi per {name}: {base_dim.low}, {base_dim.high}")
+            
+            else:
+                # --- CASO B: La dimensione NON ESISTE -> NUOVA ---
+                # La salviamo per aggiungerla alla fine
+                new_dims_to_add.append(next_dim)
+
+        # 3. Ricostruzione della lista ordinata delle dimensioni
+        # NOTA: È cruciale mantenere l'ordine originale di base_space per non rompere la history (x0, y0)
+        final_dimensions = [base_dims_map[d.name] for d in base_space.dimensions]
+        
+        # Aggiungiamo le nuove dimensioni in coda
+        for new_dim in new_dims_to_add:
+            final_dimensions.append(new_dim)
+
+        # 4. Ritorniamo un NUOVO oggetto Space
+        # Importante: ricreare l'oggetto Space resetta i trasformatori interni di skopt
+        return Space(final_dimensions)
+    
+    
     def remove_params(self, params: Dict[str, Any]) -> Space:
         """
         Deactivate existing dimensions in the search space when a value of 0 is provided.

@@ -1,9 +1,9 @@
 import subprocess
 from itertools import product
 
-datasets_cifar = ['CIFAR-10', 'CIFAR-100', 'Imagenet16120']
-optimizers = ['filtered', 'standard', 'basic', 'RS', 'RS_ruled']
-seeds = [42, 84, 123, 96, 7]
+datasets_cifar = ['CIFAR-10', 'CIFAR-100', 'tinyImageNet']
+optimizers = ['filtered', 'RS_ruled']
+seeds = [42]
 
 
 def generate_jobs():
@@ -37,9 +37,9 @@ def generate_params_file(output_path: str = "params_gesture.txt"):
     Genera un file params.txt per job array, dove ogni riga è una combinazione di parametri
     a partire da 'gesture'. Ignora prefissi e ID.
     """
-    dataset = "gesture"
-    epochs = 100
-    batch_size = 30
+    dataset = "roigesture"
+    eval = 100
+    epochs = 30
 
     # definizione delle configurazioni
     configs = [
@@ -51,7 +51,7 @@ def generate_params_file(output_path: str = "params_gesture.txt"):
     lines = []
     for mode, params_list in configs:
         for p in params_list:
-            line = f"{dataset},{epochs},{batch_size},{mode},{p[0]},{p[1]},{p[2]}"
+            line = f"{dataset},{eval},{epochs},{mode},{p[0]},{p[1]},{p[2]}"
             lines.append(line)
 
     # scrive il file

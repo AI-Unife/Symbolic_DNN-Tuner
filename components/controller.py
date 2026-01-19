@@ -9,6 +9,8 @@ from tensorflow.keras import backend as K
 import matplotlib.pyplot as plt
 import gc
 
+from quantizer.quantizer_POTQ import quantizer_module
+
 try:
     from components.colors import colors
 except Exception:  # pragma: no cover
@@ -27,6 +29,8 @@ from components.integral import integrals
 from shutil import copyfile
 
 from modules.module import module
+
+from skopt.space import Space
 
 from exp_config import load_cfg
 import logging
@@ -113,9 +117,15 @@ class controller:
         self.iter: int = 0
 
         # Dynamic thresholds (updated at given epochs)
-        self.lacc: float = 0.70
+        lacc_dict: dict = {
+            'cifar10': 0.10,
+            'cifar100': 0.40,
+            'tiniimagenet': 0.30,
+            'gesture': 0.10
+        }
+        self.lacc: float = lacc_dict.get(self.cfg.dataset, 0.20)
         self.hloss: float = np.log(n_classes)
-        self.acc_w = 0.5  # weight of accuracy in combined score
+        self.acc_w = 0.77  # weight of accuracy in combined score
         self.vanish_th = 1e-8
         self.exploding_th = 100.0
 
@@ -280,7 +290,11 @@ class controller:
             else:
                 _, _, opt_value = self.modules.optimiziation()
                 self.score = float(opt_value)-self.scoreNN[1]*self.acc_w  # combine module opt with accuracy
-
+            if self.cfg.quantization:
+                quantizer = quantizer_module(opt=params["optimizer"])
+                quantized_model = quantizer.quantizer_function(self.model)
+                self.score = quantizer.evaluate_quantized_model(self.X_test, self.Y_test)[-1]
+                quantizer.log_function()
         else:
             print(f"Model FLOPs {self.nn.flops} exceed maximum {self.flops_th}. Skipping training.")
             self.scoreNN, self.history, self.model = None, None, self.nn.model
@@ -292,7 +306,6 @@ class controller:
             self.modules.log()
 
             self.score = 1e10 #float('inf')
-            
         self.iter += 1
         # Track the best score and persist the model artifact
         if self.score < self.best_score:
@@ -305,7 +318,7 @@ class controller:
                 logger.warning("Failed to save best model: %s", e)
 
         # if we have no improv in 10 iter end tuner evaluations
-        if self.iter > self.best_iter + 20:
+        if self.iter > self.best_iter + self.cfg.early_stop:
             self.convergence = True
         try:
             del self.nn.model
@@ -316,7 +329,7 @@ class controller:
         return self.score
     # ------------------------------ Diagnosis --------------------------------
 
-    def diagnosis(self) -> Tuple[Any]:
+    def diagnosis(self, const_space) -> Tuple[Any]:
         """
         Diagnose potential issues (e.g., overfitting) and propose tuning actions.
 
@@ -400,14 +413,14 @@ class controller:
 
         # If we have candidate repairs, perform tuning; otherwise return current space
         if self.symbolic_tuning:
-            new_space = self.tuning()
+            new_space = self.tuning(const_space)
             return new_space
         else:
             return self.space
 
     # ------------------------------- Tuning ----------------------------------
 
-    def tuning(self) -> Tuple[Any]:
+    def tuning(self, const_space) -> Tuple[Any]:
         """
         Apply symbolic tuning actions to the hyperparameter space and/or architecture.
 
@@ -417,8 +430,8 @@ class controller:
         print(colors.FAIL, "| START SYMBOLIC TUNING    ----------------------------------  |\n", colors.ENDC)
 
         # Perform the actual repairs via the tuning rules engine
-        new_space, self.model = self.tr.repair(
-            self.symbolic_tuning, self.symbolic_diagnosis, self.model, self.params or {}
+        new_space = self.tr.repair(
+            self.symbolic_tuning, self.symbolic_diagnosis, self.params or {}, const_space
         )
 
         # Simple convergence heuristic: too many iterations without clear problems
@@ -439,3 +452,72 @@ class controller:
             print(f"\nACCURACY: {0.0}\n")
             f.write("None \n")
         f.close()
+
+    # Probabilmente avrai bisogno di importare 'Space' per il type hint
+    # from skopt.space import Space 
+
+    def continue_learning(self, const_space) -> Space: # 1. Aggiornato il type hint
+        """
+        Set the controller to continue learning from a previous run.
+        """
+        import ast
+        self.rules, self.actions, self.problems = self.modules.get_rules()
+
+        for module, no_err in zip(self.modules.modules_obj, self.modules.modules_ready):
+            # if there are no errors in the module, dynamically add facts and problems to the symbolic part
+            if no_err:
+                self.nsb.initial_facts += module.facts
+                self.nsb.problems += module.problems
+
+        # Create/refresh the symbolic problem file
+        self.nsb.build_sym_prob(self.problems)
+        # Definisci i percorsi dei file (ho corretto il typo "symblic")
+        sym_log_path = f"{self.cfg.name}/algorithm_logs/tuning_symbolic_logs.txt"
+        diag_log_path = f"{self.cfg.name}/algorithm_logs/diagnosis_symbolic_logs.txt"
+        param_log_path = f"{self.cfg.name}/algorithm_logs/hyper-neural.txt"
+
+        # 2. Inizializza new_space *prima* del loop con un valore predefinito
+        #    per evitare un UnboundLocalError.
+        new_space = self.space  
+
+        try:
+            # 3. Usa 'with' per aprire tutti i file in modo sicuro.
+            #    Questo blocco chiuderà automaticamente tutti i file all'uscita.
+            with open(sym_log_path, "r") as sym_tuning_logs, \
+                open(diag_log_path, "r") as diagnosis_logs, \
+                open(param_log_path, "r") as params_log:
+
+                # 4. Usa zip() per iterare su tutti e tre i file contemporaneamente.
+                #    zip() si ferma automaticamente quando il file più corto finisce.
+                for sym_line, diag_line, param_line in zip(sym_tuning_logs, diagnosis_logs, params_log):
+                    
+                    try:
+                        # 5. Usa ast.literal_eval per *tutte* le righe
+                        #    Aggiungi .strip() per rimuovere spazi bianchi e newline
+                        sym_tuning = ast.literal_eval(sym_line.strip())
+                        diagnosis = ast.literal_eval(diag_line.strip())
+                        
+                        # Gestisce il caso in cui la riga dei parametri sia vuota
+                        params = ast.literal_eval(param_line.strip() or "{}")
+
+                    except (ValueError, SyntaxError) as e:
+                        # Salta le righe di log mal formattate
+                        print(f"Attenzione: riga di log saltata a causa di un errore di parsing: {e}")
+                        continue
+
+                    # Ora esegui la riparazione. self.model viene aggiornato
+                    # e new_space ottiene il nuovo valore.
+                    new_space, self.model = self.tr.repair(
+                        sym_tuning, diagnosis, params, const_space
+                    )
+            
+            # 6. Restituisci il valore *finale* di new_space dopo l'ultimo loop
+            return new_space
+
+        except FileNotFoundError as e:
+            print(f"Errore: File di log non trovato. Impossibile continuare l'apprendimento. {e}")
+            # Restituisce lo spazio originale se i log non esistono
+            return self.space
+        except Exception as e:
+            print(f"Errore imprevisto durante la lettura dei log: {e}")
+            return self.space

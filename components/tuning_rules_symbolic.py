@@ -55,7 +55,7 @@ class tuning_rules_symbolic:
         """
         for i, hp in enumerate(self.space):
             if hp.name == "reg_l2":
-                new_categories = [True, False]
+                new_categories = [True]
                 self.space.dimensions[i] = Categorical(new_categories, name='reg_l2')
         logger.info("Enabled L2 regularization")
 
@@ -75,7 +75,7 @@ class tuning_rules_symbolic:
         """
         for i, hp in enumerate(self.space):
             if hp.name == "data_augmentation":
-                new_categories = [True, False]
+                new_categories = [True]
                 self.space.dimensions[i] = Categorical(new_categories, name='data_augmentation')
         logger.info("Enabled data augmentation")
 
@@ -95,16 +95,26 @@ class tuning_rules_symbolic:
         """
         for i, hp in enumerate(self.space):
             if hp.name == "skip_connection":
-                new_categories = [True, False]
+                new_categories = [True]
                 self.space.dimensions[i] = Categorical(new_categories, name='skip_connection')
         logger.info("Enabled residual connection")
+        
+    def remove_residual(self) -> None:
+        """
+        Disable residual connection in the controller.
+        """
+        for i, hp in enumerate(self.space):
+            if hp.name == "skip_connection":
+                new_categories = [False]
+                self.space.dimensions[i] = Categorical(new_categories, name='skip_connection')
+        logger.info("Disabled residual connection")
     # -------------------------- Architecture edits ---------------------------
 
-    def new_fc_layer(self) -> None:
+    def new_fc_layers(self) -> None:
         """
         Add a fully-connected (dense) layer, respecting a soft upper bound to avoid bloat.
         """
-        if self.controller.count_new_fc > self.controller.max_fc:
+        if self.controller.count_new_fc >= self.controller.max_fc:
             print(
                 colors.FAIL,
                 "Max number of dense layers reached",
@@ -112,10 +122,8 @@ class tuning_rules_symbolic:
             )
             print(
                 colors.FAIL,
-                "start dense layers: ",
-                self.controller.start_fc,
                 " Dense layers: ",
-                self.controller.count_new_fc + self.controller.start_fc,
+                self.controller.count_new_fc,
                 " Max dense layers: ",
                 self.controller.max_fc,
                 colors.ENDC,
@@ -127,7 +135,7 @@ class tuning_rules_symbolic:
         self.space = self.ss.add_params(new_p)
         logger.info("Added dense layer #%d", self.controller.count_new_fc)
 
-    def dec_fc_layer(self) -> None:
+    def dec_fc_layers(self) -> None:
         """
         Remove one dense layer if present.
         """
@@ -183,13 +191,13 @@ class tuning_rules_symbolic:
         logger.info("Removed one conv section; remaining added sections: %d", self.controller.count_new_cv)
         self.controller.count_new_cv -= 1
 
-    def inc_conv_layer(self) -> None:
+    def inc_conv_layers(self) -> None:
         if self.controller.layer_x_block < self.controller.max_layer_x_block:
             self.controller.layer_x_block += 1
             logger.info("Add one conv layer per section; new layers per sections: %d", self.controller.layer_x_block)
         logger.info("No more convolutional layers per section to add")
 
-    def dec_conv_layer(self) -> None:
+    def dec_conv_layers(self) -> None:
         if self.controller.layer_x_block < self.controller.max_layer_x_block:
             self.controller.layer_x_block -= 1
             logger.info("Removed one conv layer per section; remaining layers per sections: %d", self.controller.layer_x_block)
@@ -228,7 +236,6 @@ class tuning_rules_symbolic:
             for name in valid_names:
                 if name in hp.name and hp.low > -1:
                     hp.low = max(params[hp.name] - 1, 1)
-
 
     
     def inc_batch_size(self, params):
@@ -272,19 +279,17 @@ class tuning_rules_symbolic:
         # or dense layer increase the upper value of the range
         for hp in self.space:
             if 'unit_c1' in hp.name:
-                hp.high = min(params['unit_c1'] + 16, 64)
+                hp.high = min(params['unit_c1'] + 1, 4)
             if 'unit_c2' in hp.name:
-                hp.high = min(params['unit_c2'] + 16, 128)
-            if 'unit_d' in hp.name:
-                hp.high = min(params['unit_d'] + 16, 2048)
+                hp.high = min(params['unit_c2'] + 1, 8)
             if 'new_conv' in hp.name:
                 try:
-                    hp.high = min(params[hp.name] + 16, 512)
+                    hp.high = min(params[hp.name] + 1, 16)
                 except KeyError:
                     continue
             if 'new_fc' in hp.name:
                 try:
-                    hp.high = min(params[hp.name] + 16, 2048)
+                    hp.high = min(params[hp.name] + 1, 32)
                 except KeyError:
                     continue
 
@@ -328,7 +333,7 @@ class tuning_rules_symbolic:
 
     # ------------------------------- Orchestration ---------------------------
 
-    def repair(self, sym_tuning: Iterable[str], diagnosis: Iterable[str], model: Any, params: Dict[str, Any]) -> Tuple[Any, Any]:
+    def repair(self, sym_tuning: Iterable[str], diagnosis: Iterable[str], params: Dict[str, Any], const_space) -> Tuple[Any, Any]:
         """
         Execute a sequence of symbolic tuning actions produced by a diagnosis step.
 
@@ -349,6 +354,7 @@ class tuning_rules_symbolic:
         if hasattr(self.controller, "model"):
             del self.controller.model
 
+        self.space = const_space
         diag_list = list(diagnosis)
         for i, action_name in enumerate(sym_tuning):
             # Preserve original control flow semantics:
@@ -388,5 +394,5 @@ class tuning_rules_symbolic:
             else:
                 method()
 
-        return self.space, model
+        return self.space
         

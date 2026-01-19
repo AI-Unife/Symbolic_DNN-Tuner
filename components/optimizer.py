@@ -295,7 +295,7 @@ class Optimizer:
         if acq_optimizer_kwargs is None:
             acq_optimizer_kwargs = dict()
 
-        self.n_points = acq_optimizer_kwargs.get("n_points", 10000)
+        self.n_points = acq_optimizer_kwargs.get("n_points", 1000000)
         self.n_restarts_optimizer = acq_optimizer_kwargs.get("n_restarts_optimizer", 5)
         self.n_jobs = acq_optimizer_kwargs.get("n_jobs", 1)
         self.acq_optimizer_kwargs = acq_optimizer_kwargs
@@ -631,15 +631,19 @@ class Optimizer:
             # of points and then pick the best ones as starting points
             X = self.space.rvs(n_samples=self.n_points, random_state=self.rng)
             if self.space_constraint is not None:
-                valid_mask = [self.space_constraint(x) for x in X]
-                X_valid = [x for x, keep in zip(X, valid_mask) if keep]
-                print("\n\n\n [INFO] Punti validi {}/{}".format(len(X_valid), len(X)))
-                if len(X_valid) > 0:
-                    X = self.space.transform(
-                        X_valid
+                X_valid = []
+                i=0
+                while len(X_valid) == 0:
+                    i+=1
+                    X = self.space.rvs(
+                        n_samples=self.n_points*i, random_state=self.rng
                     )
-                else:
-                    X = self.space.transform(X)
+                    valid_mask = [self.space_constraint(x) for x in X]
+                    X_valid = [x for x, keep in zip(X, valid_mask) if keep]
+                print("\n\n\n [INFO] Punti validi {}/{}".format(len(X_valid), len(X)))
+                X = self.space.transform(
+                    X_valid
+                )
             else:
                 X = self.space.transform(X)
             self.next_xs_ = []

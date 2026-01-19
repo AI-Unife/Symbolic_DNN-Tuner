@@ -1,0 +1,48 @@
+
+# Temporary Files Extensions
+*~
+*.swp
+*.swo
+*.raw2
+*.txn.raw
+*.jou
+*.x
+*.so
+*.log
+*.csv
+*.tar.gz
+*.pth
+*.out
+*npy
+*.txt
+*.yaml
+*.spyproject
+*ninja*
+!*CMakeLists.txt
+!specs/template.yaml
+
+# Temporary Directories
+*_
+*temp
+*data
+*old
+*workspace
+build
+
+# VScode Files
+.vscode
+
+# PyCharm Files
+.idea
+
+# Project-specific Files
+specs/import_configs.sh
+setup.sh
+env.setup
+ets24/*
+!ets24/scripts
+!ets24/alexnet*
+!ets24/resnet*
+!ets24/yolo*
+!ets24/populate_dir.sh
+!ets24/collect_reports.sh

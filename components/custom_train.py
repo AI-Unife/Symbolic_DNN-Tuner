@@ -52,9 +52,9 @@ def accuracy(outputs: tf.Tensor, targets: tf.Tensor) -> float:
 def train_model(
     model: tf.keras.Model,
     optimizer: tf.keras.optimizers.Optimizer,
-    train_data: tf.Tensor,
+    train_data,  # Can be array or [data, pos] list
     train_labels: tf.Tensor,
-    test_data: tf.Tensor,
+    test_data,   # Can be array or [data, pos] list
     test_labels: tf.Tensor,
     epochs: int,
     params: Dict,
@@ -64,11 +64,12 @@ def train_model(
     Custom training loop that mimics `model.fit` structure:
       - supports Keras callbacks (EarlyStopping, ReduceLROnPlateau, TensorBoard, ...)
       - returns a `history` dict like `model.fit(...).history`
+      - handles both regular and ROI (dual-input) datasets
 
     Expected shapes:
-      - train_data: [B, T, ...]
+      - train_data: [B, T, ...] or [data_array, pos_array]
       - train_labels: [B, T, C] (one-hot)
-      - test_data:  [B_val, T, ...]
+      - test_data:  [B_val, T, ...] or [data_array, pos_array]
       - test_labels:[B_val, T, C] (one-hot)
 
     Notes:
@@ -79,7 +80,18 @@ def train_model(
     # Data pipeline (simple & deterministic; enable shuffle if needed)
     # -------------------------------------------------------------------------
     batch_size = int(params["batch_size"])
-    ds = tf.data.Dataset.from_tensor_slices((train_data, train_labels))
+    
+    # Check if this is a ROI dataset (list with two arrays)
+    is_roi = isinstance(train_data, list) and len(train_data) == 2
+    
+    if is_roi:
+        # ROI case: train_data = [data, pos]
+        data_array, pos_array = train_data
+        ds = tf.data.Dataset.from_tensor_slices(((data_array, pos_array), train_labels))
+    else:
+        # Regular case
+        ds = tf.data.Dataset.from_tensor_slices((train_data, train_labels))
+    
     # Uncomment to enable shuffling & prefetch for performance:
     # ds = ds.shuffle(buffer_size=min(4 * batch_size, 1000), reshuffle_each_iteration=True)
     ds = ds.batch(batch_size)
@@ -94,14 +106,24 @@ def train_model(
     clipvalue: Optional[float] = params.get("clipvalue")
 
     @tf.function(reduce_retracing=True)
-    def train_step(batch_x: tf.Tensor, batch_y: tf.Tensor) -> Tuple[tf.Tensor, tf.Tensor]:
+    def train_step(batch_input, batch_y: tf.Tensor) -> Tuple[tf.Tensor, tf.Tensor]:
         """
         One training step:
           - unroll model over time dimension T (frame-wise forward)
           - stack outputs to [B, T, C]
           - compute loss & gradients, apply optimizer (with optional clipping)
           - compute batch accuracy (Python conversion is avoided inside tf.function)
+          
+        Args:
+            batch_input: For ROI, a tuple (batch_x, batch_pos); otherwise just batch_x
+            batch_y: labels [B, T, C]
         """
+        # Handle ROI vs regular input
+        if is_roi:
+            batch_x, batch_pos = batch_input
+        else:
+            batch_x = batch_input
+        
         time_steps = tf.shape(batch_x)[1]
 
         out_dtype = tf.as_dtype(getattr(model, "compute_dtype", tf.float32))
@@ -112,7 +134,11 @@ def train_model(
             # Unroll temporale; usare tf.range dentro @tf.function crea un tf.while_loop ma con TensorArray è ok
             for t in tf.range(time_steps):
                 # batch_x[:, t] : [B, ...]
-                out_t = model(batch_x[:, t], training=True)  # [B, C]
+                if is_roi:
+                    # For ROI: pass both data and pos
+                    out_t = model([batch_x[:, t], batch_pos], training=True)  # [B, C]
+                else:
+                    out_t = model(batch_x[:, t], training=True)  # [B, C]
                 ta = ta.write(t, out_t)
 
             # ta.stack(): [T, B, C] -> permuta a [B, T, C]
@@ -181,11 +207,20 @@ def train_model(
         history["accuracy"].append(avg_acc)
 
         # Validation (full tensor, frame-wise forward)
-        time_steps_val = test_data.shape[1]
-        outputs_val_list = []
-        for t in range(time_steps_val):
-            outputs_val_list.append(model(test_data[:, t], training=False))
-        val_outputs = tf.stack(outputs_val_list, axis=1)  # [B_val, T, C]
+        if is_roi:
+            test_data_array, test_pos_array = test_data
+            time_steps_val = test_data_array.shape[1]
+            outputs_val_list = []
+            for t in range(time_steps_val):
+                outputs_val_list.append(model([test_data_array[:, t], test_pos_array], training=False))
+            val_outputs = tf.stack(outputs_val_list, axis=1)  # [B_val, T, C]
+        else:
+            time_steps_val = test_data.shape[1]
+            outputs_val_list = []
+            for t in range(time_steps_val):
+                outputs_val_list.append(model(test_data[:, t], training=False))
+            val_outputs = tf.stack(outputs_val_list, axis=1)  # [B_val, T, C]
+        
         val_loss = float(tf.keras.losses.categorical_crossentropy(
             test_labels, val_outputs, from_logits=True
         ).numpy().mean())
@@ -215,22 +250,39 @@ def train_model(
 # Evaluation
 # -----------------------------------------------------------------------------
 
-def eval_model(model: tf.keras.Model, X: tf.Tensor, y: tf.Tensor) -> Tuple[float, float]:
+def eval_model(model: tf.keras.Model, X, y: tf.Tensor) -> Tuple[float, float]:
     """
     Evaluate a trained model on a temporal batch:
       - unroll over time, stack outputs to [B, T, C]
       - compute CategoricalCrossentropy(from_logits=True)
       - compute sequence-level majority-vote accuracy
+    
+    Args:
+        model: Keras model
+        X: Test data (array or [data, pos] list for ROI)
+        y: Test labels [B, T, C]
 
     Returns:
         (val_loss, val_accuracy)
     """
-    time_steps = X.shape[1]
+    # Handle ROI vs regular input
+    if isinstance(X, list) and len(X) == 2:
+        X_data, X_pos = X
+        is_roi = True
+    else:
+        X_data = X
+        X_pos = None
+        is_roi = False
+    
+    time_steps = X_data.shape[1]
     outputs_val_list = []
     loss_fn = tf.keras.losses.CategoricalCrossentropy(from_logits=True)
 
     for t in range(time_steps):
-        outputs_val_list.append(model(X[:, t], training=False))
+        if is_roi:
+            outputs_val_list.append(model([X_data[:, t], X_pos], training=False))
+        else:
+            outputs_val_list.append(model(X_data[:, t], training=False))
 
     val_outputs = tf.stack(outputs_val_list, axis=1)  # [B, T, C]
     val_loss = float(loss_fn(y, val_outputs).numpy())

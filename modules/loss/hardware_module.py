@@ -7,6 +7,11 @@ import flops.flops_calculator as fc
 from pathlib import Path
 from tensorflow.keras import layers, models
 
+import torch
+import tf2onnx
+import onnx
+import onnx2torch
+
 import nvdla.profiler as profiler
 
 class hardware_module(common_interface):
@@ -16,7 +21,7 @@ class hardware_module(common_interface):
     problems = ['out_range']
     
     #weight of the module for the final loss calculation
-    weight = 0.5
+    weight = 0.33
 
     # custom hardware module initialization
     def __init__(self):
@@ -35,8 +40,11 @@ class hardware_module(common_interface):
         # init list of available configurations to an empty dict
         self.nvdla = {}
 
+        self.specs_dir = "/hpc/home/bzzlca/Symbolic_DNN-Tuner/nvdla/specs/"
+        
+        # iterate over each configuration
         for config in nvdla_list:
-            if os.path.exists('nvdla/specs/' + config['path']):
+            if os.path.exists(self.specs_dir + config['path']):
                 # calculate the current manifacturing cost
                 current_cost = round(config['C/mm2'] * config['area'], 2)
                 # inclusion of only configurations that are less expensive than the cost limit
@@ -65,7 +73,7 @@ class hardware_module(common_interface):
 
         # for each configuration calculate the latency and the total cost
         for config_key in self.nvdla:
-            config_path = self.nvdla[config_key]['path']
+            config_path = self.specs_dir + self.nvdla[config_key]['path']
             self.nvdla[config_key]['latency'] = self.get_model_latency(self.model, config_path) / (10**9)
             latency_temp = self.nvdla[config_key]['latency'] / self.max_latency
             cost_temp = self.nvdla[config_key]['cost'] / self.max_cost
@@ -126,6 +134,20 @@ class hardware_module(common_interface):
         :param model: model to be evaluated
         :return: model latency
         """
+        input_size = model.layers[0].output.shape
+        input_size = [1, input_size[3], input_size[1], input_size[2]]
+        X = torch.Tensor(torch.randn(input_size))
+        print(f"[INFO] Profiling model with configuration: {config_path}...")
+        #### EMBER IMPLEMENTATION USING THE NEW PROFILER ####
+        # onnx_model = tf2onnx.convert.from_keras(model, output_path="{}/model.onnx".format(self.cfg.name))
+        # onnx_model = onnx.load("{}/model.onnx".format(self.cfg.name))
+        # print("[INFO] ONNX model created.")
+        # torch_model = onnx2torch.convert(onnx_model)
+        # print("[INFO] PyTorch model created.")
+        # print("[INFO] Starting profiling, log files will be saved in {} directory...".format(self.cfg.name))
+        # total_latency = profiler.profile_network(torch_model, X, config_path, self.cfg.name+'/')
+        
+        #### OLD IMPLEMENTATION USING THE OLDER PROFILER - TO BE DEPRECATED ####
         # counter to accumulate the latencies of each network layer
         total_latency = 0
         
