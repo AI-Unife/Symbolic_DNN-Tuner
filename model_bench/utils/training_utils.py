@@ -17,7 +17,7 @@ def fine_tune_model(model_path):
 
     model, X_train, Y_train, X_test, Y_test, n_classes = load_model_dataset(model_path)
 
-    # Ensure that label are one-hot encoded for evaluation for gestture dataset in depth mode
+    # Ensure that label are one-hot encoded for evaluation for gesture dataset in depth mode
     if cfg.dataset == "gesture" and cfg.mode == "depth":
         if len(Y_train.shape) == 1 or (len(Y_train.shape) == 2 and Y_train.shape[1] == 1):
             import tensorflow as tf
