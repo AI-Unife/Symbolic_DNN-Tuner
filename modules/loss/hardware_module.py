@@ -11,7 +11,7 @@ import tf2onnx
 import onnx
 import onnx2torch
 
-import profiler as profiler
+import nvdla.profiler as profiler
 from exp_config import load_cfg
 
 class hardware_module(common_interface):
@@ -21,7 +21,7 @@ class hardware_module(common_interface):
     problems = ['out_range']
     
     #weight of the module for the final loss calculation
-    weight = 0.5
+    weight = 0.33
 
     def __init__(self):
         # cost value per square millimeter, 10K / mm2
@@ -33,17 +33,17 @@ class hardware_module(common_interface):
         # max manifacturing cost value
         self.max_cost = 40000
         self.cfg = load_cfg()
-        nvdla_list = [
-            {'name': "nv_small", 'path': "nv_small64_int8.yaml", 'area': 2.824},
-                      {'name': "nv_small256", 'path': "nv_small256_int8.yaml", 'area': 3.091},
-                      {'name': "nv_large", 'path': "nv_large1024_int32.yaml", 'area': 3.809}]
+        nvdla_list = [{'name': "nv_small", 'path': "nv_small64_fp32.yaml", 'area': 2.824},
+                      {'name': "nv_small256", 'path': "nv_small256_fp32.yaml", 'area': 3.091},
+                      {'name': "nv_large", 'path': "nv_large2048_fp32.yaml", 'area': 3.809}]
                       
         # init list of available configurations to an empty dict
         self.nvdla = {}
+        self.specs_dir = "/hpc/home/bzzlca/Symbolic_DNN-Tuner/nvdla/specs/"
         
         # iterate over each configuration
         for config in nvdla_list:
-            if os.path.exists('/hpc/home/bzzlca/NVDLA-EMBER/specs/' + config['path']):
+            if os.path.exists(self.specs_dir + config['path']):
                 # calculate the current manifacturing cost
                 current_cost = round(self.cost_par*config['area'], 2)
                 # inclusion of only configurations that are less expensive than the cost limit
@@ -74,7 +74,7 @@ class hardware_module(common_interface):
 
         # for each configuration calculate the latency and the total cost
         for config_key in self.nvdla:
-            config_path = "/hpc/home/bzzlca/NVDLA-EMBER/specs/{}".format(self.nvdla[config_key]['path'])
+            config_path = self.specs_dir + self.nvdla[config_key]['path']
             self.nvdla[config_key]['latency'] = self.get_model_latency(self.model, config_path) / (10**9)
             latency_temp = self.nvdla[config_key]['latency'] / self.max_latency
             cost_temp = self.nvdla[config_key]['cost'] / self.max_cost
