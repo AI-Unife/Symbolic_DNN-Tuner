@@ -447,8 +447,8 @@ def get_ROI_numpy(cfg):
     dataset_path = "rois_and_coordinates/datasets"
     polarity = cfg.polarity
     n_pol = 2 if polarity == "both" else 1
-    # cache_dir = f"/hpc/home/bzzlca/AIDA4Edge/tf/cache/DVS_ROI_{cfg.mode}_{polarity}_{cfg.frames}_{cfg.channels}_{n_pol}/"
-    cache_dir = f"cache/DVS_ROI_{cfg.mode}_{polarity}_{cfg.frames}_{cfg.channels}_{n_pol}/"
+    cache_dir = f"/hpc/home/bzzlca/AIDA4Edge/tf/cache/DVS_ROI_{cfg.mode}_{polarity}_{cfg.frames}_{cfg.channels}_{n_pol}/"
+    # cache_dir = f"cache/DVS_ROI_{cfg.mode}_{polarity}_{cfg.frames}_{cfg.channels}_{n_pol}/"
     _ensure_cache_dir(cache_dir)
     print("cache_dir:", cache_dir)
 

@@ -195,6 +195,8 @@ def main():
 
     # Lists to hold the results from the *current run*
     total_experiment_summaries = []
+    args.total_csv = args.base_dir / args.total_csv
+    args.mean_csv = args.base_dir / args.mean_csv
 
     # 2. Scan directories
     # We look for 'algorithm_logs' as the anchor for an experiment dir
@@ -202,7 +204,8 @@ def main():
         experiment_dir = logs_dir.parent
         if not utils.should_select_experiment_dir(experiment_dir.name, args.exp_prefix):
             continue
-            
+        
+        
         logging.info("--- Analyzing experiment: %s ---", experiment_dir.relative_to(args.base_dir))
 
         # 3. Run "heavy" analysis (optional)

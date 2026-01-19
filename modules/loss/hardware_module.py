@@ -142,81 +142,82 @@ class hardware_module(common_interface):
         input_size = [1, input_size[3], input_size[1], input_size[2]]
         X = torch.Tensor(torch.randn(input_size))
         print(f"[INFO] Profiling model with configuration: {config_path}...")
-        onnx_model = tf2onnx.convert.from_keras(model, output_path="{}/model.onnx".format(self.cfg.name))
-        onnx_model = onnx.load("{}/model.onnx".format(self.cfg.name))
-        print("[INFO] ONNX model created.")
-        torch_model = onnx2torch.convert(onnx_model)
-        print("[INFO] PyTorch model created.")
-        print("[INFO] Starting profiling, log files will be saved in {} directory...".format(self.cfg.name))
-        total_latency = profiler.profile_network(torch_model, X, config_path, self.cfg.name+'/')
+        #### EMBER IMPLEMENTATION USING THE NEW PROFILER ####
+        # onnx_model = tf2onnx.convert.from_keras(model, output_path="{}/model.onnx".format(self.cfg.name))
+        # onnx_model = onnx.load("{}/model.onnx".format(self.cfg.name))
+        # print("[INFO] ONNX model created.")
+        # torch_model = onnx2torch.convert(onnx_model)
+        # print("[INFO] PyTorch model created.")
+        # print("[INFO] Starting profiling, log files will be saved in {} directory...".format(self.cfg.name))
+        # total_latency = profiler.profile_network(torch_model, X, config_path, self.cfg.name+'/')
         
         #### OLD IMPLEMENTATION USING THE OLDER PROFILER - TO BE DEPRECATED ####
-        # # counter to accumulate the latencies of each network layer
-        # total_latency = 0
+        # counter to accumulate the latencies of each network layer
+        total_latency = 0
         
-        # # initialize all the variables that will be passed to the profiler and that characterize the convolutional layers
-        # in_ch, out_ch, kernel, stride, padding, batch, bias = 0, 0, 0, 0, 2, 1, False
+        # initialize all the variables that will be passed to the profiler and that characterize the convolutional layers
+        in_ch, out_ch, kernel, stride, padding, batch, bias = 0, 0, 0, 0, 2, 1, False
 
-        # # define the configuration on which to perform the evaluation and the log file name in which to save the informations
-        # nvdla_path = config_path
-        # log_file = "profiler_logs.txt"
+        # define the configuration on which to perform the evaluation and the log file name in which to save the informations
+        nvdla_path = config_path
+        log_file = "profiler_logs.txt"
         
-        # # build the path where the configuration file is located
-        # work_p = os.getcwd()
-        # config_p = Path(work_p).joinpath('nvdla').joinpath('specs').joinpath(nvdla_path)
-        # nvdla = profiler.nvdla(config_p)
+        # build the path where the configuration file is located
+        work_p = os.getcwd()
+        config_p = Path(work_p).joinpath('nvdla').joinpath('specs').joinpath(nvdla_path)
+        nvdla = profiler.nvdla(config_p)
         
-        # # build a list containing input dimensions, following the format of pytorch on which the profiler is based
-        # # the list contains this informations: [number of batches, number of channels, height, width]
-        # input_size = model.layers[0].output.shape
-        # input_size = [batch, input_size[3], input_size[1], input_size[2]]
+        # build a list containing input dimensions, following the format of pytorch on which the profiler is based
+        # the list contains this informations: [number of batches, number of channels, height, width]
+        input_size = model.layers[0].output.shape
+        input_size = [batch, input_size[3], input_size[1], input_size[2]]
 
-        # #model = self.LENET()
-        # #input_size = [batch, 1, 28, 28]
+        #model = self.LENET()
+        #input_size = [batch, 1, 28, 28]
         
-        # # iterate over each layer of the model
-        # for i in model.layers:
-        #     layer_class = i.__class__.__name__
+        # iterate over each layer of the model
+        for i in model.layers:
+            layer_class = i.__class__.__name__
 
-        #     # if the current layer is a convolution
-        #     if layer_class in ['Conv2D']:
+            # if the current layer is a convolution
+            if layer_class in ['Conv2D']:
                 
-        #         # build the list containing the output dimensions of the convolutional layer
-        #         out_size = i.output.shape
-        #         out_size = [batch, out_size[3], out_size[1], out_size[2]]
+                # build the list containing the output dimensions of the convolutional layer
+                out_size = i.output.shape
+                out_size = [batch, out_size[3], out_size[1], out_size[2]]
 
-        #         # set the convolutional variables to pass to the profiler with values from the layer
-        #         in_ch = i.input.shape[-1]
-        #         out_ch = i.output.shape[-1]
-        #         kernel = i.kernel_size[0]
-        #         stride = i.strides[0]
-        #         bias = i.use_bias
+                # set the convolutional variables to pass to the profiler with values from the layer
+                in_ch = i.input.shape[-1]
+                out_ch = i.output.shape[-1]
+                kernel = i.kernel_size[0]
+                stride = i.strides[0]
+                bias = i.use_bias
 
-        #         # set the padding value according to the padding type of the layer
-        #         input_size = i.input.shape
-        #         input_size = [batch, input_size[3], input_size[1], input_size[2]]
-        #         if i.padding == 'valid':
-        #             padding = 0
-        #         else:
-        #             padding = int((kernel - 1) / 2)
+                # set the padding value according to the padding type of the layer
+                input_size = i.input.shape
+                input_size = [batch, input_size[3], input_size[1], input_size[2]]
+                if i.padding == 'valid':
+                    padding = 0
+                else:
+                    padding = int((kernel - 1) / 2)
 
-        #         # build the profiler object that maps the convolutional layer and get its latency value
-        #         conv_obj = profiler.Conv2d(nvdla, log_file, i.name, out_size, in_ch, out_ch, kernel, stride, padding, 1, bias)
-        #         total_latency += conv_obj.forward(input_size)
+                # build the profiler object that maps the convolutional layer and get its latency value
+                conv_obj = profiler.Conv2d(nvdla, log_file, i.name, out_size, in_ch, out_ch, kernel, stride, padding, 1, bias)
+                total_latency += conv_obj.forward(input_size)
                 
-        #     elif layer_class in ['Dense']:
-        #         # if the layer is dense, get the input/output features information and
-        #         # save in the variables that will be passed to the profiler
-        #         in_f = i.input.shape[-1]
-        #         out_f = i.output.shape[-1]
-        #         bias = i.use_bias
+            elif layer_class in ['Dense']:
+                # if the layer is dense, get the input/output features information and
+                # save in the variables that will be passed to the profiler
+                in_f = i.input.shape[-1]
+                out_f = i.output.shape[-1]
+                bias = i.use_bias
                 
-        #         # build the list containing the output dimensions of the dense layer
-        #         out_size = [batch, out_f]
+                # build the list containing the output dimensions of the dense layer
+                out_size = [batch, out_f]
                 
-        #         # build the profiler object that maps the dense layer and get its latency value
-        #         dense_obj = profiler.Linear(nvdla, log_file, i.name, out_size, in_f, out_f, bias)
-        #         total_latency += dense_obj.forward([batch, in_f])
+                # build the profiler object that maps the dense layer and get its latency value
+                dense_obj = profiler.Linear(nvdla, log_file, i.name, out_size, in_f, out_f, bias)
+                total_latency += dense_obj.forward([batch, in_f])
 
         return total_latency
 

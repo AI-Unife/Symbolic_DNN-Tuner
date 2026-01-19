@@ -84,6 +84,35 @@ def parse_experiment_name(exp_name: str) -> Dict[str, Any]:
         
     return parsed_data
 
+def extract_total_time(log_path: Path) -> Optional[float]:
+    """
+    Extracts the total time from a log file by searching for the line
+    containing 'TOTAL TIME -------->' and parsing the time value.
+
+    Args:
+        log_path: Path to the log file.
+    Returns:
+        The total time in seconds as a float, or None if not found.
+    """
+    if not log_path.is_file():
+        logging.warning("Log file does not exist: %s", log_path)
+        return None
+
+    try:
+        with log_path.open("r", encoding="utf-8") as f:
+            for line in f:
+                if "TOTAL TIME -------->" in line:
+                    parts = line.split("TOTAL TIME -------->")
+                    if len(parts) > 1:
+                        time_str = parts[1].strip().split()[0]  # Get the first token after the arrow
+                        total_time = float(time_str)
+                        logging.debug("Extracted total time: %f seconds from %s", total_time, log_path)
+                        return total_time
+    except Exception as e:
+        logging.error("Error reading log file %s: %s", log_path, e)
+
+    logging.info("TOTAL TIME not found in log file: %s", log_path)
+    return None
 
 def copy_log_to_output(log_src: Path, exp_dir: Path) -> Optional[Path]:
     """

@@ -1,131 +1,332 @@
+import sys
 import os
-import sys
-import torch
+
+import numpy as np
+
 import yaml
-import glob  # --- MODIFICA: Aggiunto import ---
-import sys
+import math
 
-# Imposta le variabili d'ambiente
-os.environ['TORCH_DATASETPATH'] = '/hpc/home/bzzlca/datasets'
-os.environ['TORCH_TRAINPATH'] = '/hpc/home/bzzlca/models'
+##############################
+## Profilation Routines
 
-# Aggiungi il tuo percorso 'build' al sys.path
-nvdla_build_path = '/hpc/home/bzzlca/NVDLA-EMBER/build'
+# CONV Operations
+def getHWConvs(nvdla, datTensor, wtTensor):
+    K,C,R,S = size(wtTensor)
+    B,C2,H,W = size(datTensor)
+    AtomicK = nvdla.config['cmac']['atomic-k']
+    HWBatch = nvdla.config['cmac']['batch-size']
+    return int(math.ceil(K/AtomicK)*math.ceil(B / HWBatch))
 
-# Aggiungilo solo se non è già presente (buona pratica)
-if nvdla_build_path not in sys.path:
-    sys.path.append(nvdla_build_path)
+# Get Entries
+def getEntries(nvdla, tensor, thpt):
+    B, C, H, W = size(tensor)
+    HWBatch = nvdla.config['cmac']['batch-size']
+    return int(H*W*math.ceil(C/thpt)*min(B, HWBatch))
+
+def getDATentries(nvdla, datTensor):
+    B, C, H, W = size(datTensor)
+    AtomicC = nvdla.config['cmac']['atomic-c']
+    HWBatch = nvdla.config['cmac']['batch-size']
+    return int(H*W*math.ceil(C/AtomicC)*min(B, HWBatch))
+
+def getWTentries(nvdla, wtTensor):
+    K, C, R, S = size(wtTensor)
+    AtomicC = nvdla.config['cmac']['atomic-c']
+    AtomicK = nvdla.config['cmac']['atomic-k']
+    return int(R*S*math.ceil(C/AtomicC)*min(K, AtomicK))
+
+def getOUTentries(nvdla, datTensor, wtTensor, stride, padding, dilatation):
+    B, C, H, W  = size(datTensor)
+    K, C2, R, S = size(wtTensor)
+    if(C != C2):
+        raise ValueError(f'-E: mismatching channel sizes: {C} != {C2}')
+
+    S_ = S
+    R_ = R
+    C_ = K
+    W_ = ((2*padding[0] +W -S_)/stride) +1
+    H_ = ((2*padding[1] +H -R_)/stride) +1
+
+    return W_ * H_
 
 
-
-# sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
-
-
-from nvdla.models.zoo import models_factory
-from nvdla.wrapper.parser.torch import nvdlaReplacer as converter
-
-##################################################################
+# Transactions
+def getTransactions(nvdla, tensor):
+    wordsize  = nvdla.config['primary-dbb']['wordsize']
+    precision = nvdla.bits
+    size      = math.prod(tensor)*precision
+    return int(math.ceil(size/wordsize))
 
 
+# BUF Usage
+def cbufUsage(nvdla, datTensor, wtTensor, stride, padding, dilatation):
+    datEntries  = getDATentries(nvdla, datTensor) +2*padding[0] +2*padding[1]
+    wtEntries   = getWTentries(nvdla, wtTensor)
+    entries     = datEntries + wtEntries
+    cbufEntries = nvdla.config['cbuf']['banks'] * nvdla.config['cbuf']['bank-depth']
+    usage       = 100*(entries / cbufEntries)
+    return usage, int(entries), int(cbufEntries)
 
-def profile_network(model, X, config, outdir):
+def caccUsage(nvdla, datTensor, wtTensor, stride, padding, dilatation):
+    entries     = getOUTentries(nvdla, datTensor, wtTensor, stride, padding, dilatation)
+    caccEntries = nvdla.config['cacc']['banks'] * nvdla.config['cacc']['bank-depth']
+    usage       = 100*(entries / caccEntries)
+    return usage, int(entries), int(caccEntries)
 
-    # Generate Converter
-    print(f'[INFO] Enabling Profiler...')
-    nvconverter = converter(config, True, outdir)
-    nvmodel = nvconverter.replaceAll(model)
-    print(nvmodel)
 
-    ## Profile Input
-    try:
-        with torch.no_grad():
-            for x, _ in X:
-                X = x
-                _ = nvmodel(X)
-                break
-    except Exception as e:
-        _ = nvmodel(X)
+# Get Atomics
+def getAtomics(nvdla, datTensor, wtTensor, stride, padding, dilatation):
+    B, C, H, W  = size(datTensor)
+    K, C2, R, S = size(wtTensor)
+    if(C != C2):
+        raise ValueError(f'-E: mismatching channel sizes: {C} != {C2}')
 
-    # Layers log
-    exectime = 0
+    AtomicC = nvdla.config['cmac']['atomic-c']
 
-    # --- INIZIO MODIFICA: Implementazione della ricerca file come da richiesta ---
-    print(f'[INFO] Searching for layer logs in {outdir}...')
-    workdir = outdir
-    # Trova tutti i file .yaml nella directory di output
-    search_pattern = os.path.join(workdir, "*.yaml")
-    all_yaml_files = glob.glob(search_pattern)
-    
-    # Definisci i nomi dei file da escludere
-    excluded_filenames = {
-        "netcontent.yaml", 
-        "layerlog.yaml", 
-        "seulog.yaml", 
-        "work_specs.yaml"
-    }
-    
-    layerlogs = []
-    for f_path in all_yaml_files:
-        # Aggiungi alla lista solo se è un file e il suo nome non è nell'elenco degli esclusi
-        if os.path.isfile(f_path) and os.path.basename(f_path) not in excluded_filenames:
-            layerlogs.append(f_path)
-    
-    if not layerlogs:
-        print(f'[WARNING] No layer log .yaml files found in {outdir}. Total time will be 0.')
-    # --- FINE MODIFICA ---
+    S_ = S
+    R_ = R
+    C_ = K
+    W_ = ((2*padding[0] +W -S_)/stride) +1
+    H_ = ((2*padding[1] +H -R_)/stride) +1
 
-    for layerlog in layerlogs: # Ora 'layerlogs' è definita
-        
-        with open(layerlog, 'r') as f:
-            layer = yaml.load(f, Loader=yaml.SafeLoader)
-        
-            # Get Time
-            if 'total-layertime' in layer:
-                exectime += layer['total-layertime']
-            else:
-                print(f'[WARNING] Key "total-layertime" not found in {layerlog}.')
+    StripeSize = W_ * H_
+    BlockSize  = StripeSize * S * R
 
-    # --- INIZIO MODIFICA: Cancellazione dei file .yaml processati ---
-    # print(f'[INFO] Cleaning up {len(layerlogs)} processed layer log files...')
-    # for layerlog_file in layerlogs:
-    #     try:
-    #         os.remove(layerlog_file)
-    #     except OSError as e:
-    #         print(f'[ERROR] Could not delete file {layerlog_file}: {e}')
-    # --- FINE MODIFICA ---
+    return int(BlockSize*math.ceil(C / AtomicC))
 
-    print(f'Total Inference Time: {exectime} cycles of clock')
-    if "int8" in config or "fp8" in config:
-        # Periodo = 1 ns -> Calcolo = time * 1 * 1e-6
-        time_in_ms = exectime * 1 * 1e-6
-        print(f'Data type: 8-bit (Period=1ns). Approximate Time: {time_in_ms:.6f} ms')
-    elif "int16" in config or "fp16" in config:
-        # Periodo = 2 ns -> Calcolo = time * 2 * 1e-6
-        time_in_ms = exectime * 2 * 1e-6
-        print(f'Data type: 16-bit (Period=2ns). Approximate Time: {time_in_ms:.6f} ms')  
-    elif "int32" in config or "fp32" in config:
-        # Periodo = 4 ns -> Calcolo = time * 4 * 1e-6
-        time_in_ms = exectime * 4 * 1e-6
-        print(f'Data type: 32-bit (Period=4ns). Approximate Time: {time_in_ms:.6f} ms')
+
+# Execution Time
+def getCLKperiod(technology='xilinx', busWordSize=1):
+    if(technology == 'xilinx'):    # Time period in NS
+        clkPeriod = 4.0
+        accesLatency = 33.5
+    elif(technology == 'raw'):     # Just counts the raw values
+        clkPeriod = 1
+        accesLatency = 1
     else:
-        print(f'[WARNING] Data type (int8/16/32) not detected in config name.')
-        print(f'           Unable to determine correct clock period (1, 2, or 4 ns).')
-        return None
-        
-    return time_in_ms
+        raise ValueError(f'-E: {technology} is not a supported technology type')
 
-if __name__ == '__main__':
-    # Imposta le variabili d'ambiente
-    os.environ['TORCH_DATASETPATH'] = '/hpc/home/bzzlca/datasets'
-    os.environ['TORCH_TRAINPATH'] = '/hpc/home/bzzlca/models'
+    return (clkPeriod, accesLatency)
 
-    # Aggiungi il tuo percorso 'build' al sys.path
-    nvdla_build_path = '/hpc/home/bzzlca/NVDLA-EMBER/build'
+def getCONVTime(nvdla, datTensor, wtTensor, stride, padding, dilatation, backend='nvdla-v1', technology='xilinx'):
+    convs = getHWConvs(nvdla, datTensor, wtTensor)
+    convAtomics = getAtomics(nvdla, datTensor, wtTensor, stride, padding, dilatation)
+    if(backend == 'nvdla-v1'):
+        atomicCLKs = 7
+    elif(backend == 'nvdla-v2'):
+        atomicCLKs = 6
+    else:
+        raise ValueError(f'-E: {backend} is not a supported backend type')
 
-    # Aggiungilo solo se non è già presente (buona pratica)
-    if nvdla_build_path not in sys.path:
-        sys.path.append(nvdla_build_path)
-    model, testloader = models_factory('mnist', 'lenet', 1, False)
-    config = '/hpc/home/bzzlca/NVDLA-EMBER/specs/nv_large1024_int32.yaml'
-    time = profile_network(model, testloader, config, './debug/')
+    outEntries = getOUTentries(nvdla, datTensor, wtTensor, stride, padding, dilatation)
+    return int(convs*(convAtomics*atomicCLKs + outEntries))*getCLKperiod(technology=technology)[0]
+
+def getSDPTime(nvdla, tensor, backend='nvdla-v1', technology='xilinx'):
+    if((not nvdla.config['sdp']['bs']['en']) and (not nvdla.config['sdp']['bn']['en']) and (not nvdla.config['sdp']['bn']['en'])):
+        raise ValueError(f'-E: no units available in SDP')
+
+    latency = 0
+    if(backend == 'nvdla-v1'):
+        xCLKs = 3
+        yCLKs = 3
+    elif(backend == 'nvdla-v2'):
+        xCLKs = 3
+        yCLKs = 3
+    else:
+        raise ValueError(f'-E: {backend} is not a supported backend type')
+
+    if(nvdla.config['sdp']['bs']['en']):
+        bsThpt = nvdla.config['sdp']['bs']['thpt']
+        latency += getEntries(nvdla, tensor, bsThpt)*xCLKs
+
+    if(nvdla.config['sdp']['bn']['en']):
+        bnThpt = nvdla.config['sdp']['bn']['thpt']
+        latency += getEntries(nvdla, tensor, bnThpt)*xCLKs
+
+    if(nvdla.config['sdp']['ew']['en']):
+        ewThpt = nvdla.config['sdp']['ew']['thpt']
+        latency += getEntries(nvdla, tensor, ewThpt)*yCLKs
+
+    return int(latency)*getCLKperiod(technology=technology)[0]
+
+def getPDPTime(nvdla, tensor, backend='nvdla-v1', technology='xilinx'):
+    if(not nvdla.config['pdp']['en']):
+        raise ValueError(f'-E: no units available in SDP')
+
+    if(backend == 'nvdla-v1'):
+        pdpCLKs = 5
+    elif(backend == 'nvdla-v2'):
+        pdpCLKs = 5
+    else:
+        raise ValueError(f'-E: {backend} is not a supported backend type')
+
+    return int(getEntries(nvdla, tensor, nvdla.config['pdp']['thpt']) *pdpCLKs)*getCLKperiod(technology=technology)[0]
+
+
+# Function to get elements from a list
+def size(value):
+    if len(value) == 4:
+        return value[0], value[1], value[2], value[3]
+    elif len(value) == 2:
+        return value[0], value[1]
     
+
+##############################
+## Config Wrapper
+
+
+class nvdla:
+    def __init__(self, config) -> None:
+        with open(config) as stream:
+            try:
+               self.config = yaml.safe_load(stream)
+            except yaml.YAMLError as exc:
+                print(exc)
+
+        if(self.config['dtype'] == 'int8'):
+            self.bits = 8
+            self.isFloat = False
+        elif(self.config['dtype'] == 'int16'):
+            self.bits = 16
+            self.isFloat = False
+        elif(self.config['dtype'] == 'int32'):
+            self.bits = 32
+            self.isFloat = False
+        elif(self.config['dtype'] == 'fp16'):
+            self.bits = 16
+            self.isFloat = True
+        elif(self.config['dtype'] == 'fp32'):
+            self.bits = 32
+            self.isFloat = True
+        elif(self.config['dtype'] == 'bf16'):
+            self.bits = 16
+            self.isFloat = True
+        else:
+            raise ValueError(f'-E: {self.config["dtype"]} is not supported')
+
+        #print(f'-I({__file__}): Loaded config: {self.config["name"]}')
+
+##############################
+## Extension of Torch Layers
+
+## Conv2d
+class Conv2d():
+    """
+    Conv2d Profiler
+    """
+    def __init__(self, nvdla, file, layerid, out, in_channels, out_channels, kernel_size, stride=1, padding=0, dilatation=1, bias=True, out_offset=0, out_rshift=0):
+        #super().__init__(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, stride=stride, bias=bias)
+        self.logfile    = file
+        self.nvdla      = nvdla
+        self.stride     = stride
+        self.padding    = padding if padding is tuple else (padding, padding)
+        self.dilatation = dilatation
+        self.biasTrue   = bias
+        self.offset     = out_offset
+        self.rshift     = out_rshift
+        self.layerid    = layerid
+        
+        # new informations for tensorflow
+        self.kernel = kernel_size
+        self.in_ch = in_channels
+        self.out_ch = out_channels
+        self.out = out
+        self.bias = [out_channels]
+
+    def forward(self, input):
+        # FIXME: Feature now tupported
+        B,C,H,W = size(input)
+
+        if(B > 1):
+            raise ValueError(f'-E: Batch Size > 1 is not currently supported')
+
+        # CONV execution
+        out = self.out
+        self.weight = [self.out_ch, self.in_ch, self.kernel, self.kernel]
+
+        # Profile HW Ops
+        convs = getHWConvs(self.nvdla, input, self.weight)
+
+        # Profile Latency
+        latency = getCONVTime(self.nvdla, input, self.weight, self.stride, self.padding, self.dilatation)
+        latency += getSDPTime(self.nvdla, out)
+        
+        # Profile Mem Transactions
+        readT  = getTransactions(self.nvdla, input)
+        readT += getTransactions(self.nvdla, self.weight)
+        if(self.biasTrue):
+            readT += getTransactions(self.nvdla, self.bias)
+        writeT = getTransactions(self.nvdla, out)
+        
+        # Scale Mem Transactions
+        readT  *= getCLKperiod(technology='xilinx')[1]
+        writeT *= getCLKperiod(technology='xilinx')[1]
+
+        # Profile BUF Usage
+        cbuf = cbufUsage(self.nvdla, input, self.weight, self.stride, self.padding, self.dilatation)
+        cacc = caccUsage(self.nvdla, input, self.weight, self.stride, self.padding, self.dilatation)
+        
+        return latency
+
+## Linear
+class Linear():
+    """
+    Linear Profiler
+    """
+    def __init__(self, nvdla, file, layerid, out, in_features, out_features, bias=True, out_offset=0, out_rshift=0):
+        #super().__init__(in_features, out_features, bias=bias)
+        self.logfile    = file
+        self.nvdla      = nvdla
+        self.biasTrue   = bias
+        self.offset     = out_offset
+        self.rshift     = out_rshift
+        self.layerid    = layerid
+        
+        # new informations for tensorflow
+        self.in_f = in_features
+        self.out_f = out_features
+        self.out = out
+        self.bias = [out_features]
+
+    def forward(self, input):
+        # FIXME: Feature now tupported
+        self.weight = [self.out_f, self.in_f]
+        
+        B,C  = size(input)
+        K,C2 = size(self.weight)
+        
+        if(B > 1):
+            raise ValueError(f'-E: Batch Size > 1 is not currently supported')
+
+        # LINEAR execution
+        out = self.out
+
+        # Reshape
+        inputT = [B, C] + [1, 1]
+        weightT = [K, C2] + [1, 1]
+        outT = [B, K] + [1, 1]
+
+        # Profile HW Ops
+        convs = getHWConvs(self.nvdla, inputT, weightT)
+
+        # Profile Latency
+        latency = getCONVTime(self.nvdla, inputT, weightT, 1, (0,0), 1)
+        latency += getSDPTime(self.nvdla, outT)
+
+        # Profile Mem Transactions
+        readT  = getTransactions(self.nvdla, input)
+        readT += getTransactions(self.nvdla, self.weight)
+        if(self.biasTrue):
+            readT += getTransactions(self.nvdla, self.bias)
+        writeT = getTransactions(self.nvdla, out)
+
+        # Scale Mem Transactions
+        readT  *= getCLKperiod(technology='xilinx')[1]
+        writeT *= getCLKperiod(technology='xilinx')[1]
+        
+        # Profile BUF Usage
+        cbuf = cbufUsage(self.nvdla, inputT, weightT, 1, (0,0), 1)
+        cacc = caccUsage(self.nvdla, inputT, weightT, 1, (0,0), 1)
+
+        return latency
+

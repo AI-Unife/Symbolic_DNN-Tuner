@@ -15,6 +15,7 @@ It handles:
 """
 
 import pandas as pd
+import tensorflow as tf
 import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any, Set
@@ -22,6 +23,7 @@ import numpy as np
 
 # Import utilities and constants
 from analyse_components import utils 
+from flops.flops_calculator import flop_calculator
 # Note: 'parsing' is imported but not used, could be removed.
 # from analyse_components import parsing 
 
@@ -174,19 +176,29 @@ def update_model_db(network_data_list: List[Dict]) -> Tuple[Dict, int, int]:
     # This row is based *only* on the best network from this experiment,
     # but metadata (Tuner, Dataset, Epochs) comes from the FOLDER NAME.
     exp_name = Path(best_network['experiment_source']).name
+    base_dir = Path(best_network['experiment_source'])
     parsed_name_data = utils.parse_experiment_name(exp_name)
-    
+    rep_log = utils.pick_representative_log(base_dir)
+    ## Find in rep log the line TOTAL TIME --------> and extract time:
+    total_time = utils.extract_total_time(rep_log)
+    flops = best_network.get('flops', 0)
+    if flops == 0:
+        model = tf.keras.models.load_model(rep_log.parent / "Model" / "best-model.keras", compile=False)
+        flops = flop_calculator().get_flops(model)
+        best_network['flops'] = flops
     summary_row = {
-        'Base Dir': str(Path(best_network['experiment_source']).parent),
+        'Base Dir': str(base_dir),
         'Experiment Name': exp_name,
         'Tuner': parsed_name_data.get('Tuner'),     # From folder name
         'Dataset': parsed_name_data.get('Dataset'), # From folder name
-        'Eval Count': idx,     # How many models this experiment tested
+        'Best idx': idx,
+        'Eval Count': len(network_data_list),     # How many models this experiment tested
         'Best Score': best_network['score'],
         'Best Accuracy': best_network['accuracy'],
         'Best FLOPs': best_network.get('flops', 0),
         'Best Quantized': best_network.get('accuracy_quantization', None),
-        'Best Latency': best_network.get('latency', 0)
+        'Best Latency': best_network.get('latency', 0),
+        'Total Time': total_time
     }
 
     
@@ -254,7 +266,7 @@ def write_total_file(csv_path: Path, total_summaries: List[Dict]) -> pd.DataFram
         return pd.DataFrame()
         
     # Define a consistent column order for the 'total' summary
-    static_cols = ['Base Dir', 'Experiment Name', 'Tuner', 'Dataset', 'Epochs', 'Eval Count', 'Best Accuracy']
+    static_cols = ['Base Dir', 'Experiment Name', 'Tuner', 'Dataset', 'Epochs', 'Best idx', 'Eval Count', 'Best Accuracy', 'Total Time']
     total_headers = _get_ordered_headers(total_summaries, static_cols)
     
     # Pass the data and headers to the writer
@@ -277,7 +289,7 @@ def write_mean_file(csv_path: Path, df_total: pd.DataFrame):
     # Identify all numeric columns to aggregate
     numeric_cols = df_total.select_dtypes(include=[np.number]).columns.tolist()
     # Define which metrics we want to average
-    metrics = [c for c in numeric_cols if c in ( 'Best Score', 'Best Accuracy', 'Eval Count', 'Epochs', 'Best Quantized','Best FLOPs', 'Best Latency')]
+    metrics = [c for c in numeric_cols if c in ( 'Best Score', 'Best Accuracy', 'Best idx', 'Eval Count', 'Epochs', 'Best Quantized','Best FLOPs', 'Best Latency', 'Total Time')]
     if not metrics:
         logging.warning("No numeric metric columns found for 'mean' summary.")
         return

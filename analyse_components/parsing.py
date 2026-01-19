@@ -228,7 +228,7 @@ def parse_experiment_data(experiment_dir: Path, root_path: Path) -> List[Dict[st
                 'dataset': dataset,
                 'accuracy': accuracy,
                 # 'hyperparams': hyper_dict,
-                'experiment_source': str(experiment_dir.relative_to(root_path)), 
+                'experiment_source': str(experiment_dir), 
                 'accuracy_quantization': acc_quant,
                 'flops': flops,
                 'score': score_val,
