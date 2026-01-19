@@ -316,35 +316,37 @@ def dataset_to_numpy(dataset, cfg) -> Tuple[np.ndarray, np.ndarray]:
     x_list, y_list = [], []
 
     for x, y in dataset:
-        # Handle ROI items (dicts with 'data' and 'pos')
-        if isinstance(x, dict) or (hasattr(cfg, "dataset") and "roi" in cfg.dataset.lower()):
-            events = x["data"]
-            pos = x.get("pos", None)
-            arr = np.array(events)
-            x_reshaped, _ = reshape_x_pos(arr, np.array(pos) if pos is not None else None, cfg)
-            pos_mean = None
-            if pos is not None:
-                # Example analysis: compute center of mass of ROI position map in first frame
-                # A.shape = (16, 32, 32, 1)
-                A = np.squeeze(pos, axis=1)  # -> (16, 32, 32)
+        # x is typically [T, 2, H, W] after ToFrame(sensor_size=(H, W, 2), ...)
+        arr = np.array(x)
 
-                H, W = A.shape[1], A.shape[2]
+        if cfg.mode == "fwdPass":
+            # [T, 2, H, W] -> [T, H, W, 2]
+            x_list.append(np.transpose(arr, (0, 2, 3, 1)))
 
-                yy, xx = np.indices((H, W))  # yy, xx -> (32, 32)
+        elif cfg.mode == "hybrid":
+            # Expect BothPolarity OR a prior framing such that arr has shape [T, 2, H, W]
+            # We reshape into groups of NUM_CHANNELS along time and stack polarities as channels.
+            T, C, H, W = arr.shape  # C should be 2
+            assert T % cfg.channels == 0, f"T={T} not divisible by NUM_CHANNELS={cfg.channels}"
+            # Group frames: (T//NUM_CHANNELS, NUM_CHANNELS, C, H, W)
+            grouped = arr.reshape(T // cfg.channels, cfg.channels, C, H, W)
+            # Move to (T', H, W, NUM_CHANNELS, C)
+            transposed = grouped.transpose(0, 3, 4, 1, 2)
+            # Merge channel dims -> (T', H, W, NUM_CHANNELS*C) == (T', H, W, 2*NUM_CHANNELS)
+            x_final = transposed.reshape(T // cfg.channels, H, W, cfg.channels * C)
+            x_list.append(x_final)
 
-                tot = A.sum(axis=(1, 2))  # (16,)
-
-                mean_y = (A * yy).sum(axis=(1, 2)) / tot
-                mean_x = (A * xx).sum(axis=(1, 2)) / tot
-
-                pos_mean = np.stack([mean_y, mean_x], axis=1)  # (16, 2)
-
-            x_list.append({"data": x_reshaped, "pos": pos_mean})
-        else:
-            # Non-ROI: plain arrays
-            arr = np.array(x)
-            x_reshaped, _ = reshape_x_pos(arr, None, cfg)
-            x_list.append(x_reshaped)
+        else:  # "depth" or any other single-frame mode
+            # [T, 2, H, W] -> assume polarity transform reduced to [T, H, W] or similar
+            # If still [T, 2, H, W], collapse time by sum; otherwise, keep as is.
+            if arr.ndim == 4 and arr.shape[1] == 2:
+                arr = arr.sum(axis=0)  # simple collapse to [H, W] (choose your policy)
+            # Ensure shape is [H, W] or [H, W, C]
+            if arr.ndim == 2:
+                arr = arr[..., None]  # [H, W, 1]
+            elif arr.ndim == 3 and arr.shape[0] not in (1, 2, 3, 4):  # likely [T, H, W]
+                arr = np.transpose(arr, (1, 2, 0))
+            x_list.append(arr)
 
         y_list.append(np.array(y))
 
@@ -390,17 +392,13 @@ def get_datasets_numpy(cfg):
     Returns:
         ((x_train, y_train), (x_test, y_test))
     """
-    if cfg.cache_dataset is None:
-        cfg.cache_dataset = "{}/cache".format(cfg.name)
-    dataset_path = cfg.dataset_path
+    dataset_path = "/mnt/d/Users/Osama/Documents/AIDA4Edge/data/"
     polarity = cfg.polarity
     n_pol = 2 if polarity == "both" else 1
-    cache_dir = f"{cfg.cache_dataset}/cache/DVSGesture_{cfg.mode}_{polarity}_{cfg.frames}_{cfg.channels}_{n_pol}/"
+    cache_dir = f"/mnt/d/Users/Osama/Documents/AIDA4Edge/tf/cache/DVSGesture_{cfg.mode}_{polarity}_{cfg.frames}_{cfg.channels}_{n_pol}/"
     # resolve with fallback
     dataset_path, cache_dir = _resolve_paths(dataset_path, cache_dir)
     _ensure_cache_dir(cache_dir)
-    print("dataset_path:", dataset_path)
-    print("cache_dir:", cache_dir)
 
     # Base framing to [T, 2, H, W] with H=W=64
     tfms: List = [
@@ -444,25 +442,23 @@ def get_ROI_numpy(cfg):
     Returns:
         ((x_train, y_train), (x_test, y_test))
     """
-    dataset_path = "rois_and_coordinates/datasets"
+    dataset_path = "datasets/DVS_ROI/"
     polarity = cfg.polarity
     n_pol = 2 if polarity == "both" else 1
-    cache_dir = f"/hpc/home/bzzlca/AIDA4Edge/tf/cache/DVS_ROI_{cfg.mode}_{polarity}_{cfg.frames}_{cfg.channels}_{n_pol}/"
-    # cache_dir = f"cache/DVS_ROI_{cfg.mode}_{polarity}_{cfg.frames}_{cfg.channels}_{n_pol}/"
+    cache_dir = f"/mnt/d/Users/Osama/Documents/AIDA4Edge/tf/cache/DVS_ROI_{cfg.mode}_{polarity}_{cfg.frames}_{cfg.channels}_{n_pol}/"
     _ensure_cache_dir(cache_dir)
-    print("cache_dir:", cache_dir)
 
     tfms: List = [
         transforms.Denoise(filter_time=10000),
         # Reuse DVSGesture sensor size only as a (H,W) hint for downsampling,
         # since we target a fixed (64, 64) output anyway.
-        # transforms.Downsample(sensor_size=tonic.datasets.DVSGesture.sensor_size, target_size=(64, 64)),
-        transforms.ToFrame(sensor_size=(32, 32, 2), n_time_bins=cfg.frames),
+        transforms.Downsample(sensor_size=tonic.datasets.DVSGesture.sensor_size, target_size=(64, 64)),
+        transforms.ToFrame(sensor_size=(64, 64, 2), n_time_bins=cfg.frames),
     ]
 
-    if cfg.mode == "fwdPass":
+    if cfg.MODE == "fwdPass":
         target_transform = ToOneHotTimeCoding(n_classes=11, n_frames=cfg.frames)
-    elif cfg.mode == "hybrid":
+    elif cfg.MODE == "hybrid":
         target_transform = ToOneHotTimeCoding(n_classes=11, n_frames=cfg.frames // cfg.channels)
     else:
         tfms.append(select_polarity_transform(polarity))

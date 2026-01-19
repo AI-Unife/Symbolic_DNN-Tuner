@@ -29,6 +29,7 @@ class ConfigSchema:
     polarity: str = "both"           # both | sum | sub | drop
     seed: int = 42
     opt: str = "RS_ruled"            # standard | filtered | basic | RS | RS_ruled
+    batch_size: int = 32             # aggiunto per completezza
 
 # ---------------- Validazione (stesse regole del tuo parser) ----------------
 _VALID_MODULES = {"hardware_module", "flops_module"}
@@ -65,6 +66,7 @@ def create_config_file(exp_dir: str | Path, overrides: Optional[Dict[str, Any]] 
         "early_stop": schema.early_stop if hasattr(schema, "early_stop") else 20,
         "dataset_path": schema.dataset_path if hasattr(schema, "dataset_path") else "./data",
         "cache_dataset": schema.cache_dataset if hasattr(schema, "chache_dataset") else "./cache",
+        "batch_size": schema.batch_size,
     }
     if overrides:
         base.update(overrides)
@@ -140,6 +142,7 @@ def _apply_defaults(d: Dict[str, Any]) -> Dict[str, Any]:
         "early_stop": d.get("early_stop", getattr(schema, "early_stop", 20)),
         "dataset_path": d.get("dataset_path", getattr(schema, "dataset_path", "./data")),
         "cache_dataset": d.get("cache_dataset", getattr(schema, "cache_dataset", "./cache")),
+        "batch_size": d.get("batch_size", schema.batch_size),
     }
     return merged
 

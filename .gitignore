@@ -22,3 +22,7 @@ prova.py
 gesture/*
 *.h5
 test_gesture/*
+training_history.json
+model_bench/exports/*
+model_bench/fine_tuned/*
+components/gesture_dataset.py

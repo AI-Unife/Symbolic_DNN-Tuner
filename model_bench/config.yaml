@@ -1,0 +1,12 @@
+eval: 1000
+epochs: 5
+mod_list: []
+dataset: gesture
+name: debug
+frames: 16
+mode: hybrid
+channels: 4
+polarity: both
+seed: 42
+opt: RS_ruled
+batch_size: 32

@@ -2,6 +2,7 @@ from modules.common_interface import common_interface
 from components.colors import colors
 import os
 
+from utils.hardware_utils import load_or_create_nvdla_configs
 import flops.flops_calculator as fc
 from pathlib import Path
 from tensorflow.keras import layers, models
@@ -12,7 +13,6 @@ import onnx
 import onnx2torch
 
 import nvdla.profiler as profiler
-from exp_config import load_cfg
 
 class hardware_module(common_interface):
 
@@ -23,20 +23,20 @@ class hardware_module(common_interface):
     #weight of the module for the final loss calculation
     weight = 0.33
 
+    # custom hardware module initialization
     def __init__(self):
         # cost value per square millimeter, 10K / mm2
-        self.cost_par = 10000
+        #self.cost_par = 10000
         # attribute indicating how much cost weighs against latency value
         self.weight_cost = 0.7
         # max latency value in second 
         self.max_latency = 0.033 #30FPS
         # max manifacturing cost value
         self.max_cost = 40000
-        self.cfg = load_cfg()
-        nvdla_list = [{'name': "nv_small", 'path': "nv_small64_fp32.yaml", 'area': 2.824},
-                      {'name': "nv_small256", 'path': "nv_small256_fp32.yaml", 'area': 3.091},
-                      {'name': "nv_large", 'path': "nv_large2048_fp32.yaml", 'area': 3.809}]
-                      
+
+        # setup and read the hw configurations from the json file       
+        nvdla_list = load_or_create_nvdla_configs()
+
         # init list of available configurations to an empty dict
         self.nvdla = {}
         self.specs_dir = "/hpc/home/bzzlca/Symbolic_DNN-Tuner/nvdla/specs/"
@@ -45,7 +45,7 @@ class hardware_module(common_interface):
         for config in nvdla_list:
             if os.path.exists(self.specs_dir + config['path']):
                 # calculate the current manifacturing cost
-                current_cost = round(self.cost_par*config['area'], 2)
+                current_cost = round(config['C/mm2'] * config['area'], 2)
                 # inclusion of only configurations that are less expensive than the cost limit
                 if current_cost <= self.max_cost:
                     self.nvdla[config['name']] = {'path': config['path'],
@@ -53,18 +53,16 @@ class hardware_module(common_interface):
                                                   'latency': 0,
                                                   'total_cost': 0}
             else:
-                print(colors.FAIL, f"|  --------- {config['name']} CONFIGURATION FILE DOESN'T EXIST  -------  |\n", colors.ENDC)
-        
-        if self.nvdla == {}:
-            raise ModuleNotFoundError("No NVDLA configuration found")
+                print(colors.FAIL, f"|  --------- {config['name']} CONFIGURATION FILE DOESN'T EXIST  -------  |\n", colors.ENDC)        
 
         # maximum cost
         self.last_flops = 0
-        self.nvdla  = dict(sorted(self.nvdla.items(), key=lambda item: item[1]['cost'], reverse=True))
+        if self.nvdla:
+            self.nvdla  = dict(sorted(self.nvdla.items(), key=lambda item: item[1]['cost'], reverse=True))
 
     def update_state(self, *args):
         # import current model reference
-        self.model = args[0]
+        self.model = args[2]
 
         self.flops, _ = fc.analyze_model(self.model)
         self.flops = self.flops.total_float_ops
@@ -108,10 +106,7 @@ class hardware_module(common_interface):
         pass
 
     def log_function(self):
-        f = open("{}/algorithm_logs/hardware_report.txt".format(self.cfg.name), "a")
-        f.write(str(self.latency) + "," + str(self.cost) + "," + str(self.total_cost) + "," + str(
-            self.current_config) + "\n")
-        f.close()
+        pass
 
     def LENET(self):
         """
