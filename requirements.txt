@@ -3,6 +3,6 @@ matplotlib>=3.9.0
 pytest>=8.3.4
 tonic>=1.5.0
 problog>=2.2.6
-tqdm==4.67.1
-PyYAML==6.0.3
-pandas==2.3.3
+tqdm>=4.67.1
+PyYAML>=6.0.3
+pandas>=2.3.3
