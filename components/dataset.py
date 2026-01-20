@@ -22,6 +22,35 @@ def filter_zeros_ones(x, y):
     y = y[keep]
     return x, y
 
+
+def get_balanced_subset(x, y, n_per_class=500):
+    """
+    Obtain a balanced subset of the dataset.
+
+    """
+    x_list = []
+    y_list = []
+
+    classes = np.unique(y)
+
+    for c in classes:
+        mask = (y == c)
+
+        x_c = x[mask]
+        y_c = y[mask]
+
+        x_c = x_c[:n_per_class]
+        y_c = y_c[:n_per_class]
+
+        x_list.append(x_c)
+        y_list.append(y_c)
+
+    new_x = np.concatenate(x_list, axis=0)
+    new_y = np.concatenate(y_list, axis=0)
+
+    perm = np.random.permutation(len(new_x))
+    return new_x[perm], new_y[perm]
+
 def get_datasets(name):
     num_classes = Dataset2Class[name]
 
@@ -39,6 +68,7 @@ def get_datasets(name):
 
         x_train, y_train = filter_zeros_ones(x_train, y_train)
         x_test, y_test = filter_zeros_ones(x_test, y_test)
+        x_train, y_train = get_balanced_subset(x_train, y_train, n_per_class=500)
         x_train = np.expand_dims(x_train, axis=-1)
         x_test = np.expand_dims(x_test, axis=-1)
         y_train = tf.keras.utils.to_categorical(y_train, num_classes)
