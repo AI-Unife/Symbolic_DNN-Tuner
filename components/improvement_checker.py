@@ -20,10 +20,10 @@ class ImprovementChecker:
             return None
 
         # set to true that there was an improvement in socre and accuracy
-        score_check = True
+        score_check = False
 
         # if there's a degradation compared to the last training
         if last_score < score[len(score) - 1]:
-            score_check = False
+            score_check = True
         
         return score_check
