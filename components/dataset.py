@@ -8,13 +8,13 @@ import tensorflow as tf
 from PIL import Image
 from io import BytesIO
 
-
 Dataset2Class = {
     "cifar10": 10,
     "cifar100": 100,
-    "light": 2,
+    "light": 10,
     "tinyimagenet": 1000,
 }
+
 
 def filter_zeros_ones(x, y):
     keep = (y == 0) | (y == 1)
@@ -35,8 +35,10 @@ def get_balanced_subset(x, y, n_per_class=500):
 
     for c in classes:
         mask = (y == c)
+        mask = mask.reshape(-1)
 
         x_c = x[mask]
+
         y_c = y[mask]
 
         x_c = x_c[:n_per_class]
@@ -51,6 +53,7 @@ def get_balanced_subset(x, y, n_per_class=500):
     perm = np.random.permutation(len(new_x))
     return new_x[perm], new_y[perm]
 
+
 def get_datasets(name):
     num_classes = Dataset2Class[name]
 
@@ -60,18 +63,17 @@ def get_datasets(name):
         y_train = tf.keras.utils.to_categorical(y_train, num_classes)
         y_test = tf.keras.utils.to_categorical(y_test, num_classes)
     elif name == "light":
-        (x_train, y_train), (x_test, y_test) = mnist.load_data()
+        (x_train, y_train), (x_test, y_test) = cifar10.load_data()
 
         # Normalize the pixel values to be between 0 and 1
         x_train = x_train / 255.0
         x_test = x_test / 255.0
 
-        x_train, y_train = filter_zeros_ones(x_train, y_train)
-        x_test, y_test = filter_zeros_ones(x_test, y_test)
+        # x_train, y_train = filter_zeros_ones(x_train, y_train)
+        # x_test, y_test = filter_zeros_ones(x_test, y_test)
         x_train, y_train = get_balanced_subset(x_train, y_train, n_per_class=500)
         x_test, y_test = get_balanced_subset(x_test, y_test, n_per_class=500)
-        x_train = np.expand_dims(x_train, axis=-1)
-        x_test = np.expand_dims(x_test, axis=-1)
+        print(np.shape(x_train), np.shape(y_train))
         y_train = tf.keras.utils.to_categorical(y_train, num_classes)
         y_test = tf.keras.utils.to_categorical(y_test, num_classes)
 
@@ -91,3 +93,4 @@ def get_datasets(name):
     print("shape of y_test:", y_test.shape)
     print("num_classes:", num_classes)
     return x_train, y_train, x_test, y_test, num_classes
+
