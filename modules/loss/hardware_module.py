@@ -6,11 +6,6 @@ import flops.flops_calculator as fc
 from pathlib import Path
 from tensorflow.keras import layers, models
 
-import torch
-import tf2onnx
-import onnx
-import onnx2torch
-
 import nvdla.profiler as profiler
 from exp_config import load_cfg
 
