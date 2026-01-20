@@ -8,6 +8,7 @@ from tqdm import tqdm
 from pathlib import Path
 from components.colors import colors
 import questionary
+import gc
 
 # Set TensorFlow environment variables to reduce log verbosity
 import os
@@ -33,12 +34,13 @@ def calculate_model_flops(model_path):
 
     model = load_model_simple(str(model_path))
     if model is None:
+        tf.keras.backend.clear_session()
         return None
     
     try:
         flops, res_dict = analyze_model(model)
 
-        return {
+        result = {
             "model": Path(model_path).name,
             "path": str(model_path),
             "total_flops": flops.total_float_ops,
@@ -46,9 +48,16 @@ def calculate_model_flops(model_path):
             "mflops": flops.total_float_ops / 1e6,
             "details": res_dict
         }
+        
+        return result
+        
     except Exception as e:
         print(colors.FAIL + f"Error calculating FLOPs for model {model_path}: {e}" + colors.ENDC)
         return None
+    finally:
+        # Cleanup: clear TensorFlow session and force garbage collection
+        tf.keras.backend.clear_session()
+        gc.collect()
 
 def calculate_multiple_models_flops(directory_path, recursive=True):
     """
@@ -93,6 +102,7 @@ def calculate_multiple_models_flops(directory_path, recursive=True):
             result = calculate_model_flops(str(model_path))
             if result:
                 results.append(result)
-            pbar.update(1) # update progress bar
+            pbar.update(1)
+                
     print(colors.OKGREEN + f"FLOPs calculation completed. total results: {len(results)}" + colors.ENDC)
     return results

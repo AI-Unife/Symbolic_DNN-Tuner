@@ -10,3 +10,8 @@ polarity: both
 seed: 42
 opt: RS_ruled
 batch_size: 32
+verbose: 0
+quantization: false
+early_stop: 20
+dataset_path: ./data
+cache_dataset: ./cache

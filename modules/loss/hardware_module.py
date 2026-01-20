@@ -2,7 +2,7 @@ from modules.common_interface import common_interface
 from components.colors import colors
 import os
 
-from utils.hardware_utils import load_or_create_nvdla_configs
+from model_bench.utils.hardware_utils import load_or_create_nvdla_configs
 import flops.flops_calculator as fc
 from pathlib import Path
 from tensorflow.keras import layers, models
@@ -40,11 +40,15 @@ class hardware_module(common_interface):
         # init list of available configurations to an empty dict
         self.nvdla = {}
 
-        self.specs_dir = "/hpc/home/bzzlca/Symbolic_DNN-Tuner/nvdla/specs/"
+        self.specs_dir = str(Path(__file__).parent.parent.parent / "nvdla" / "specs")
+
+
+
+        #"/mnt/d/Users/Osama/Documents/GitHub/Symbolic_DNN-Tuner/nvdla/specs/"
         
         # iterate over each configuration
         for config in nvdla_list:
-            if os.path.exists(self.specs_dir + config['path']):
+            if os.path.exists(os.path.join(self.specs_dir, config['path'])):
                 # calculate the current manifacturing cost
                 current_cost = round(config['C/mm2'] * config['area'], 2)
                 # inclusion of only configurations that are less expensive than the cost limit
@@ -73,7 +77,7 @@ class hardware_module(common_interface):
 
         # for each configuration calculate the latency and the total cost
         for config_key in self.nvdla:
-            config_path = self.specs_dir + self.nvdla[config_key]['path']
+            config_path = os.path.join(self.specs_dir, self.nvdla[config_key]['path'])
             self.nvdla[config_key]['latency'] = self.get_model_latency(self.model, config_path) / (10**9)
             latency_temp = self.nvdla[config_key]['latency'] / self.max_latency
             cost_temp = self.nvdla[config_key]['cost'] / self.max_cost
@@ -137,7 +141,7 @@ class hardware_module(common_interface):
         input_size = model.layers[0].output.shape
         input_size = [1, input_size[3], input_size[1], input_size[2]]
         X = torch.Tensor(torch.randn(input_size))
-        print(f"[INFO] Profiling model with configuration: {config_path}...")
+        #print(f"[INFO] Profiling model with configuration: {config_path}...")
         #### EMBER IMPLEMENTATION USING THE NEW PROFILER ####
         # onnx_model = tf2onnx.convert.from_keras(model, output_path="{}/model.onnx".format(self.cfg.name))
         # onnx_model = onnx.load("{}/model.onnx".format(self.cfg.name))

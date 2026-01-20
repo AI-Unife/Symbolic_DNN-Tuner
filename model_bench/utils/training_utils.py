@@ -9,6 +9,7 @@ from utils.model_utils import load_model_dataset
 from components.colors import colors
 from exp_config import load_cfg
 from components.custom_train import eval_model
+import numpy as np
 
 def fine_tune_model(model_path):
     """Fine-tune a pre-trained model"""
@@ -16,6 +17,12 @@ def fine_tune_model(model_path):
     cfg = load_cfg()
 
     model, X_train, Y_train, X_test, Y_test, n_classes = load_model_dataset(model_path)
+
+    # Convert data to float32 for TensorFlow compatibility
+    X_train = X_train.astype(np.float32) 
+    X_test = X_test.astype(np.float32) 
+    Y_train = Y_train.astype(np.float32)
+    Y_test = Y_test.astype(np.float32)
 
     # Ensure that label are one-hot encoded for evaluation for gesture dataset in depth mode
     if cfg.dataset == "gesture" and cfg.mode == "depth":
@@ -43,7 +50,7 @@ def fine_tune_model(model_path):
     callbacks = [es1, es2, reduce_lr]
     params = {'batch_size': cfg.batch_size}
     history = None
-    
+
     print(colors.OKBLUE + "|  --------- START FINE-TUNING --------  |" + colors.ENDC)
     before = do_eval("Before fine-tuning")
 
