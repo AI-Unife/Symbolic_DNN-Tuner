@@ -69,6 +69,7 @@ def get_datasets(name):
         x_train, y_train = filter_zeros_ones(x_train, y_train)
         x_test, y_test = filter_zeros_ones(x_test, y_test)
         x_train, y_train = get_balanced_subset(x_train, y_train, n_per_class=500)
+        x_test, y_test = get_balanced_subset(x_test, y_test, n_per_class=500)
         x_train = np.expand_dims(x_train, axis=-1)
         x_test = np.expand_dims(x_test, axis=-1)
         y_train = tf.keras.utils.to_categorical(y_train, num_classes)
