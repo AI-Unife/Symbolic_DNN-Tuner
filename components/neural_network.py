@@ -34,10 +34,8 @@ except Exception:
     # TF/Keras 2.x
     from tensorflow.keras.utils import serialize_keras_object, deserialize_keras_object
 
-from components.gesture_dataset import gesture_data
 from components.search_space import search_space
 from components.colors import colors
-from components.custom_train import train_model, eval_model
 from flops.flops_calculator import analyze_model
 # from components.monitor_model import MonitoredModel, GradientMonitor
 
@@ -190,23 +188,9 @@ class neural_network:
     ) -> None:
         # Store dataset (ensure dtype for Keras)
         # Handle ROI datasets: X may be an object array of dicts with "data" and "pos" keys
-        if X_train.dtype == object and isinstance(X_train[0], dict):
-            # ROI dataset: extract "data" and store separately
-            self.train_data = np.array([item["data"] for item in X_train]).astype("float32")
-            self.train_pos = np.array([item["pos"] for item in X_train])
-            self.is_roi = True
-        else:
-            # Regular dataset: use as-is
-            self.train_data = X_train.astype("float32")
-            self.train_pos = None
-            self.is_roi = False
-        
-        if X_test.dtype == object and isinstance(X_test[0], dict):
-            self.test_data = np.array([item["data"] for item in X_test]).astype("float32")
-            self.test_pos = np.array([item["pos"] for item in X_test])
-        else:
-            self.test_data = X_test.astype("float32")
-            self.test_pos = None
+        self.train_data = X_train.astype("float32")
+
+        self.test_data = X_test.astype("float32")
 
         self.train_labels = Y_train
         self.test_labels = Y_test
@@ -283,10 +267,7 @@ class neural_network:
         batch = self.cfg.dataset == 'tinyimagenet'
         self.model = None
         # 2) Build a new CNN
-        if (self.cfg.mode in ("fwdPass", "hybrid")) and "gesture" in self.cfg.dataset :
-            input_shape = self.train_data.shape[2:]  # (H, W, C) for gesture pipeline
-        else:
-            input_shape = self.train_data.shape[1:]  # generic (H, W, C)
+        input_shape = self.train_data.shape[1:]
 
         reg_layer = reg.l2() if self.reg else None
 
@@ -344,16 +325,6 @@ class neural_network:
             x = MaxPooling2D(pool_size=(2, 2))(x)
 
         x = GlobalAveragePooling2D()(x) if batch else Flatten()(x)
-        
-        # If ROI dataset, concatenate flattened pos with x
-        pos_input = None
-        if self.is_roi and self.train_pos is not None:
-            # Create a position input branch
-            pos_input = Input(shape=self.train_pos.shape[1:])
-            pos_flat = Flatten()(pos_input)
-            # Concatenate with main branch
-            x = tf.keras.layers.Concatenate()([x, pos_flat])
-        
         # x = Flatten()(x)
         # x = Dense(params["unit_d"], kernel_regularizer=reg_layer)(x)
         # x = Activation(params["activation"])(x)
@@ -369,10 +340,7 @@ class neural_network:
         outputs = Dense(self.n_classes, kernel_regularizer=reg_layer, activation="softmax")(x)
 
         # Build model with appropriate inputs
-        if pos_input is not None:
-            self.model = Model(inputs=[inputs, pos_input], outputs=outputs)
-        else:
-            self.model = Model(inputs=inputs, outputs=outputs)
+        self.model = Model(inputs=inputs, outputs=outputs)
         if self.cfg.verbose > 1:
             self.model.summary()
         if "flops_module" in self.cfg.mod_list:
@@ -449,72 +417,34 @@ class neural_network:
         # --- Callbacks ---
         es = EarlyStopping(monitor="val_accuracy", min_delta=0.005, patience=20, verbose=1,
                             mode="max", restore_best_weights=True)
-        # reduce_lr = ReduceLROnPlateau(monitor="val_loss", factor=0.2, patience=30,
-        #                               verbose=1, min_lr=1e-4)
-        # gm = GradientMonitor()
-        # --- Optional data augmentation ---
-        # We prepend a small augmentation pipeline. Wrapping with Sequential is fine here
-        # since the base model is purely sequential in topology (functional API).
 
-        # Wrap it with MonitoredModel
-        # self.model = MonitoredModel(inputs=self.model.inputs, outputs=self.model.outputs)
         # --- Compile ---
         self.model.compile(loss="categorical_crossentropy", optimizer=opt, metrics=["accuracy"])
 
         # --- Train ---
-        if (self.cfg.mode in ("fwdPass", "hybrid")) and "gesture" in self.cfg.dataset :
-            if "debug" in self.cfg.name:
-                # Simulated history for debug mode
-                history = {k: [] for k in ["loss", "accuracy", "val_loss", "val_accuracy"]}
-                for _ in range(self.cfg.epochs):
-                    history["val_loss"].append(random.uniform(0.1, 0.5))
-                    history["val_accuracy"].append(random.uniform(0.1, 1.0))
-                    history["loss"].append(random.uniform(0.1, 0.5))
-                    history["accuracy"].append(random.uniform(0.1, 1.0))
-            else:
-                # For ROI datasets, pass pos data as second input
-                if self.is_roi and self.train_pos is not None:
-                    train_input = [self.train_data, self.train_pos]
-                    test_input = [self.test_data, self.test_pos]
-                else:
-                    train_input = self.train_data
-                    test_input = self.test_data
-                
-                history = train_model(
-                    self.model, opt,
-                    train_input, self.train_labels,
-                    test_input, self.test_labels,
-                    self.epochs, params,
-                    [tensorboard, es]
-                )
+        if "debug" in self.cfg.name:
+            history = {k: [] for k in ["loss", "accuracy", "val_loss", "val_accuracy"]}
+            for _ in range(self.cfg.epochs):
+                history["val_loss"].append(random.uniform(0.1, 0.5))
+                history["val_accuracy"].append(random.uniform(0.1, 1.0))
+                history["loss"].append(random.uniform(0.1, 0.5))
+                history["accuracy"].append(random.uniform(0.1, 1.0))
         else:
-            if "debug" in self.cfg.name:
-                history = {k: [] for k in ["loss", "accuracy", "val_loss", "val_accuracy"]}
-                for _ in range(self.cfg.epochs):
-                    history["val_loss"].append(random.uniform(0.1, 0.5))
-                    history["val_accuracy"].append(random.uniform(0.1, 1.0))
-                    history["loss"].append(random.uniform(0.1, 0.5))
-                    history["accuracy"].append(random.uniform(0.1, 1.0))
-            else:
-                # For ROI datasets, pass pos data as second input
-                if self.is_roi and self.train_pos is not None:
-                    train_input = [self.train_data, self.train_pos]
-                    test_input = [self.test_data, self.test_pos]
-                else:
-                    train_input = self.train_data
-                    test_input = self.test_data
-                
-                # Validate labels before model.fit() - critical for ROI depth mode
-                self._validate_labels(self.train_labels, self.test_labels)
-                
-                history = self.model.fit(
-                    train_input, self.train_labels,
-                    epochs=self.epochs,
-                    batch_size=int(params["batch_size"]),
-                    verbose=2,
-                    validation_data=(test_input, self.test_labels),
-                    callbacks=[tensorboard, es],
-                ).history
+            # For ROI datasets, pass pos data as second input
+            train_input = self.train_data
+            test_input = self.test_data
+
+            # Validate labels before model.fit() - critical for ROI depth mode
+            self._validate_labels(self.train_labels, self.test_labels)
+
+            history = self.model.fit(
+                train_input, self.train_labels,
+                epochs=self.epochs,
+                batch_size=int(params["batch_size"]),
+                verbose=2,
+                validation_data=(test_input, self.test_labels),
+                callbacks=[tensorboard, es],
+            ).history
         # --- Evaluate ---
         score = self.eval_model()
         # --- Save weights and canonical dashboard model ---
@@ -526,16 +456,10 @@ class neural_network:
             self.model.save(dash_model_path)
 
             if not getattr(self.model, "built", False) or self.model.inputs is None:
-                # print("\n\n\n\n\n\n rebuilding model\n\n\n\n\n")
                 self.model = tf.keras.models.load_model(dash_model_path, custom_objects={"LayerWiseLR": LayerWiseLR})
         except:
             pass
 
-        # Cleanup temp artifacts
-        # try:
-        #     os.remove(weights_tmp)
-        # except OSError:
-        #     pass
         try:
             os.remove(model_json_path)
         except OSError:
@@ -544,26 +468,13 @@ class neural_network:
         return score, history, self.model
     
     def eval_model(self):
-        if (self.cfg.mode in ("fwdPass", "hybrid")) and "gesture" in self.cfg.dataset:
-            if "debug" in self.cfg.name:
-                score = [random.uniform(0.1, 0.5), random.uniform(0.1, 1.0)]
-            else:
-                # For ROI datasets, pass pos data as second input
-                if self.is_roi and self.test_pos is not None:
-                    test_input = [self.test_data, self.test_pos]
-                else:
-                    test_input = self.test_data
-                score = eval_model(self.model, test_input, self.test_labels)
+
+        if "debug" in self.cfg.name:
+            score = [random.uniform(0.1, 0.5), random.uniform(0.1, 1.0)]
         else:
-            if "debug" in self.cfg.name:
-                score = [random.uniform(0.1, 0.5), random.uniform(0.1, 1.0)]
-            else:
-                # For ROI datasets, pass pos data as second input
-                if self.is_roi and self.test_pos is not None:
-                    test_input = [self.test_data, self.test_pos]
-                else:
-                    test_input = self.test_data
-                score = self.model.evaluate(test_input, self.test_labels, verbose=2)
+            # For ROI datasets, pass pos data as second input
+            test_input = self.test_data
+            score = self.model.evaluate(test_input, self.test_labels, verbose=2)
         return score
 
 

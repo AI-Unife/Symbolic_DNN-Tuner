@@ -195,11 +195,15 @@ class module:
         """
         Printing module values
         """
-        print(colors.OKGREEN, "| MODULE VALUES ---------------------------------------------  |\n", colors.ENDC)
-        for index, module in enumerate(self.modules_obj):
-            if self.modules_ready[index]:
-                module.printing_values()
-        print(colors.OKGREEN, "\n | -----------------------------------------------------------  |\n", colors.ENDC)
+        if len(self.modules_obj) > 0:
+
+            print(colors.OKGREEN, "| MODULE VALUES ---------------------------------------------  |\n", colors.ENDC)
+            for index, module in enumerate(self.modules_obj):
+                if self.modules_ready[index]:
+                    module.printing_values()
+            print(colors.OKGREEN, "\n | -----------------------------------------------------------  |\n", colors.ENDC)
+        # else:
+        #     print(colors.OKGREEN, "| NO MODULES IMPORTED ---------------------------------------------  |\n", colors.ENDC)
 
     def plot(self):
         """

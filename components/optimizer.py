@@ -640,7 +640,7 @@ class Optimizer:
                     )
                     valid_mask = [self.space_constraint(x) for x in X]
                     X_valid = [x for x, keep in zip(X, valid_mask) if keep]
-                print("\n\n\n [INFO] Punti validi {}/{}".format(len(X_valid), len(X)))
+                print("[INFO] Valid  Points {}/{}".format(len(X_valid), len(X)))
                 X = self.space.transform(
                     X_valid
                 )

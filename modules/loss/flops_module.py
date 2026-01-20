@@ -14,15 +14,16 @@ class flops_module(common_interface):
     facts = ['flops', 'flops_th', 'nparams', 'nparams_th']
     problems = ['latency', 'model_size']
 
+    cfg = load_cfg()
     #weight of the module for the final loss calculation
-    weight = 0.33
+    weight = cfg.get('w_FLOPS', 0.33)
 
 
     def __init__(self):
         # self.epsilon = 0.33
         self.cfg = load_cfg()
-        self.flops_th = 150000000 # 150 MFLOPs
-        self.nparams_th = 2500000 # 2.5M params
+        self.flops_th = self.cfg.get('flops_th',  150000000) #150000000 # 150 MFLOPs
+        self.nparams_th = self.cfg.get('nparams_th',2500000) # 2.5M params
         self.tuner_opt_function = []
         self.flops_gap = []
         self.tuner_steps = 0

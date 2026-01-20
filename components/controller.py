@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 import os
-import random
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np  # only for type hints; safe if arrays are numpy-like
 from tensorflow.keras import backend as K
-import matplotlib.pyplot as plt
 import gc
 
 from quantizer.quantizer_POTQ import quantizer_module
@@ -26,7 +24,6 @@ from components.lfi_integration import LfiIntegration
 from components.storing_experience import StoringExperience
 from components.improvement_checker import ImprovementChecker
 from components.integral import integrals
-from shutil import copyfile
 
 from modules.module import module
 
@@ -117,13 +114,8 @@ class controller:
         self.iter: int = 0
 
         # Dynamic thresholds (updated at given epochs)
-        lacc_dict: dict = {
-            'cifar10': 0.10,
-            'cifar100': 0.40,
-            'tiniimagenet': 0.30,
-            'gesture': 0.10
-        }
-        self.lacc: float = lacc_dict.get(self.cfg.dataset, 0.20)
+
+        self.lacc: float = self.cfg.get('lacc', 0.10)
         self.hloss: float = np.log(n_classes)
         self.acc_w = 0.77  # weight of accuracy in combined score
         self.vanish_th = 1e-8
@@ -177,9 +169,6 @@ class controller:
             int: maximum number of *additional* conv+pool blocks that can be appended.
         """
         # Extract (H, W) robustly from train_data:
-        # - gesture fwdPass/hybrid: (N, T, H, W, C)  -> H=shape[2], W=shape[3]
-        # - generic images:         (N, H, W, C)     -> H=shape[1], W=shape[2]
-        # - single sample:          (H, W, C)        -> H=shape[0], W=shape[1]
         td = getattr(self, "train_data", None)
         if td is None or not hasattr(td, "shape"):
             # Fallback to controller.X_train if presente nel tuo progetto
@@ -189,13 +178,7 @@ class controller:
                 return 0
 
         dims = td.shape
-        if len(dims) >= 5:
-            # (N, T, H, W, C)
-            h, w = int(dims[2]), int(dims[3])
-        elif len(dims) == 4:
-            # (N, H, W, C)
-            h, w = int(dims[1]), int(dims[2])
-        elif len(dims) == 3:
+        if len(dims) >= 3:
             # (H, W, C)
             h, w = int(dims[0]), int(dims[1])
         else:

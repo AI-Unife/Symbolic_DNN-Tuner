@@ -44,7 +44,6 @@ def create_experiment_folders() -> None:
         sys.exit(1) # This is okay for a setup script, it's a critical error.
 
 
-### IMPROVEMENT: Using pathlib for source and destination. ###
 def copy_symbolic_files() -> None:
     """
     Copy the base symbolic files into this experiment's symbolic folder.
@@ -90,7 +89,6 @@ class ObjectiveWrapper:
             with open(log_path, "a") as f:
                 f.write(str(space_dict) + "\n")
         except OSError as e:
-            ### IMPROVEMENT: Don't silently 'pass'. Log the error. ###
             print(colors.WARNING, f"Could not write to log file {log_path}: {e}", colors.ENDC)
         
         # 3. Run the training and get the score
@@ -138,7 +136,6 @@ class ConstraintsWrapper:
                 if not (dim.low <= val <= dim.high):
                     return False
             else:
-                ### IMPROVEMENT: Do not sys.exit(1) from a helper class. ###
                 # Raise an error that the main program can catch if needed.
                 raise TypeError(f"Type space dimension {dim} - {type(dim)} not valid")
         return True
@@ -146,9 +143,7 @@ class ConstraintsWrapper:
 
 # ------------------------------ optimization ---------------------------------
 
-###
-### CRITICAL IMPROVEMENT & REFACTOR of run_optimization
-###
+
 def run_optimization(base_space: Space, first_ss: search_space, ctrl: controller, max_iter: int):
     """
     Outer optimization loop:
@@ -189,8 +184,8 @@ def run_optimization(base_space: Space, first_ss: search_space, ctrl: controller
         if cfg.verbose > 0:
             print("Actual constrained space for this iteration:")
             print_space(const_space)
-            print("Actual base space for this iteration:")
-            print_space(base_space)
+        #     print("Actual base space for this iteration:")
+        #     print_space(base_space)
 
         # --- 3. Run One Step of Optimization ---
         try:
@@ -290,34 +285,27 @@ def parse_args() -> argparse.Namespace:
                         help="Dataset name")
     parser.add_argument("--name", type=str, default="debug",
                         help="Experiment name")
-    parser.add_argument("--frames", type=int, default=16,
-                        help="Number of frames for gesture dataset")
-    parser.add_argument("--mode", type=str, default="fwdPass",
-                        choices=["fwdPass", "depth", "hybrid"],
-                        help="Experiment mode (fwdPass, depth, hybrid)")
-    parser.add_argument("--channels", type=int, default=2,
-                        help="Number of channels for the dataset")
-    parser.add_argument("--polarity", type=str, default="both",
-                        choices=["both", "sum", "sub", "drop"],
-                        help="Polarity for event-based datasets")
     parser.add_argument("--seed", type=int, default=42,
                         help="Random seed for reproducibility")
     parser.add_argument('--quantization', action='store_true',
                         help='quantize the network')
-
     parser.add_argument("--verbose", type=int, default=2, 
                         help="Verbosity level (0: silent, 1: print space, 2: print space and model summary)")
+    parser.add_argument('--w_FLOPS', type=float, default=0.33,
+                        help="Weight Flops loss")
+    parser.add_argument('--w_HW', type=float, default=0.33,
+                        help="Weight HW loss")
+    parser.add_argument('--lacc', type=float, default=0.10,
+                        help="if 1-acc>lacc --> Underfitting")
+    parser.add_argument('--flops_th', type=int, default=150000000,
+                         help="Max number of FLOPS")
+    parser.add_argument('--nparams_th', type=int, default=2500000,
+                        help="Max number of PARAMS")
     parser.add_argument(
         "--opt", type=str, default="filtered",
         choices=["standard", "filtered", "basic", "RS", "RS_ruled"],
         help="Optimizer type for the analysis"
     )
-    
-    parser.add_argument("--dataset_path", type=str, default="/hpc/home/bzzlca/AIDA4Edge/data/",
-                        help="Gesture Dataset Dir name")
-    
-    parser.add_argument("--cache_dataset", type=str, default="/hpc/home/bzzlca/AIDA4Edge/tf/",
-                        help="Gesture Dataset Cache Dir name")
 
     args = parser.parse_args()
 
@@ -378,8 +366,8 @@ if __name__ == "__main__":
     first_ss = search_space()
     first_space = first_ss.search_sp(max_block=ctrl.max_conv, max_dense=ctrl.max_fc)
     
-    print(colors.MAGENTA, "|  ----------- BASIC SEARCH SPACE ----------  |\n", colors.ENDC)
-    print_space(first_space) # Use helper to print
+    # print(colors.MAGENTA, "|  ----------- BASIC SEARCH SPACE ----------  |\n", colors.ENDC)
+    # print_space(first_space) # Use helper to print
 
     # --- 4. Run Optimization ---
     start_time = time.time()
