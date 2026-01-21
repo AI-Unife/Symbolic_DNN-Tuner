@@ -49,12 +49,11 @@ params = {'num_neurons': 32,
             'optimizer': 'Adamax', 
             'activation': 'relu', 
             'data_augmentation': True, 
-            'reg_l2': False, 
-            'skip_connection': False, 
+            'reg_l2': False,
             }
 
 nn = neural_network(X_train, Y_train, X_test, Y_test, n_classes, 
-                    params['reg_l2'], params['data_augmentation'], params['skip_connection'])
+                    params['reg_l2'], params['data_augmentation'])
 nn.build_network(params)
 
 

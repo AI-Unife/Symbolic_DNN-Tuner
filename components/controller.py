@@ -105,7 +105,7 @@ class controller:
         # Action flags (reset each training call)
         self.da: Optional[bool] = None
         self.reg: Optional[bool] = None
-        self.residual: Optional[bool] = None
+
 
         # Model/training bookkeeping
         self.nn: Optional[neural_network] = None
@@ -140,9 +140,6 @@ class controller:
         """Enable/disable data augmentation for the next training call."""
         self.da = da
 
-    def set_residual(self, residual: bool) -> None:
-        """Enable/disable residual connection for the next training call."""
-        self.residual = residual
 
     def set_reg_l2(self, reg: bool) -> None:
         """Enable/disable data augmentation for the next training call."""
@@ -250,12 +247,10 @@ class controller:
         # Build and train model
         self.set_data_augmentation(params.get("data_augmentation", False))
         self.set_reg_l2(params.get("reg_l2", False))
-        self.set_residual(params.get("skip_connection", False))
         print("Action flags for this training: ")
         print(f"  Data Augmentation: {self.da}")
         print(f"  L2 Regularization: {self.reg}")
-        print(f"  Residual Connections: {self.residual}")
-        self.nn = neural_network(self.X_train, self.Y_train, self.X_test, self.Y_test, self.n_classes, self.reg, self.da, self.residual)
+        self.nn = neural_network(self.X_train, self.Y_train, self.X_test, self.Y_test, self.n_classes, self.reg, self.da)
         self.nn.build_network(params, self.layer_x_block)
         if self.nn.flops is None or self.nn.flops <= self.flops_th:
             self.scoreNN, self.history, self.model = self.nn.training(params)

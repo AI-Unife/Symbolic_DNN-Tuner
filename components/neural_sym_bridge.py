@@ -291,15 +291,12 @@ class NeuralSymbolicBridge:
             if res[prob]:
                 # Choose argmax action for this problem (with random tie-breaking)
 
-                # --- Regularization, residual, and DA controls ---
+                # --- Regularization, and DA controls ---
                 if True in controller.space['reg_l2'][1].categories and "reg_l2" in res[prob]:
                     res[prob]["reg_l2"] = 0
                 elif True not in controller.space['reg_l2'][1].categories and "remove_reg_l2" in res[prob]:
                     res[prob]["remove_reg_l2"] = 0
 
-                    
-                elif True not in controller.space['skip_connection'][1].categories and "remove_residual" in res[prob]:
-                    res[prob]["remove_residual"] = 0
 
                 if True in controller.space['data_augmentation'][1].categories and "data_augmentation" in res[prob]:
                     res[prob]["data_augmentation"] = 0

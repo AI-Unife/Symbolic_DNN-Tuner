@@ -89,25 +89,6 @@ class tuning_rules_symbolic:
                 self.space.dimensions[i] = Categorical(new_categories, name='data_augmentation')
         logger.info("Disabled data augmentation")
 
-    def add_residual(self) -> None:
-        """
-        Enable residual connection in the controller.
-        """
-        for i, hp in enumerate(self.space):
-            if hp.name == "skip_connection":
-                new_categories = [True]
-                self.space.dimensions[i] = Categorical(new_categories, name='skip_connection')
-        logger.info("Enabled residual connection")
-        
-    def remove_residual(self) -> None:
-        """
-        Disable residual connection in the controller.
-        """
-        for i, hp in enumerate(self.space):
-            if hp.name == "skip_connection":
-                new_categories = [False]
-                self.space.dimensions[i] = Categorical(new_categories, name='skip_connection')
-        logger.info("Disabled residual connection")
     # -------------------------- Architecture edits ---------------------------
 
     def new_fc_layers(self) -> None:

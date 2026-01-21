@@ -184,7 +184,6 @@ class neural_network:
         n_classes: int,
         da: bool,
         reg: bool,
-        residual: bool,
     ) -> None:
         # Store dataset (ensure dtype for Keras)
         # Handle ROI datasets: X may be an object array of dicts with "data" and "pos" keys
@@ -220,7 +219,6 @@ class neural_network:
 
         self.da = da
         self.reg = reg
-        self.residual = residual
         self.model = None
     # --------------------------- Build the model -----------------------------
 
@@ -550,9 +548,9 @@ if __name__ == "__main__":
               'optimizer': 'Adamax', 
               'activation': 'swish'}
     
-    for da, regl2, residual in product([False, True], repeat=3):
-        print(f"\n=== Testing configuration: da={da}, reg={regl2}, residual={residual} ===")
-        nn = neural_network(X_train, Y_train, X_test, Y_test, n_classes, da=da, reg=regl2, residual=residual)
+    for da, regl2 in product([False, True], repeat=2):
+        print(f"\n=== Testing configuration: da={da}, reg={regl2}===")
+        nn = neural_network(X_train, Y_train, X_test, Y_test, n_classes, da=da, reg=regl2)
     
         nn.build_network(params, layer_x_block=2)
         score, history, model = nn.training(params)
