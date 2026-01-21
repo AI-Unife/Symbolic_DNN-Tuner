@@ -25,7 +25,7 @@ safe_den(A, A) :- A =\= 0.0.
 % Relative improvements on training loss
 rel_impr_loss_early(R) :-
     l(L), nth0(0, L, L0),
-    length(L, N), K is min(5, N-1),            % prime ~5 epoche (adatta se vuoi)
+    length(L, N), K is min(5, N-1),
     nth0(K, L, Lk),
     safe_den(L0, D), R is (L0 - Lk)/D.
 
@@ -34,14 +34,6 @@ rel_impr_loss_total(R) :-
     last(L, Lend),
     safe_den(L0, D), R is (L0 - Lend)/D.
 
-% Instabilità (oscillazioni) su loss/acc già definite altrove, ma le raccogliamo qui
-instability_signal :- up_down_loss ; up_down_acc.
-
-% Slow start: la loss scende pochissimo all inizio (tipico di reti che beneficiano di skip)
-slow_start :- rel_impr_loss_early(R), R < 0.05.                  % <5% nelle prime ~5 epoche
-
-% Plateau precoce: miglioramento totale modesto
-early_plateau :- rel_impr_loss_total(R), R < 0.20.               % <20% sull’intero run
 
 % ANALYSIS
 gap_tr_te_acc :- a(A), va(VA), last(A,LTA), last(VA,ScoreA),
@@ -78,9 +70,6 @@ min_list([H|T],M):-
 
 is_overfitting:- vl(L_val), loss_increase(L_val,0,5,100).
 
-vanish_gradient :- grad_global_norm(G), vanish_th(Th), G < Th.
-exploding_gradient :- grad_global_norm(G), exploding_th(Th), G > Th.
-
 
 % POSSIBLE PROBLEMS
 problem(overfitting) :- is_overfitting, \+ problem(underfitting).
@@ -89,9 +78,6 @@ problem(inc_loss) :- growing_loss_trend.
 problem(floating_loss) :- up_down_loss.
 problem(low_lr) :- to_low_lr.
 problem(high_lr) :- to_high_lr.
-problem(gradient) :- vanish_gradient; exploding_gradient.
-% PROBLEMI SPECIFICI CHE SUGGERISCONO SKIP
-problem(need_skip) :- vanish_gradient; exploding_gradient ; slow_start ; early_plateau ; instability_signal.
 
 
 % QUERY ----------------------------------------------------------------------------------------------------------------

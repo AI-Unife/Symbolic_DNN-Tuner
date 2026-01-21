@@ -14,4 +14,3 @@ t(0.60)::action(decr_lr,inc_loss).
 t(0.99)::action(decr_lr,high_lr).
 t(0.80)::action(inc_batch_size,floating_loss).
 t(0.30)::action(decr_lr,floating_loss).
-t(0.70)::action(add_residual, need_skip).

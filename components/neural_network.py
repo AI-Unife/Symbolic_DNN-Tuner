@@ -224,16 +224,6 @@ class neural_network:
         self.model = None
     # --------------------------- Build the model -----------------------------
 
-    def add_residual(self, shortcut, x, output_channels, activation, reg_layer):
-        # If input and output channel dimensions differ, align them via 1x1 conv
-        if shortcut.shape[-1] != output_channels:
-            shortcut = Conv2D(output_channels, (1, 1), padding="same", kernel_regularizer=reg_layer)(shortcut)
-        # Add skip connection
-        x = Add()([shortcut, x])
-        # Apply activation after addition (ResNet-style)
-    
-        x = Activation(activation)(x)
-        return x
 
     def _validate_labels(self, train_labels, test_labels):
         """
@@ -282,28 +272,17 @@ class neural_network:
         for _ in range(1, layer_x_block-1):
             x = Conv2D(params["unit_c1"] * params['num_neurons'], (3, 3), padding="same")(x)
             x = Activation(params["activation"])(x)
-            x = BatchNormalization()(x) if batch else x
-        if self.residual:
-            x = Conv2D(params["unit_c1"] * params['num_neurons'] , (3, 3), padding="same")(x)
-            x = self.add_residual(inputs, x, params['unit_c1'] * params['num_neurons'], params['activation'], reg_layer)
-        else:
-            x = Conv2D(params["unit_c1"] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
-            x = Activation(params["activation"])(x)
-            x = BatchNormalization()(x) if batch else x
+
+        x = Conv2D(params["unit_c1"] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
+        x = Activation(params["activation"])(x)
         x = MaxPooling2D(pool_size=(2, 2))(x)
 
-        shortcut = x
         for _ in range(layer_x_block-1):
             x = Conv2D(params["unit_c2"] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
             x = Activation(params["activation"])(x)
-            x = BatchNormalization()(x) if batch else x
-        if self.residual:
-            x = Conv2D(params["unit_c2"] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
-            x = self.add_residual(shortcut, x, params['unit_c2'] * params['num_neurons'], params['activation'], reg_layer)
-        else:
-            x = Conv2D(params["unit_c2"] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
-            x = Activation(params["activation"])(x)
-            x = BatchNormalization()(x) if batch else x
+
+        x = Conv2D(params["unit_c2"] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
+        x = Activation(params["activation"])(x)
         x = MaxPooling2D(pool_size=(2, 2))(x)
 
 
@@ -315,20 +294,12 @@ class neural_network:
                 x = Conv2D(params[layer_key] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
                 x = Activation(params["activation"])(x)
                 x = BatchNormalization()(x) if batch else x
-            if self.residual:
-                x = Conv2D(params[layer_key] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
-                x = self.add_residual(shortcut, x, params[layer_key] * params['num_neurons'], params['activation'], reg_layer)
-            else:
-                x = Conv2D(params[layer_key] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
-                x = Activation(params["activation"])(x)
-                x = BatchNormalization()(x) if batch else x
+
+            x = Conv2D(params[layer_key] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
+            x = Activation(params["activation"])(x)
             x = MaxPooling2D(pool_size=(2, 2))(x)
 
-        x = GlobalAveragePooling2D()(x) if batch else Flatten()(x)
-        # x = Flatten()(x)
-        # x = Dense(params["unit_d"], kernel_regularizer=reg_layer)(x)
-        # x = Activation(params["activation"])(x)
-        # x = Dropout(params["dr_f"])(x)
+        x = Flatten()(x)
 
         # Dynamically added FC layers
         added_fcs = [k for k in params if re.match(r"new_fc_\d+$", k) and params[k] > 0]

@@ -16,14 +16,6 @@ class search_space:
     """
 
     def __init__(self) -> None:
-        """
-        Initialize helper epsilons used for building bounds of newly inserted dimensions.
-        These are kept to preserve your original semantics.
-        """
-        self.epsilon_r1 = 10 ** -3
-        self.epsilon_r2 = 10 ** 2
-        self.epsilon_i = 2
-        self.epsilon_d = 4
 
         # Will be set by search_sp(); defined here to be explicit.
         self.search_space: Space
@@ -37,7 +29,7 @@ class search_space:
         """
 
         self.search_space = Space([
-            Categorical(name='num_neurons', categories=[8, 16, 32, 64]),
+            Categorical(name='num_neurons', categories=[8, 16]),
             Integer(1, 4,  name='unit_c1'),
             Integer(1, 8, name='unit_c2'),
             Real(0.03, 0.5,  name='dr_f'),
@@ -46,8 +38,7 @@ class search_space:
             Categorical(['Adam', 'Adamax', 'SGD', 'Adagrad', 'Adadelta'], name='optimizer'),
             Categorical(['relu', 'elu', 'selu', 'swish'], name='activation'),
             Categorical(name='data_augmentation', categories=[False]),
-            Categorical(name="reg_l2", categories=[False]),
-            Categorical(name="skip_connection", categories=[False])
+            Categorical(name="reg_l2", categories=[False])
 
         ])
         for b in range(1, max_block + 1):
