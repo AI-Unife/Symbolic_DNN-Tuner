@@ -27,7 +27,7 @@ _META_PATTERNS: Dict[str, re.Pattern] = {
     "epochs_out": re.compile(r"EPOCHS FOR TRAINING:\s+(\d+)", re.IGNORECASE),
     "total_time": re.compile(r"TOTAL TIME -------->\s*([0-9]*\.?[0-9]+)", re.IGNORECASE),
     # Changed to capture the group directly in findall
-    "score": re.compile(r"Score:\s+\.?(-*[0-9]*\.?[0-9]+)")
+    "score": re.compile(r"Score:\s+\.?(-?[0-9]*\.?[0-9]+)")
 }
 
 def _get_config_metadata(experiment_dir: Path) -> Tuple[Optional[int], Optional[str]]:
@@ -142,6 +142,7 @@ def parse_experiment_data(experiment_dir: Path, root_path: Path) -> List[Dict[st
     acc_file = logs_dir / 'acc_report.txt'
     quantize = logs_dir / 'quantization_report.txt'
     flop_params_file = experiment_dir / 'flops_report.txt'
+    hw_file = logs_dir / 'hardware_report.txt'
 
     # --- 1. METADATA (Epochs/Dataset) ---
     # Try parsing from folder name first
@@ -178,7 +179,10 @@ def parse_experiment_data(experiment_dir: Path, root_path: Path) -> List[Dict[st
         flops_params = []
         if flop_params_file.exists():
             with open(flop_params_file) as f_flops:
-                flops_params = f_flops.readlines()    
+                flops_params = f_flops.readlines()   
+        if hw_file.exists():
+            with open(hw_file) as f_hw:
+                hw_lines = f_hw.readlines() 
         quantize_lines = []
         if quantize.exists():
             with open(quantize, 'r') as f_quantize:
@@ -216,12 +220,23 @@ def parse_experiment_data(experiment_dir: Path, root_path: Path) -> List[Dict[st
                 parts = params_line.strip().split(' ')
                 if len(parts) > 1:
                     flops = float(parts[1])
-
+            
+            latency, cost, tot_cost = 0, 0, 0
+            if hw_file.exists() and i < len(hw_lines):
+                hw_line = hw_lines[i]
+                hw_parts = hw_line.strip().split(',')
+                if len(hw_parts) > 2:
+                    latency = float(hw_parts[0])  # Override with hardware-reported latency if available
+                    cost = float(hw_parts[1])     # Override with hardware-reported cost if available
+                    tot_cost = float(hw_parts[2])  # Total cost if available
             # Handle Losses (safe access)
             loss_val = losses[i] if i < len(losses) else None
             
             # Handle Scores (safe access)
-            score_val = -0.77*accuracy-0.33*(1-flops/150000000) if accuracy > 0.0 else 100000 # Default scoring formula
+            w_flops = 0.33
+            w_accuracy = 0.77 if flops > 0 or latency > 0 else 1.0
+            w_latency = 0.33
+            score_val = -w_accuracy*accuracy-w_flops*(1-flops/150000000)*-w_latency*tot_cost if accuracy > 0.0 else 100000 # Default scoring formula
 
             network_data = {
                 'epochs': epochs,
@@ -231,6 +246,9 @@ def parse_experiment_data(experiment_dir: Path, root_path: Path) -> List[Dict[st
                 'experiment_source': str(experiment_dir), 
                 'accuracy_quantization': acc_quant,
                 'flops': flops,
+                'latency': latency,
+                'cost': cost,
+                'total_cost': tot_cost,
                 'score': score_val,
                 'loss': loss_val
             }

@@ -206,7 +206,7 @@ def main():
             continue
         
         
-        logging.info("--- Analyzing experiment: %s ---", experiment_dir.relative_to(args.base_dir))
+        print("\n\n\n--- Analyzing experiment: %s ---", experiment_dir.relative_to(args.base_dir))
 
         # 3. Run "heavy" analysis (optional)
         # This includes plotting and re-training, which can be slow.

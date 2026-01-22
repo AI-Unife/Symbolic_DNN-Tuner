@@ -14,6 +14,26 @@ import logging
 from pathlib import Path
 from typing import Optional, Dict, Any
 
+def get_modules_from_experiment(exp_dir: str) -> Optional[Dict[str, Any]]:
+    """
+    Extracts module information from an experiment directory.
+    
+    Args:
+        exp_dir: The root directory of the experiment.
+    Returns:
+        A dictionary of module information, or None if not found.
+    """
+    modules = {}
+    if 'FLOPS' in exp_dir:
+        modules['FLOPS'] = True
+    if 'HW7' in exp_dir:
+        modules['HW7'] = True
+    if 'HW3' in exp_dir:
+        modules['HW3'] = True
+    if modules == {}:
+        return {'Accuracy': True}
+    return modules
+
 def extract_tuner(exp_name: str) -> Optional[str]:
     """
     Heuristically infers the tuner name from the experiment folder string.

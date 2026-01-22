@@ -24,6 +24,7 @@ import numpy as np
 # Import utilities and constants
 from analyse_components import utils 
 from flops.flops_calculator import flop_calculator
+from modules.loss.hardware_module import hardware_module as HardwareModule
 # Note: 'parsing' is imported but not used, could be removed.
 # from analyse_components import parsing 
 
@@ -168,7 +169,12 @@ def update_model_db(network_data_list: List[Dict]) -> Tuple[Dict, int, int]:
 
     # Find the best network *in this specific list* (from one experiment)
     # x[0] è l'indice, x[1] è il dizionario vero e proprio
-    idx, best_network = min(enumerate(network_data_list), key=lambda x: x[1]['score'])
+    try:
+        idx, best_network = min(enumerate(network_data_list), key=lambda x: x[1]['score'])
+    except Exception as e:
+        logging.error("Failed to determine best network from experiment %s data: %s", network_data_list[0]['experiment_source'], e)
+        print("Score values in network_data_list:", [net.get('score') for net in network_data_list])
+        exit()
 
         
    
@@ -180,17 +186,41 @@ def update_model_db(network_data_list: List[Dict]) -> Tuple[Dict, int, int]:
     parsed_name_data = utils.parse_experiment_name(exp_name)
     rep_log = utils.pick_representative_log(base_dir)
     ## Find in rep log the line TOTAL TIME --------> and extract time:
-    total_time = utils.extract_total_time(rep_log)
+    if rep_log is None:
+        logging.warning("No representative log found in %s, cannot extract total time.", base_dir)
+        total_time = None
+    else:
+        total_time = utils.extract_total_time(rep_log)
     flops = best_network.get('flops', 0)
+    model = None
+    HW_module = None
     if flops == 0:
         model = tf.keras.models.load_model(rep_log.parent / "Model" / "best-model.keras", compile=False)
         flops = flop_calculator().get_flops(model)
         best_network['flops'] = flops
+    if best_network.get('latency', 0) == 0:
+        if model is None:
+            model = tf.keras.models.load_model(rep_log.parent / "Model" / "best-model.keras", compile=False)
+        HW_module = HardwareModule(weight_cost=0.7)
+        HW_module.update_state(model)
+        HW_module.printing_values()
+        best_network['latency'] = HW_module.latency
+        best_network['cost'] = HW_module.cost
+        best_network['total_cost'] = HW_module.total_cost
+
+    modules = utils.get_modules_from_experiment(exp_name)
+    modules_str = "_".join(modules)
+    if HW_module:
+        modules_str += str(HW_module.weight_cost).split(".")[1]
+        
+
     summary_row = {
         'Base Dir': str(base_dir),
         'Experiment Name': exp_name,
         'Tuner': parsed_name_data.get('Tuner'),     # From folder name
         'Dataset': parsed_name_data.get('Dataset'), # From folder name
+        'Seed': parsed_name_data.get('Seed'),         # From folder name
+        'Modules': modules_str,
         'Best idx': idx,
         'Eval Count': len(network_data_list),     # How many models this experiment tested
         'Best Score': best_network['score'],
@@ -198,6 +228,8 @@ def update_model_db(network_data_list: List[Dict]) -> Tuple[Dict, int, int]:
         'Best FLOPs': best_network.get('flops', 0),
         'Best Quantized': best_network.get('accuracy_quantization', None),
         'Best Latency': best_network.get('latency', 0),
+        'Best Cost': best_network.get('cost', 0),
+        'Best Total Cost': best_network.get('total_cost', 0),
         'Total Time': total_time
     }
 
@@ -266,7 +298,7 @@ def write_total_file(csv_path: Path, total_summaries: List[Dict]) -> pd.DataFram
         return pd.DataFrame()
         
     # Define a consistent column order for the 'total' summary
-    static_cols = ['Base Dir', 'Experiment Name', 'Tuner', 'Dataset', 'Epochs', 'Best idx', 'Eval Count', 'Best Accuracy', 'Total Time']
+    static_cols = ['Base Dir', 'Experiment Name', 'Tuner', 'Dataset', 'Modules', 'Best idx', 'Eval Count', 'Best Accuracy', 'Total Time']
     total_headers = _get_ordered_headers(total_summaries, static_cols)
     
     # Pass the data and headers to the writer
@@ -289,7 +321,7 @@ def write_mean_file(csv_path: Path, df_total: pd.DataFrame):
     # Identify all numeric columns to aggregate
     numeric_cols = df_total.select_dtypes(include=[np.number]).columns.tolist()
     # Define which metrics we want to average
-    metrics = [c for c in numeric_cols if c in ( 'Best Score', 'Best Accuracy', 'Best idx', 'Eval Count', 'Epochs', 'Best Quantized','Best FLOPs', 'Best Latency', 'Total Time')]
+    metrics = [c for c in numeric_cols if c in ( 'Best Score', 'Best Accuracy', 'Best idx', 'Eval Count', 'Modules', 'Best Quantized','Best FLOPs', 'Best Latency', 'Total Time')]
     if not metrics:
         logging.warning("No numeric metric columns found for 'mean' summary.")
         return

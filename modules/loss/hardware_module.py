@@ -23,16 +23,19 @@ class hardware_module(common_interface):
     #weight of the module for the final loss calculation
     weight = 0.33
 
-    def __init__(self):
+    def __init__(self, weight_cost: float = 0.3):
         # cost value per square millimeter, 10K / mm2
         self.cost_par = 10000
         # attribute indicating how much cost weighs against latency value
-        self.weight_cost = 0.7
+        self.weight_cost = weight_cost
         # max latency value in second 
         self.max_latency = 0.033 #30FPS
         # max manifacturing cost value
         self.max_cost = 40000
-        self.cfg = load_cfg()
+        try:
+            self.cfg = load_cfg()
+        except:
+            self.cfg = {"name": "./"}
         nvdla_list = [{'name': "nv_small", 'path': "nv_small64_fp32.yaml", 'area': 2.824},
                       {'name': "nv_small256", 'path': "nv_small256_fp32.yaml", 'area': 3.091},
                       {'name': "nv_large", 'path': "nv_large2048_fp32.yaml", 'area': 3.809}]
@@ -102,7 +105,7 @@ class hardware_module(common_interface):
         print(f"TOTAL COST: {self.total_cost}")
 
     def optimiziation_function(self, *args):
-        return -self.total_cost
+        return self.total_cost
 
     def plotting_function(self):
         pass
