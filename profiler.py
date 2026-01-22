@@ -9,9 +9,9 @@ import tf2onnx
 import onnx
 import onnx2torch
 
-# Imposta le variabili d'ambiente
-os.environ['TORCH_DATASETPATH'] = '/hpc/home/bzzlca/datasets'
-os.environ['TORCH_TRAINPATH'] = '/hpc/home/bzzlca/models'
+### Crea le cartelle necessarie per i dataset e i modelli (anche vuote) ###
+os.environ['TORCH_DATASETPATH'] = './dataset'
+os.environ['TORCH_TRAINPATH'] = './models'
 
 # Aggiungi il tuo percorso 'build' al sys.path
 nvdla_build_path = '/hpc/home/bzzlca/NVDLA-EMBER/build'
@@ -133,7 +133,7 @@ class SimpleCNN(torch.nn.Module):
         # --- Blocco Convoluzionale 2 ---
         # Input: (Batch Size, 16, 16, 16)
         # Output: (Batch Size, 32, 16, 16)
-        # self.conv2 = torch.nn.Conv2d(in_channels=16, out_channels=32, kernel_size=3, stride=1, padding=1)
+        self.conv2 = torch.nn.Conv2d(in_channels=16, out_channels=32, kernel_size=3, stride=1, padding=1)
         
         # --- Blocco di Pooling 2 ---
         # (Riutilizziamo lo stesso self.pool)
@@ -143,10 +143,10 @@ class SimpleCNN(torch.nn.Module):
         # --- Strati Fully Connected (Linear) ---
         # Appiattiamo l'output del blocco pool2
         # La dimensione appiattita è 32 (canali) * 8 (altezza) * 8 (larghezza) = 2048
-        # self.fc1 = torch.nn.Linear(32 * 8 * 8, 128)
+        self.fc1 = torch.nn.Linear(32 * 8 * 8, 128)
         
         # Layer di output (10 classi)
-        self.fc2 = torch.nn.Linear(16 * 8 * 8, 10)
+        self.fc2 = torch.nn.Linear(128, 10)
         self.dequant = torch.quantization.DeQuantStub()
 
     def forward(self, x):
@@ -160,14 +160,14 @@ class SimpleCNN(torch.nn.Module):
         x = self.pool(torch.nn.functional.relu(self.conv1(x)))
         
         # Blocco 2: Conv -> ReLU -> Pool
-        # x = self.pool(torch.nn.functional.relu(self.conv2(x)))
+        x = self.pool(torch.nn.functional.relu(self.conv2(x)))
         
         # Appiattimento dei dati per gli strati lineari
         # 'x.size(0)' è la dimensione del batch (di solito -1 per automatico)
         x = torch.flatten(x, 1) # Appiattisce tutto tranne la dimensione del batch
         
         # Strato lineare 1 con ReLU
-        # x = torch.nn.functional.relu(self.fc1(x))
+        x = torch.nn.functional.relu(self.fc1(x))
         
         # Strato lineare 2 (output - logits)
         # Non applichiamo ReLU qui perché l'output va a una funzione di perdita
@@ -180,30 +180,15 @@ class SimpleCNN(torch.nn.Module):
     
 
 if __name__ == '__main__':
-    # Imposta le variabili d'ambiente
-    # os.environ['TORCH_DATASETPATH'] = '/hpc/home/bzzlca/datasets'
-    # os.environ['TORCH_TRAINPATH'] = '/hpc/home/bzzlca/models'
-    is_torch = True
-    # Aggiungi il tuo percorso 'build' al sys.path
-    nvdla_build_path = '/hpc/home/bzzlca/NVDLA-EMBER/build'
 
-    # Aggiungilo solo se non è già presente
+    # Aggiungi il tuo percorso 'build' al sys.path
+    nvdla_build_path = '/hpc/home/bzzlca/NVDLA-EMBER/build' # Change this path accordingly
+    out_dir = './test/'
     if nvdla_build_path not in sys.path:
         sys.path.append(nvdla_build_path)
-    
-    if is_torch:
-        model = SimpleCNN()
-        dummy_input = torch.randint(0, 256, (1, 3, 32, 32))
-    else:
-        tf_model = tf.keras.models.load_model('/hpc/home/bzzlca/Symbolic_DNN-Tuner/25_11_12_05_55990_CIFAR-10_filtered_7_1000_50/Model/best-model.keras')
-        input_size = tf_model.layers[0].output.shape
-        input_size = [1, input_size[3], input_size[1], input_size[2]]
-        dummy_input = torch.Tensor(torch.randn(input_size))
-        onnx_model = tf2onnx.convert.from_keras(tf_model, output_path="debug/model.onnx")
-        onnx_model = onnx.load("debug/model.onnx")
-        print("[INFO] ONNX model created.")
-        model = onnx2torch.convert(onnx_model)
-            
+
+    model = SimpleCNN() 
+    dummy_input = torch.randint(0, 256, (1, 3, 32, 32)) 
     config = '/hpc/home/bzzlca/NVDLA-EMBER/specs/nv_large2048_int8_modified.yaml'
-    time = profile_network(model, dummy_input, config, './debug/')
+    time = profile_network(model, dummy_input, config, out_dir)
     
