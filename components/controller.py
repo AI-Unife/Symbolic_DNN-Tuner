@@ -273,18 +273,17 @@ class controller:
                 quantized_model = quantizer.quantizer_function(self.model)
                 self.score = quantizer.evaluate_quantized_model(self.X_test, self.Y_test)[-1]
                 quantizer.log_function()
+            self.iter += 1
         else:
             print(f"Model FLOPs {self.nn.flops} exceed maximum {self.flops_th}. Skipping training.")
             self.scoreNN, self.history, self.model = None, None, self.nn.model
-    
-            self.log()
+
+            # self.log()
             # Update external modules and log their state
             self.modules.state(self.model, self.nn.flops, self.nn.nparams)
             self.modules.print()
-            self.modules.log()
-
+            # self.modules.log()
             self.score = 1e10 #float('inf')
-        self.iter += 1
         # Track the best score and persist the model artifact
         if self.score < self.best_score:
             self.best_score = self.score
@@ -361,7 +360,7 @@ class controller:
                 facts_list_module = list(self.modules.values().values())
                 self.only_modules = True
             # First diagnosis iteration: assemble rule base from modules and build logic program
-            if self.iter == 1:
+            if self.iter == 1 or self.iter == 0:
                 self.rules, self.actions, self.problems = self.modules.get_rules()
 
                 for module, no_err in zip(self.modules.modules_obj, self.modules.modules_ready):

@@ -52,6 +52,8 @@ def create_config_file(exp_dir: str | Path, overrides: Optional[Dict[str, Any]] 
         "opt": schema.opt,
         "verbose": schema.verbose if hasattr(schema, "verbose") else 0,
         "quantization": schema.quantization if hasattr(schema, "quantization") else False,
+        "flops_th": schema.flops_th if hasattr(schema, "flops_th") else 0,
+        "params_th": schema.params_th if hasattr(schema, "params_th") else 0,
         "early_stop": schema.early_stop if hasattr(schema, "early_stop") else 20,
     }
     if overrides:
@@ -115,6 +117,8 @@ def _apply_defaults(d: Dict[str, Any]) -> Dict[str, Any]:
         "opt": d.get("opt", schema.opt),
         "verbose": d.get("verbose", getattr(schema, "verbose", 0)),
         "quantization": d.get("quantization", getattr(schema, "quantization", False)),
+        "flops_th": d.get("flops_th", getattr(schema, "flops_th", 0)),
+        "params_th": d.get("params_th", getattr(schema, "params_th", 0)),
         "early_stop": d.get("early_stop", getattr(schema, "early_stop", 20)),
     }
     return merged
