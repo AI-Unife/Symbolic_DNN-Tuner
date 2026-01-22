@@ -181,8 +181,8 @@ class SimpleCNN(torch.nn.Module):
 
 if __name__ == '__main__':
     # Imposta le variabili d'ambiente
-    os.environ['TORCH_DATASETPATH'] = '/hpc/home/bzzlca/datasets'
-    os.environ['TORCH_TRAINPATH'] = '/hpc/home/bzzlca/models'
+    # os.environ['TORCH_DATASETPATH'] = '/hpc/home/bzzlca/datasets'
+    # os.environ['TORCH_TRAINPATH'] = '/hpc/home/bzzlca/models'
     is_torch = True
     # Aggiungi il tuo percorso 'build' al sys.path
     nvdla_build_path = '/hpc/home/bzzlca/NVDLA-EMBER/build'
