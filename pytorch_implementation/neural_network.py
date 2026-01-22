@@ -1,6 +1,7 @@
 import torch
+import json
 
-import time
+from time import time
 
 from torch import nn, optim
 from torchvision import transforms
@@ -10,13 +11,15 @@ from torchinfo import summary
 
 from components.colors import colors
 from components.model_interface import InsertPosition, LayerSpec, LayerTypes, Params, TunerModel
-from components.neural_network import neural_network
+from components.neural_network import NeuralNetwork
 from pytorch_implementation.model import TorchModel
+from components.dataset import TunerDataset
 
-class NeuralNetwork (neural_network):
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+class NeuralNetwork (NeuralNetwork):
+
+    def __init__(self, dataset: TunerDataset):
+        super().__init__(dataset)
 
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -38,12 +41,13 @@ class NeuralNetwork (neural_network):
     def from_checkpoint(self, checkpoint):
         params = checkpoint["params"]
         input_shape = tuple(checkpoint["input_shape"])
-        n_classes = checkpoint("n_classes")
+        n_classes = checkpoint["n_classes"]
 
         model = self.from_scratch(input_shape, n_classes, params)
 
-        if "state_dict" in checkpoint:
-            model.load_state_dict(torch.load(checkpoint["state_dict"]))
+        state_dict_path = checkpoint.get("state_dict")
+        if state_dict_path:
+            model.load_state_dict(torch.load(state_dict_path, map_location=self.device))
 
         return model
 
@@ -69,12 +73,9 @@ class NeuralNetwork (neural_network):
                 self.dnet.count_layer_type(model, LayerTypes.BatchNormalization2D) > 1):
             return model
 
-        # TODO: PyTorch does not directly support attaching regularizers to layers
-        # In Pytorch i need to manually compute L2 regularization
-        # Add regularization to each convolutional layer
-        # for layer in model.modules():
-        #     if self.rgl and isinstance(layer, nn.Conv2d):
-        #         layer.weight_regularizer = nn.L1Loss(params['reg'])
+        # Collect weights to regularize
+        if self.rgl:
+            self.l2_params = [l.module.weight for l in model.layers.values() if l.type == LayerTypes.Conv2D]
 
         # Collect activations to which BatchNormalization should be added
         activation_list = [layer.type for layer in model.layers.values() if layer.is_activation and layer.type != LayerTypes.Softmax]
@@ -132,13 +133,13 @@ class NeuralNetwork (neural_network):
                     self.conv = False
                     self.dense = False
                     self.rgl = False
-                    self.model = self.remove_conv_section(self.model)
+                    self.model = self.remove_conv_section(self.model, params)
                 # if the flag for the removal of a dense layer is true
                 if rem_fc:
                     self.conv = False
                     self.dense = False
                     self.rgl = False
-                    self.model = self.remove_fc_section(self.model)
+                    self.model = self.remove_fc_section(self.model, params)
 
         except Exception as e:
             print(colors.FAIL, e, colors.ENDC)
@@ -146,10 +147,24 @@ class NeuralNetwork (neural_network):
         input_shape = self.train_data.shape[1:]
         summary(self.model, [1, input_shape[2], input_shape[0], input_shape[1]])
 
-        # Save model architecture
-        model_name_id = str(int(time.time()))
+        # Save weights
+        model_name_id = time()
         model_path = f"Model/model-{model_name_id}.pth"
         torch.save(self.model.state_dict(), model_path)
+
+        self.last_model_id = model_name_id
+
+        # Save manifest
+        manifest = {
+            "format": "pytorch",
+            "state_dict": model_path,
+            "params": params,
+            "input_shape": list(input_shape),
+            "n_classes": self.n_classes,
+        }
+        manifest_path = f"Model/pytorch-{model_name_id}.json"
+        with open(manifest_path, "w") as f:
+            json.dump(manifest, f, default=self._json_default)
 
         # Define optimizer and loss function
         criterion = nn.CrossEntropyLoss()
@@ -176,8 +191,7 @@ class NeuralNetwork (neural_network):
                 'lr': lr
             }]
 
-        # optimizer = getattr(optim, params['optimizer'])(self.model.parameters(), lr=params['learning_rate'])
-        optimizer = getattr(optim, params['optimizer'])(parameters)
+        optimizer = self.optimizer_map[params['optimizer']](parameters)
 
         # Learning rate adjustment
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.2, patience=5, min_lr=1e-4)
@@ -204,7 +218,6 @@ class NeuralNetwork (neural_network):
 
         # Training loop
         history = {'loss': [], 'val_loss': [], 'accuracy': [], 'val_accuracy': []}
-        best_loss = float('inf')
 
         best_val_loss = float('inf')
         best_val_acc = -float('inf')
@@ -221,6 +234,10 @@ class NeuralNetwork (neural_network):
                 optimizer.zero_grad()
                 outputs = self.model(inputs)
                 loss = criterion(outputs, labels)
+                # Regularization
+                if self.rgl:
+                    l2 = sum(p.pow(2).sum() for p in self.l2_params)
+                    loss = loss + params['reg'] * l2
                 loss.backward()
                 optimizer.step()
                 running_loss += loss.item()
@@ -275,7 +292,6 @@ class NeuralNetwork (neural_network):
         # Load best model
         self.model.load_state_dict(torch.load(model_path))
 
-        # TODO: Maybe val_loss
-        return [best_loss, train_acc], history, self.model
+        return [best_val_loss, best_val_acc], history, self.model
     
     

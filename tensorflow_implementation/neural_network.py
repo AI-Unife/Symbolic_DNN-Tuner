@@ -1,14 +1,18 @@
 import json
 from time import time
 import tensorflow as tf
-from keras import layers, models, regularizers, callbacks, preprocessing
-from keras.optimizers import *
+from tensorflow import keras
+from tensorflow.keras import layers, models, regularizers, callbacks, preprocessing
+from tensorflow.keras import backend as K
+from tensorflow.keras.optimizers import *
 from components.colors import colors
+from components.neural_network import NeuralNetwork
+from components.dataset import TunerDataset
 from components.model_interface import LayerTypes, TunerModel, LayerSpec, InsertPosition, Params
-from components.neural_network import neural_network
 from tensorflow_implementation.model import TFModel
 
 # class wrapper used to add the functionality of the layer wise learning rate
+@keras.utils.register_keras_serializable()
 class LayerWiseLR(Optimizer):
     def __init__(self, optimizer, multiplier, learning_rate=0.001, name="LWLR", **kwargs):
         if hasattr(optimizer, 'update_step'):
@@ -49,14 +53,27 @@ class LayerWiseLR(Optimizer):
         super()._create_slots(var_list)
         self._optimizer._create_slots(var_list)
 
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "optimizer": keras.optimizers.serialize(self._optimizer),
+                "multiplier": self._multiplier,
+            }
+        )
+        return config
 
-class InserPosition:
-    pass
+    @classmethod
+    def from_config(cls, config):
+        optimizer_config = config.pop("optimizer")
+        multiplier = config.pop("multiplier")
+        optimizer = keras.optimizers.deserialize(optimizer_config)
+        return cls(optimizer=optimizer, multiplier=multiplier, **config)
 
 
-class NeuralNetwork (neural_network):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+class NeuralNetwork (NeuralNetwork):
+    def __init__(self, dataset: TunerDataset):
+        super().__init__(dataset)
 
         self.activation_map = {
             "relu": "relu",
@@ -66,9 +83,18 @@ class NeuralNetwork (neural_network):
         }
 
     def from_checkpoint(self, checkpoint):
-        # TODO: this need to use TFModel/TunerModel as well
         checkpoint_json = json.dumps(checkpoint)
-        return models.model_from_json(checkpoint_json)
+        keras_model = models.model_from_json(checkpoint_json)
+    
+        tf_model = TFModel.__new__(TFModel)   # bypass __init__
+        tf_model.model = keras_model
+        tf_model.input_shape = keras_model.input_shape[1:]
+        tf_model.n_classes = keras_model.output_shape[-1]
+        # tf_model.params = checkpoint.get("params")
+        # tf_model.activation = checkpoint.get("activation")
+        tf_model.create_specs()
+
+        return tf_model
 
     def from_scratch(self, input_shape, n_classes, params):
         return TFModel(input_shape, params, n_classes, params["activation"])
@@ -86,10 +112,10 @@ class NeuralNetwork (neural_network):
             return model
 
         # otherwise add regularization to each convolutional layer
-        # for layer in model.layers:
-        #     if self.rgl:
-        #         if 'Conv2D' in layer.__class__.__name__:
-        #             layer.kernel_regularizer = regularizers.l2(params['reg'])
+        if self.rgl:
+            for layer in model.model.layers:
+                if 'Conv2D' in layer.__class__.__name__:
+                    layer.kernel_regularizer = regularizers.l2(params['reg'])
 
         # Collect activations to which BatchNormalization should be added
         activation_list = [layer.type for layer in model.layers.values() if layer.is_activation and layer.type != LayerTypes.Softmax]
@@ -111,6 +137,10 @@ class NeuralNetwork (neural_network):
         """
         # build neural network
         self.model = self.build_network(params, new)
+        print("\n\nBuilt network with new:", new)
+        print("\n\n| ------------- LayerSpecs ------------- |")
+        for k in self.model.layers:
+            print(self.model.layers[k])
 
         # print(self.model.model.summary())
 
@@ -149,16 +179,16 @@ class NeuralNetwork (neural_network):
                     self.conv = False
                     self.dense = False
                     self.rgl = False
-                    self.model = self.remove_conv_section(self.model)
+                    self.model = self.remove_conv_section(self.model, params)
                 # if the flag for the removal of a dense layer is true
                 if rem_fc:
                     self.conv = False
                     self.dense = False
                     self.rgl = False
-                    self.model = self.remove_fc_section(self.model)
+                    self.model = self.remove_fc_section(self.model, params)
 
         except Exception as e:
-            print(colors.FAIL, e, colors.ENDC)
+            print(colors.FAIL, "Error modifying network:", e, colors.ENDC)
         
         # print the structure of the neural network and save it in a json file,
         # using the current time as identifier of the model
@@ -175,7 +205,7 @@ class NeuralNetwork (neural_network):
 
         # try to load a set of weights 
         try:
-            self.model.load_weights("Weights/weights.h5")
+            self.model.model.load_weights("Weights/weights.h5")
         except:
             print("Restart\n")
 
@@ -244,16 +274,13 @@ class NeuralNetwork (neural_network):
         # this avoids errors because of the changes in the network structure before training
         weights_name = "Weights/weights-{}.weights.h5".format(model_name_id)
         self.model.model.save_weights(weights_name)
-
         self.model.model.save("dashboard/model/model.keras")
         
         f = open("Model/model-{}.json".format(model_name_id))
-        mj = json.load(f)
-        model_json = json.dumps(mj)
-        model = models.model_from_json(model_json)
-        model.load_weights("Weights/weights-{}.weights.h5".format(model_name_id))
+        self.model = self.from_checkpoint(json.load(f))
+        self.model.model.load_weights(weights_name)
+
+        print("\n\n Reloaded model to avoid errors.\n\n")
 
         # score is [val_loss, accuracy]
-        # This should be model (the reloarded one, check comment at line 327-328) not self.model
-        # however returning model will break hardware_latency module because it expects a TunerModel
         return score, history, self.model 

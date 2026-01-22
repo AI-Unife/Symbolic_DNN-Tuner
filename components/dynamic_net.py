@@ -14,8 +14,8 @@ from components.model_interface import TunerModel, LayerTypes, LayerSpec, Insert
 class DynamicNet:
 
     def remove_section(self, tuner_model: TunerModel, target: LayerSpec, linked_layers: List[LayerTypes], delimiter: bool, first_found: bool):
-        model.remove_layers(target, linked_layers, delimiter, first_found)
-        return model
+        tuner_model.remove_layers(target, linked_layers, delimiter, first_found)
+        return tuner_model
 
     def insert_section(self, tuner_model: TunerModel, n_section: int, new_section: List[LayerSpec], position: InsertPosition,
                        targets: List[LayerTypes]):

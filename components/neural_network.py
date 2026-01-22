@@ -18,35 +18,38 @@ from tensorflow.keras.layers import (Activation, Conv2D, Dense, Flatten, MaxPool
 from tensorflow.keras.optimizers import *
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
-from components.dataset import cifar_data
 from components.LOLR import Lolr
 from components.model_interface import LayerTypes, Params, LayerSpec, InsertPosition, TunerModel
 from components.search_space import search_space
 from components.dynamic_net import DynamicNet
 
 from abc import ABC, abstractmethod
-     
-class neural_network (ABC):
+
+from components.dataset import TunerDataset
+
+
+class NeuralNetwork (ABC):
     """
     class used for the management of the neural network architecture,
     offering methods for training the dnn and adding and removing convolutional layers
     """
-    def __init__(self, X_train, Y_train, X_test, Y_test, n_classes):
+    def __init__(self, dataset: TunerDataset):
         """
         initialized the attributes of the class.
         first part is used for storing the examples of the dataset,
         the second part to keep track of the number of the various parts of the dnn,
         for example the number of convolutional or dense layers.
         """
-        self.train_data = X_train
-        self.train_labels = Y_train
-        self.test_data = X_test
-        self.test_labels = Y_test
+        
+        self.train_data = dataset.X_train
+        self.train_labels = dataset.Y_train
+        self.test_data = dataset.X_test
+        self.test_labels = dataset.Y_test
         self.train_data = self.train_data.astype('float32')
         self.test_data = self.test_data.astype('float32')
         self.train_data /= 255
         self.test_data /= 255
-        self.n_classes = n_classes
+        self.n_classes = dataset.n_classes
         self.epochs = 2
         self.last_dense = 0
         self.counter_fc = 0
@@ -57,6 +60,13 @@ class neural_network (ABC):
         self.dense = False
         self.conv = False
         self.dnet = DynamicNet()
+
+    def _json_default(obj):
+        if isinstance(obj, (np.integer, np.floating)):
+            return obj.item()
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return str(obj)
 
     @abstractmethod
     def from_checkpoint(checkpoint):
@@ -212,7 +222,7 @@ class neural_network (ABC):
         # Insert the new section at the specified position
         return self.dnet.insert_section(model, n_fc, new_section, InsertPosition.After, [LayerTypes.Flatten])
 
-    def remove_conv_section(self, model):
+    def remove_conv_section(self, model, params):
         """
         Method to remove a convolutional section from a PyTorch model.
         :param model: PyTorch model from which to remove the convolutional section
@@ -227,8 +237,7 @@ class neural_network (ABC):
         layer_spec = self.dnet.get_last_section(model, LayerTypes.Conv2D)
 
         # Define the layers associated with the convolutional section
-        linked_section = [LayerTypes.Conv2D, LayerTypes.ELU,
-                          LayerTypes.BatchNormalization2D]  # TODO: activation should be the one in params
+        linked_section = [LayerTypes.Conv2D, LayerTypes.Activation, LayerTypes.BatchNormalization2D]
 
         # If the number of convolutions is odd, include additional layers to remove
         if (current_conv_count % 2) == 1:
@@ -238,7 +247,7 @@ class neural_network (ABC):
         model.remove_layers(layer_spec, linked_section, True, True)
         return model
 
-    def remove_fc_section(self, model):
+    def remove_fc_section(self, model, params):
         """
         Method used for removing a dense (fully connected) section.
         :param model: model from which to remove the dense section
@@ -252,7 +261,7 @@ class neural_network (ABC):
             return model
 
         # Remove the first dense section in the model and all associated layers in linked_section
-        linked_section = [LayerTypes.ELU, LayerTypes.BatchNormalization1D, LayerTypes.Dropout] #TODO: activation should be the one in params
+        linked_section = [LayerTypes.Activation, LayerTypes.BatchNormalization1D, LayerTypes.Dropout]
 
         target = None
         for layer_spec in model.layers.values():
@@ -269,13 +278,10 @@ class neural_network (ABC):
         :param params new: network layer parameters
         :return: built model
         """
-
-        # TODO: This stays here until i fix loading from saved model
-        return self.from_scratch(self.train_data.shape[1:], self.n_classes, params)
         
         try:
             checkpoints_dir = "Model"
-            checkpoints = os.listdir(checkpoints_dir)
+            checkpoints = [f for f in os.listdir(checkpoints_dir) if f.endswith(".json")]
             checkpoints.sort()
 
             latest_checkpoint = os.path.join(checkpoints_dir, checkpoints[-1])
@@ -288,6 +294,7 @@ class neural_network (ABC):
             return self.from_checkpoint(checkpoint)
 
         except:
+            print("=============== NUOVO MODELLO =================")
             return self.from_scratch(self.train_data.shape[1:], self.n_classes, params)
 
     @abstractmethod
@@ -298,6 +305,7 @@ class neural_network (ABC):
         :return: training history, trained model and and performance evaluation score 
         """
         raise NotImplementedError
+    
 
 
 if __name__ == '__main__':

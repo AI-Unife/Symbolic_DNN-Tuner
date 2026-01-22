@@ -25,13 +25,9 @@ class controller:
     """
     def __init__(
         self,
-        neural_network_class,
-        module_backend_class,
-        X_train,
-        Y_train,
-        X_test,
-        Y_test,
-        n_classes,
+        neural_network,
+        module_backend,
+        dataset,
         clear_session_callback: Optional[Callable[[], None]] = None,
     ):
         """
@@ -39,12 +35,8 @@ class controller:
         as well as auxiliary classes such as the one for interfacing with the symbolic part
         and the one for storing the training progress on DB.
         """
-        # self.nn = neural_network(X_train, Y_train, X_test, Y_test, n_classes)
-        self.X_train = X_train
-        self.Y_train = Y_train
-        self.X_test = X_test
-        self.Y_test = Y_test
-        self.n_classes = n_classes
+        self.nn = neural_network
+        self.dataset = dataset
         self.ss = search_space()
         self.space = self.ss.search_sp()
         self.tr = tuning_rules_symbolic(self.space, self.ss, self)
@@ -70,9 +62,8 @@ class controller:
         self.hloss = 1.2
         self.levels = [7, 10, 13]
         self.imp_checker = ImprovementChecker(self.db, self.lfi)
-        self.modules = module(module_backend_class(), self.X_train.shape[1:], self.n_classes, ["hardware_module", "accuracy_module"])
+        self.modules = module(module_backend, self.dataset.X_train.shape[1:], self.dataset.n_classes, ["hardware_module", "accuracy_module"])
 
-        self.neural_network_class = neural_network_class
         self.clear_session_callback = clear_session_callback
 
     # The following methods are used to determine actions to be applied to the network structure,
@@ -158,7 +149,7 @@ class controller:
         print(colors.OKBLUE, "|  --> START TRAINING\n", colors.ENDC)
         if self.clear_session_callback:
             self.clear_session_callback()
-        self.nn = self.neural_network_class(self.X_train, self.Y_train, self.X_test, self.Y_test, self.n_classes)
+
         self.score, self.history, self.model = self.nn.training(params, self.new, self.new_fc, self.new_conv, self.rem_conv, self.rem_fc, self.da,
                                                                 self.space)
 

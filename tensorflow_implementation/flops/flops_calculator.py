@@ -47,9 +47,9 @@ class flop_calculator:
         """
 
         # concrete function to apply to each layer to obtain inputs value
-        concrete = tf.function(lambda inputs: model(inputs))
-        concrete_func = concrete.get_concrete_function(
-            [tf.TensorSpec([1, *inputs.shape[1:]]) for inputs in model.inputs])
+        concrete = tf.function(lambda *inputs: model.model(*inputs))
+        specs = [tf.TensorSpec([1, *inputs.shape[1:]]) for inputs in model.inputs]
+        concrete_func = concrete.get_concrete_function(*specs)
 
         flops = self.flop_calc(concrete_func)
         res_dict = nm.to_dict(flops)
@@ -74,9 +74,9 @@ def analyze_model(initial_model):
     model = initial_model
 
     # concrete function to apply to each layer to obtain inputs value
-    concrete = tf.function(lambda inputs: model.model(inputs))
-    concrete_func = concrete.get_concrete_function(
-        [tf.TensorSpec([1, *inputs.shape[1:]]) for inputs in initial_model.model.inputs])
+    concrete = tf.function(lambda *inputs: model.model(*inputs))
+    specs = [tf.TensorSpec([1, *inputs.shape[1:]]) for inputs in initial_model.model.inputs]
+    concrete_func = concrete.get_concrete_function(*specs)
 
     # total_flops, graph_nodes = get_flops(concrete_func)
 

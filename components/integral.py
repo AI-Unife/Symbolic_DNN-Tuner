@@ -33,7 +33,7 @@ def integrals(loss):
     :return: integral values of the original loss and slope respectively
     '''
     ip = build_pendence(loss)
-    return np.trapz(loss), np.trapz(ip)
+    return np.trapezoid(loss), np.trapezoid(ip)
 
 
 if __name__ == '__main__':

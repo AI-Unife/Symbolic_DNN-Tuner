@@ -6,23 +6,23 @@ import copy
 from components.model_interface import InsertPosition, LayerSpec, TunerModel, LayerTypes, Params
 
 
-
-
 class TorchModel(TunerModel, nn.Module):
 
-    _from_type_map = {
+    from_type_map = {
         LayerTypes.Conv2D: nn.Conv2d,
         LayerTypes.MaxPooling2D: nn.MaxPool2d,
         LayerTypes.Dropout: nn.Dropout,
         LayerTypes.Dense: nn.Linear,
         LayerTypes.ELU: nn.ELU,
         LayerTypes.ReLU: nn.ReLU,
+        LayerTypes.SiLU: nn.SiLU,
+        LayerTypes.SeLU: nn.SELU,
         LayerTypes.Sigmoid: nn.Sigmoid,
         LayerTypes.BatchNormalization1D: nn.BatchNorm1d,
         LayerTypes.BatchNormalization2D: nn.BatchNorm2d,
         LayerTypes.Flatten: nn.Flatten
     }
-    _to_type_map = {v: k for k, v in _from_type_map.items()}
+    to_type_map = {v: k for k, v in from_type_map.items()}
 
     def __init__(self, input_shape, params, n_classes, activation_function):
         super(TorchModel, self).__init__()
@@ -210,10 +210,10 @@ class TorchModel(TunerModel, nn.Module):
         return tensor, modules
 
     def from_type(self, layer_type: LayerTypes):
-        return self._from_type_map[layer_type]
+        return self.from_type_map[layer_type]
 
     def to_type(self, cls: type[nn.Module]):
-        return self._to_type_map[cls]
+        return self.to_type_map[cls]
 
     def to_spec(self, module_name, module, input, output):
         layer_type = self.to_type(module.__class__)
@@ -266,7 +266,7 @@ class TorchModel(TunerModel, nn.Module):
                     Params.DROPOUT_RATE: module.p
                 }
             )
-        elif layer_type in [LayerTypes.ELU, LayerTypes.ReLU, LayerTypes.Sigmoid]:
+        elif layer_type in [LayerTypes.ELU, LayerTypes.ReLU, LayerTypes.Sigmoid, LayerTypes.SiLU, LayerTypes.SeLU]:
             return LayerSpec(
                 name=module_name, 
                 type=layer_type,

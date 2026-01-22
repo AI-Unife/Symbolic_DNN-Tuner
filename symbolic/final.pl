@@ -1,16 +1,16 @@
-l([1.3549468620963718, 0.9438084502448921]).
-sl([1.3549468620963718, 1.1904914973557799]).
-a([0.51622, 0.6706]).
-sa([0.51622, 0.5779719999999999]).
-vl([1.0318560956129388, 0.8843974190861431]).
-va([0.635, 0.6958]).
-int_loss(0.9581267573495409).
-int_slope(0.9581267573495409).
+l([1.6074011325836182, 1.2879348993301392]).
+sl([1.6074011325836182, 1.4796146392822265]).
+a([0.4176799952983856, 0.5408599972724915]).
+sa([0.4176799952983856, 0.46695199608802795]).
+vl([1.3610767126083374, 1.2046899795532227]).
+va([0.5248000025749207, 0.5785999894142151]).
+int_loss(1.28288334608078).
+int_slope(1.28288334608078).
 lacc(0.15).
 hloss(1.2).
-hw_latency(0.013460416).
+hw_latency(0.006329212).
 max_latency(0.01).
-new_acc(0.6706).
+new_acc(0.5785999894142151).
 
 0.99::eve.
 action(reg_l2,overfitting):- eve, problem(overfitting).
@@ -20,14 +20,14 @@ action(inc_lr,low_lr):- eve, problem(low_lr).
 0.4::action(inc_dropout,overfitting):- problem(overfitting).
 0.6::action(data_augmentation,overfitting):- problem(overfitting).
 0.3::action(decr_lr,underfitting):- problem(underfitting).
-1.0::action(inc_neurons,underfitting):- problem(underfitting).
-0.60::action(new_fc_layer):- \+problem(out_range), problem(underfitting).
-0.45::action(new_conv_layer):- \+problem(out_range), problem(underfitting).
+0.0::action(inc_neurons,underfitting):- problem(underfitting).
+0.45::action(new_fc_layer):- problem(underfitting), \+problem(out_range).
+0.45::action(new_conv_layer):- problem(underfitting), \+problem(out_range).
 0.85::action(inc_batch_size,floating_loss):- problem(floating_loss).
 0.15::action(decr_lr,floating_loss):- problem(floating_loss).
-0.5::action(dec_layers, out_range):- problem(out_range).
-0.5::action(dec_fc, out_range):- problem(out_range).
-0.5::action(dec_neurons, out_range):- problem(out_range).
+0.0::action(dec_layers,out_range):- problem(out_range).
+0.5::action(dec_fc,out_range):- problem(out_range).
+0.5::action(dec_neurons,out_range):- problem(out_range).
 
 
 % DIAGNOSIS SECTION ----------------------------------------------------------------------------------------------------

@@ -7,13 +7,13 @@ import tensorflow as tf
 from keras import layers, Layer, models, Model, regularizers, callbacks, preprocessing
 from keras.optimizers import *
 from components.colors import colors
-from components.neural_network import neural_network
+from components.neural_network import NeuralNetwork
 from components.model_interface import LayerSpec, TunerModel, LayerTypes, InsertPosition, Params
 
 
 class TFModel(TunerModel):
 
-    _from_type_map = {
+    from_type_map = {
         LayerTypes.InputLayer: layers.InputLayer,
         LayerTypes.Conv2D: layers.Conv2D,
         LayerTypes.MaxPooling2D: layers.MaxPooling2D,
@@ -25,10 +25,12 @@ class TFModel(TunerModel):
         LayerTypes.ReLU: "relu",
         LayerTypes.SeLU: "selu",
         LayerTypes.SiLU: "swish",
-        LayerTypes.Softmax: "softmax"
+        LayerTypes.Softmax: "softmax",
+        LayerTypes.Activation: layers.Activation
     }
-    _to_type_map = {v: k for k, v in _from_type_map.items()}
-    _to_type_map[layers.Activation] = "activation"
+    to_type_map = {v: k for k, v in from_type_map.items()}
+    to_type_map[layers.Activation] = "activation"
+    to_type_map["silu"] = LayerTypes.SiLU
 
     def __init__(self, input_shape, params, n_classes, activation_function):
         super(TFModel, self).__init__()
@@ -176,15 +178,13 @@ class TFModel(TunerModel):
         self.create_specs()
 
     def from_type(self, layer_type: LayerTypes):
-        return self._from_type_map[layer_type]
+        return self.from_type_map[layer_type]
 
     def to_type(self, layer: Any):
-        if isinstance(layer, layers.Activation):
-            return self._to_type_map[layer.get_config()['activation']]
-        elif isinstance(layer, layers.Layer):
-            return self._to_type_map[layer.__class__]
+        if isinstance(layer, layers.Layer):
+            return self.to_type_map[layer.__class__]
 
-        return self._to_type_map[layer]
+        return self.to_type_map[layer]
 
     def to_spec(self, layer: Layer):
         layer_type = self.to_type(layer.__class__)
@@ -245,7 +245,7 @@ class TFModel(TunerModel):
             activation_function = layer.get_config()["activation"]
             return LayerSpec(
                 name=layer.name,
-                type=self.to_type(activation_function),
+                type=LayerTypes.Activation,
                 module=layer,
                 is_activation=True,
                 params={
@@ -298,10 +298,10 @@ class TFModel(TunerModel):
             return layers.Flatten(
                 name=layer_spec.name
             )
-        elif layer_spec.type in [LayerTypes.ELU, LayerTypes.Softmax]:
+        elif layer_spec.type == LayerTypes.Activation: # [LayerTypes.ELU, LayerTypes.Softmax, LayerTypes.ReLU, LayerTypes.Sigmoid, LayerTypes.SiLU, LayerTypes.SeLU]:
             return layers.Activation(
                 name=layer_spec.name,
-                activation=self.from_type(layer_spec.type),
+                activation=layer_spec.get("activation_function"),
             )
         elif layer_spec.type == LayerTypes.InputLayer:
             return layers.InputLayer(
@@ -314,4 +314,6 @@ class TFModel(TunerModel):
                 name=layer_spec.name,
             )
         else:
+            print("===================== FALLBACK ====================")
+            print("TYPE:", layer_spec.type)
             return self.from_type(layer_spec.type)()

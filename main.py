@@ -1,14 +1,3 @@
-from tuner import Tuner, TunerConfig
-
-__all__ = ["Tuner", "TunerConfig"]
-
-
-def create_tuner(config: TunerConfig) -> Tuner:
-    """
-    Convenience factory that mirrors the previous entrypoint semantics.
-    """
-    return Tuner(config)
-
 
 if __name__ == "__main__":
     raise SystemExit(
