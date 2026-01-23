@@ -168,10 +168,10 @@ class controller:
         # Extract (H, W) robustly from train_data:
         td = getattr(self, "train_data", None)
         if td is None or not hasattr(td, "shape"):
-            # Fallback to controller.X_train if presente nel tuo progetto
+            # Fallback to controller.X_train if present in your project
             td = getattr(self, "X_train", None)
             if td is None or not hasattr(td, "shape"):
-                # ultimo fallback
+                # last fallback
                 return 0
 
         dims = td.shape
@@ -239,72 +239,107 @@ class controller:
             Objective score to minimize (negative accuracy by default or module-provided).
         """
         self.params = params
-        print(colors.OKBLUE, "|  --> START TRAINING\n", colors.ENDC)
+        PENALTY_SCORE = 1e10  # Score assigned if constraints are not met
 
-        # Reset low-level session state to avoid graph buildup across iterations
-        K.clear_session()
+        logger.info(f"{colors.OKBLUE}|  --> START TRAINING ITERATION {self.iter}{colors.ENDC}")
 
-        # Build and train model
+        # 1. Reset Session
+        try:
+            K.clear_session()
+        except Exception as e:
+            logger.warning(f"Session clear failed: {e}")
+
+        # 2. Setup Flags & Build Network
         self.set_data_augmentation(params.get("data_augmentation", False))
         self.set_reg_l2(params.get("reg_l2", False))
-        print("Action flags for this training: ")
-        print(f"  Data Augmentation: {self.da}")
-        print(f"  L2 Regularization: {self.reg}")
-        self.nn = neural_network(self.X_train, self.Y_train, self.X_test, self.Y_test, self.n_classes, self.reg, self.da)
+
+        logger.debug(f"Flags -> DA: {self.da}, L2: {self.reg}")
+
+        self.nn = neural_network(
+            self.X_train, self.Y_train, self.X_test, self.Y_test,
+            self.n_classes, self.reg, self.da
+        )
+        # Costruzione del grafo (senza addestramento)
         self.nn.build_network(params, self.layer_x_block)
-        if self.nn.flops is None or self.nn.flops <= self.flops_th:
+
+        # 3. Check Constraints (HARDWARE AWARENESS)
+        # Check FLOPs and Latency BEFORE spending time in training
+        flops_ok = (self.nn.flops is None) or (self.nn.flops <= self.flops_th)
+
+        if not flops_ok:
+            logger.warning(f"Constraint Violated: FLOPs {self.nn.flops} > {self.flops_th}")
+
+        # 4. Training Decision
+        if flops_ok:
+            # --- START TRAINING ---
             self.scoreNN, self.history, self.model = self.nn.training(params)
-            self.log()
-            # Update external modules and log their state
+
+            # Update Modules State (pass the trained model)
             self.modules.state(self.model, self.nn.flops, self.nn.nparams)
-            self.modules.print()
-            self.modules.log()
-            
-            # Decide the optimization target:
-            # - If there are no/invalid modules, optimize accuracy (minimize -acc).
-            # - Otherwise use module-provided objective.
-            if (len(self.modules.modules_obj) == 0) or (not self.modules.all_zeros_weights()) or (not self.modules.ready()):
-                self.score = -float(self.scoreNN[1])  # usually validation accuracy
-            else:
-                _, _, opt_value = self.modules.optimiziation()
-                self.score = float(opt_value)-self.scoreNN[1]*self.acc_w  # combine module opt with accuracy
+
+            # --- SCORING LOGIC ---
             if self.cfg.quantization:
                 quantizer = quantizer_module(opt=params["optimizer"])
-                quantized_model = quantizer.quantizer_function(self.model)
-                self.score = quantizer.evaluate_quantized_model(self.X_test, self.Y_test)[-1]
+                _ = quantizer.quantizer_function(self.model)
+                q_loss, q_acc = quantizer.evaluate_quantized_model(self.X_test, self.Y_test)
+                self.score = -float(q_acc)
                 quantizer.log_function()
-            self.iter += 1
+
+            elif (len(self.modules.modules_obj) > 0) and self.modules.ready() and not self.modules.all_zeros_weights():
+                _, _, opt_value = self.modules.optimiziation()
+                val_acc = self.scoreNN[1]
+                self.score = float(opt_value) - (val_acc * self.acc_w)
+            else:
+                self.score = -float(self.scoreNN[1])
+
         else:
-            print(f"Model FLOPs {self.nn.flops} exceed maximum {self.flops_th}. Skipping training.")
+            # --- CONSTRAINT VIOLATION ---
             self.scoreNN, self.history, self.model = None, None, self.nn.model
 
-            # self.log()
-            # Update external modules and log their state
+            # Update modules with theoretical data (e.g., FLOPs calculated from build)
             self.modules.state(self.model, self.nn.flops, self.nn.nparams)
-            self.modules.print()
-            # self.modules.log()
-            self.score = 1e10 #float('inf')
-            self.score = 1e10 #float('inf')
-        # Track the best score and persist the model artifact
+            self.score = PENALTY_SCORE
+
+        # 5. Logging
+        self.log()
+        self.modules.print()
+        self.modules.log()
+
+        # 6. Best Model Tracking
+        self.iter += 1
         if self.score < self.best_score:
+            logger.info(f"New Best Score: {self.score:.4f} (Previous: {self.best_score:.4f})")
             self.best_score = self.score
             self.best_iter = self.iter
-            try:
-                os.makedirs(os.path.join(self.cfg.name, "Model"), exist_ok=True)
-                self.model.save(f"{self.cfg.name}/Model/best-model.keras")
-            except Exception as e:
-                logger.warning("Failed to save best model: %s", e)
+            self._save_best_model()  # Helper function call
 
-        # if we have no improv in 10 iter end tuner evaluations
+        # 7. Early Stopping Check
         if self.iter > self.best_iter + self.cfg.early_stop:
+            logger.info("Early Stopping triggered.")
             self.convergence = True
+
+        # 8. Cleanup
+        self._cleanup_resources()
+
+        return self.score
+
+    def _save_best_model(self):
+        """Helper to handle safe model saving."""
+        if self.model is None: return
         try:
-            del self.nn.model
+            save_path = os.path.join(self.cfg.name, "Model")
+            os.makedirs(save_path, exist_ok=True)
+            self.model.save(os.path.join(save_path, "best-model.keras"))
+        except Exception as e:
+            logger.error(f"Failed to save best model: {e}")
+
+    def _cleanup_resources(self):
+        """Helper to force garbage collection."""
+        try:
             K.clear_session()
             gc.collect()
         except Exception as e:
-            logger.warning("Failed to clear session: %s", e)
-        return self.score
+            logger.warning(f"Cleanup warning: {e}")
     # ------------------------------ Diagnosis --------------------------------
 
     def diagnosis(self, const_space) -> Tuple[Any]:
@@ -431,10 +466,10 @@ class controller:
             f.write("None \n")
         f.close()
 
-    # Probabilmente avrai bisogno di importare 'Space' per il type hint
+    # Probably you will need to import 'Space' for the type hint
     # from skopt.space import Space 
 
-    def continue_learning(self, const_space) -> Space: # 1. Aggiornato il type hint
+    def continue_learning(self, const_space) -> Space: # 1. Updated the type hint
         """
         Set the controller to continue learning from a previous run.
         """
@@ -449,53 +484,53 @@ class controller:
 
         # Create/refresh the symbolic problem file
         self.nsb.build_sym_prob(self.problems)
-        # Definisci i percorsi dei file (ho corretto il typo "symblic")
+        # Define the file paths (corrected the typo "symblic")
         sym_log_path = f"{self.cfg.name}/algorithm_logs/tuning_symbolic_logs.txt"
         diag_log_path = f"{self.cfg.name}/algorithm_logs/diagnosis_symbolic_logs.txt"
         param_log_path = f"{self.cfg.name}/algorithm_logs/hyper-neural.txt"
 
-        # 2. Inizializza new_space *prima* del loop con un valore predefinito
-        #    per evitare un UnboundLocalError.
+        # 2. Initialize new_space *before* the loop with a default value
+        #    to avoid an UnboundLocalError.
         new_space = self.space  
 
         try:
-            # 3. Usa 'with' per aprire tutti i file in modo sicuro.
-            #    Questo blocco chiuderà automaticamente tutti i file all'uscita.
+            # 3. Use 'with' to open all files safely.
+            #    This block will automatically close all files on exit.
             with open(sym_log_path, "r") as sym_tuning_logs, \
                 open(diag_log_path, "r") as diagnosis_logs, \
                 open(param_log_path, "r") as params_log:
 
-                # 4. Usa zip() per iterare su tutti e tre i file contemporaneamente.
-                #    zip() si ferma automaticamente quando il file più corto finisce.
+                # 4. Use zip() to iterate over all three files simultaneously.
+                #    zip() automatically stops when the shortest file ends.
                 for sym_line, diag_line, param_line in zip(sym_tuning_logs, diagnosis_logs, params_log):
                     
                     try:
-                        # 5. Usa ast.literal_eval per *tutte* le righe
-                        #    Aggiungi .strip() per rimuovere spazi bianchi e newline
+                        # 5. Use ast.literal_eval for *all* lines
+                        #    Add .strip() to remove whitespace and newlines
                         sym_tuning = ast.literal_eval(sym_line.strip())
                         diagnosis = ast.literal_eval(diag_line.strip())
                         
-                        # Gestisce il caso in cui la riga dei parametri sia vuota
+                        # Handle the case where the parameter line is empty
                         params = ast.literal_eval(param_line.strip() or "{}")
 
                     except (ValueError, SyntaxError) as e:
-                        # Salta le righe di log mal formattate
+                        # Skip malformed log lines
                         print(f"Attenzione: riga di log saltata a causa di un errore di parsing: {e}")
                         continue
 
-                    # Ora esegui la riparazione. self.model viene aggiornato
-                    # e new_space ottiene il nuovo valore.
+                    # Now perform the repair. self.model is updated
+                    # and new_space gets the new value.
                     new_space, self.model = self.tr.repair(
                         sym_tuning, diagnosis, params, const_space
                     )
             
-            # 6. Restituisci il valore *finale* di new_space dopo l'ultimo loop
+            # 6. Return the *final* value of new_space after the last loop
             return new_space
 
         except FileNotFoundError as e:
-            print(f"Errore: File di log non trovato. Impossibile continuare l'apprendimento. {e}")
-            # Restituisce lo spazio originale se i log non esistono
+            print(f"Error: Log file not found. Unable to continue learning. {e}")
+            # Return the original space if logs do not exist
             return self.space
         except Exception as e:
-            print(f"Errore imprevisto durante la lettura dei log: {e}")
+            print(f"Unexpected error while reading logs: {e}")
             return self.space
