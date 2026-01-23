@@ -29,9 +29,9 @@ class hardware_module(common_interface):
         # attribute indicating how much cost weighs against latency value
         self.weight_cost = weight_cost
         # max latency value in second 
-        self.max_latency = 0.033 #30FPS
+        self.max_latency = 0.008 #120FPS,
         # max manifacturing cost value
-        self.max_cost = 40000
+        self.max_cost = 30000
         try:
             self.cfg = load_cfg()
         except:
@@ -50,11 +50,11 @@ class hardware_module(common_interface):
                 # calculate the current manifacturing cost
                 current_cost = round(self.cost_par*config['area'], 2)
                 # inclusion of only configurations that are less expensive than the cost limit
-                if current_cost <= self.max_cost:
-                    self.nvdla[config['name']] = {'path': config['path'],
-                                                  'cost': current_cost,
-                                                  'latency': 0,
-                                                  'total_cost': 0}
+                #if current_cost <= self.max_cost:
+                self.nvdla[config['name']] = {'path': config['path'],
+                                                'cost': current_cost,
+                                                'latency': 0,
+                                                'total_cost': 0}
             else:
                 print(colors.FAIL, f"|  --------- {config['name']} CONFIGURATION FILE DOESN'T EXIST  -------  |\n", colors.ENDC)
         

@@ -134,6 +134,11 @@ class controller:
         self.modules = module(self.cfg.mod_list)
         if "flops_module" in self.cfg.mod_list:
             self.flops_th = self.modules.get_module("flops_module").flops_th
+        if "hardware_module" in self.cfg.mod_list:
+            max_latency = self.modules.get_module("hardware_module").max_latency
+            max_cost = self.modules.get_module("hardware_module").max_cost
+            weight_cost = self.modules.get_module("hardware_module").weight_cost
+            self.latency_th = round((max_cost * weight_cost) + (max_latency * (1-weight_cost)), 4)
 
         # Optimization objective bookkeeping
         self.best_score: float = 1e10 #float("inf")  # lower is better if we minimize
@@ -245,7 +250,8 @@ class controller:
                 self.modules.modules_obj[index].fix_configuration()
             except Exception as e:  # robust to module-specific issues
                 logger.warning("Energy module failed to fix configuration: %s", e)
-
+                
+                
     # ------------------------------ Training ---------------------------------
 
     def training(self, params: Dict[str, Any]) -> float:
@@ -259,74 +265,121 @@ class controller:
             Objective score to minimize (negative accuracy by default or module-provided).
         """
         self.params = params
-        print(colors.OKBLUE, "|  --> START TRAINING\n", colors.ENDC)
+        PENALTY_SCORE = 1e10  # Score assegnato se i vincoli non sono rispettati
 
-        # Reset low-level session state to avoid graph buildup across iterations
-        K.clear_session()
+        logger.info(f"{colors.OKBLUE}|  --> START TRAINING ITERATION {self.iter}{colors.ENDC}")
 
-        # Build and train model
+        # 1. Reset Session
+        try:
+            K.clear_session()
+        except Exception as e:
+            logger.warning(f"Session clear failed: {e}")
+
+        # 2. Setup Flags & Build Network
         self.set_data_augmentation(params.get("data_augmentation", False))
         self.set_reg_l2(params.get("reg_l2", False))
         self.set_residual(params.get("skip_connection", False))
-        print("Action flags for this training: ")
-        print(f"  Data Augmentation: {self.da}")
-        print(f"  L2 Regularization: {self.reg}")
-        print(f"  Residual Connections: {self.residual}")
-        self.nn = neural_network(self.X_train, self.Y_train, self.X_test, self.Y_test, self.n_classes, self.reg, self.da, self.residual)
+        
+        logger.debug(f"Flags -> DA: {self.da}, L2: {self.reg}, Skip: {self.residual}")
+
+        self.nn = neural_network(
+            self.X_train, self.Y_train, self.X_test, self.Y_test, 
+            self.n_classes, self.reg, self.da, self.residual
+        )
+        # Costruzione del grafo (senza addestramento)
         self.nn.build_network(params, self.layer_x_block)
-        if self.nn.flops is None or self.nn.flops <= self.flops_th:
+
+        # 3. Check Constraints (HARDWARE AWARENESS)
+        # Verifichiamo FLOPs e Latenza PRIMA di spendere tempo nel training
+        flops_ok = (self.nn.flops is None) or (self.nn.flops <= self.flops_th)
+        latency_ok = (self.nn.tot_latency_cost is None) or (self.nn.tot_latency_cost <= self.latency_th)
+
+        if not flops_ok:
+            logger.warning(f"Constraint Violated: FLOPs {self.nn.flops} > {self.flops_th}")
+        if not latency_ok:
+            logger.warning(f"Constraint Violated: Latency Cost {self.nn.tot_latency_cost} > {self.latency_th}")
+
+        # 4. Training Decision
+        if flops_ok and latency_ok:
+            # --- START TRAINING ---
             self.scoreNN, self.history, self.model = self.nn.training(params)
-            self.log()
-            # Update external modules and log their state
-            self.modules.state(self.model, self.nn.flops, self.nn.nparams)
-            self.modules.print()
-            self.modules.log()
             
-            # Decide the optimization target:
-            # - If there are no/invalid modules, optimize accuracy (minimize -acc).
-            # - Otherwise use module-provided objective.
-            if (len(self.modules.modules_obj) == 0) or (not self.modules.all_zeros_weights()) or (not self.modules.ready()):
-                self.score = -float(self.scoreNN[1])  # usually validation accuracy
-            else:
-                _, _, opt_value = self.modules.optimiziation()
-                self.score = float(opt_value)-self.scoreNN[1]*self.acc_w  # combine module opt with accuracy
+            # Update Modules State (passiamo il modello addestrato)
+            self.modules.state(self.model, self.nn.flops, self.nn.nparams)
+            
+            # --- SCORING LOGIC ---
+            # Caso 1: Quantizzazione attiva
             if self.cfg.quantization:
                 quantizer = quantizer_module(opt=params["optimizer"])
-                quantized_model = quantizer.quantizer_function(self.model)
-                self.score = quantizer.evaluate_quantized_model(self.X_test, self.Y_test)[-1]
+                # Nota: qui self.model potrebbe venire modificato dal quantizzatore
+                _ = quantizer.quantizer_function(self.model) 
+                # Valutiamo il modello quantizzato
+                q_loss, q_acc = quantizer.evaluate_quantized_model(self.X_test, self.Y_test)
+                self.score = -float(q_acc) # Minimizziamo la negative accuracy
                 quantizer.log_function()
-        else:
-            print(f"Model FLOPs {self.nn.flops} exceed maximum {self.flops_th}. Skipping training.")
-            self.scoreNN, self.history, self.model = None, None, self.nn.model
-    
-            self.log()
-            # Update external modules and log their state
-            self.modules.state(self.model, self.nn.flops, self.nn.nparams)
-            self.modules.print()
-            self.modules.log()
+            
+            # Caso 2: Moduli esterni attivi (es. Hardware, Power)
+            elif (len(self.modules.modules_obj) > 0) and self.modules.ready() and not self.modules.all_zeros_weights():
+                _, _, opt_value = self.modules.optimiziation()
+                # Formula: Score moduli - (Accuracy * Peso)
+                # Esempio: Minimizzare (Watts - 10 * Accuracy)
+                val_acc = self.scoreNN[1]
+                self.score = float(opt_value) - (val_acc * self.acc_w)
+            
+            # Caso 3: Standard (Solo Accuratezza)
+            else:
+                # Minimizziamo la negative validation accuracy
+                self.score = -float(self.scoreNN[1]) 
 
-            self.score = 1e10 #float('inf')
+        else:
+            # --- CONSTRAINT VIOLATION ---
+            # Non addestriamo, assegniamo penalità e logghiamo lo stato "teorico"
+            self.scoreNN, self.history, self.model = None, None, self.nn.model
+            
+            # Aggiorniamo i moduli con i dati teorici (es. FLOPs calcolati dalla build)
+            self.modules.state(self.model, self.nn.flops, self.nn.nparams)
+            self.score = PENALTY_SCORE
+
+        # 5. Logging comune
+        self.log()
+        self.modules.print()
+        self.modules.log()
+
+        # 6. Best Model Tracking
         self.iter += 1
-        # Track the best score and persist the model artifact
         if self.score < self.best_score:
+            logger.info(f"New Best Score: {self.score:.4f} (Previous: {self.best_score:.4f})")
             self.best_score = self.score
             self.best_iter = self.iter
-            try:
-                os.makedirs(os.path.join(self.cfg.name, "Model"), exist_ok=True)
-                self.model.save(f"{self.cfg.name}/Model/best-model.keras")
-            except Exception as e:
-                logger.warning("Failed to save best model: %s", e)
+            self._save_best_model() # Helper function call
 
-        # if we have no improv in 10 iter end tuner evaluations
+        # 7. Early Stopping Check
         if self.iter > self.best_iter + self.cfg.early_stop:
+            logger.info("Early Stopping triggered.")
             self.convergence = True
+
+        # 8. Cleanup
+        self._cleanup_resources()
+        
+        return self.score
+
+    def _save_best_model(self):
+        """Helper to handle safe model saving."""
+        if self.model is None: return
         try:
-            del self.nn.model
+            save_path = os.path.join(self.cfg.name, "Model")
+            os.makedirs(save_path, exist_ok=True)
+            self.model.save(os.path.join(save_path, "best-model.keras"))
+        except Exception as e:
+            logger.error(f"Failed to save best model: {e}")
+
+    def _cleanup_resources(self):
+        """Helper to force garbage collection."""
+        try:
             K.clear_session()
             gc.collect()
         except Exception as e:
-            logger.warning("Failed to clear session: %s", e)
-        return self.score
+            logger.warning(f"Cleanup warning: {e}")
     # ------------------------------ Diagnosis --------------------------------
 
     def diagnosis(self, const_space) -> Tuple[Any]:
@@ -382,6 +435,40 @@ class controller:
                 # Add facts from loaded modules
                 facts_list_module = list(self.modules.values().values())
                 self.only_modules = True
+
+            if self.nn.tot_latency_cost is None or self.nn.tot_latency_cost <= self.latency_th:
+                # Integral features of validation loss (used by symbolic layer)
+                val_loss_hist = self.history.get("val_loss", [])
+                int_loss, int_slope = integrals(val_loss_hist)
+
+                # Base fact list (raw + smoothed histories)
+                gnorm = getattr(self.model.optimizer, "last_grad_global_norm", 1.0)
+                if not isinstance(gnorm, float):
+                    gnorm = float(gnorm.numpy())
+                facts_list_module = [
+                    self.history.get("loss", []),
+                    self.smooth(self.history.get("loss", [])),
+                    self.history.get("accuracy", []),
+                    self.smooth(self.history.get("accuracy", [])),
+                    self.history.get("val_loss", []),
+                    self.history.get("val_accuracy", []),
+                    int_loss,
+                    int_slope,
+                    self.lacc,
+                    self.hloss,
+                    gnorm,
+                    self.vanish_th,
+                    self.exploding_th
+                ]
+
+                # Add facts from loaded modules
+                facts_list_module += list(self.modules.values().values())
+                self.only_modules = False
+            
+            else:
+                # Add facts from loaded modules
+                facts_list_module = list(self.modules.values().values())
+                self.only_modules = True
             # First diagnosis iteration: assemble rule base from modules and build logic program
             if self.iter == 1:
                 self.rules, self.actions, self.problems = self.modules.get_rules()
@@ -405,7 +492,7 @@ class controller:
 
             # Run rule-based reasoning to produce candidate repairs and diagnoses
             self.symbolic_tuning, self.symbolic_diagnosis = self.nsb.symbolic_reasoning(
-                facts_list_module, diagnosis_logs, tuning_logs, self.rules, self
+                facts_list_module, diagnosis_logs, tuning_logs, self.rules, self, const_space
             )
 
 

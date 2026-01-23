@@ -198,15 +198,15 @@ def update_model_db(network_data_list: List[Dict]) -> Tuple[Dict, int, int]:
         model = tf.keras.models.load_model(rep_log.parent / "Model" / "best-model.keras", compile=False)
         flops = flop_calculator().get_flops(model)
         best_network['flops'] = flops
-    if best_network.get('latency', 0) == 0:
-        if model is None:
-            model = tf.keras.models.load_model(rep_log.parent / "Model" / "best-model.keras", compile=False)
-        HW_module = HardwareModule(weight_cost=0.7)
-        HW_module.update_state(model)
-        HW_module.printing_values()
-        best_network['latency'] = HW_module.latency
-        best_network['cost'] = HW_module.cost
-        best_network['total_cost'] = HW_module.total_cost
+    # if best_network.get('latency', 0) < 0:
+    if model is None:
+        model = tf.keras.models.load_model(rep_log.parent / "Model" / "best-model.keras", compile=False)
+    HW_module = HardwareModule(weight_cost=0.3)
+    HW_module.update_state(model)
+    HW_module.printing_values()
+    best_network['latency'] = HW_module.latency
+    best_network['cost'] = HW_module.cost
+    best_network['total_cost'] = HW_module.total_cost
 
     modules = utils.get_modules_from_experiment(exp_name)
     modules_str = "_".join(modules)

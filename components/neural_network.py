@@ -39,6 +39,7 @@ from components.search_space import search_space
 from components.colors import colors
 from components.custom_train import train_model, eval_model
 from flops.flops_calculator import analyze_model
+from modules.loss.hardware_module import hardware_module as HardwareModule
 # from components.monitor_model import MonitoredModel, GradientMonitor
 
 from exp_config import load_cfg
@@ -233,6 +234,7 @@ class neural_network:
         self.last_model_id: Optional[str] = None
         self.flops: Optional[float] = None
         self.nparams: Optional[float] = None
+        self.tot_latency_cost: Optional[float] = None
 
         self.da = da
         self.reg = reg
@@ -280,7 +282,7 @@ class neural_network:
         """
         # 1) clear session
         tf.keras.backend.clear_session()
-        batch = self.cfg.dataset == 'tinyimagenet'
+        batch = True #self.cfg.dataset == 'tinyimagenet'
         self.model = None
         # 2) Build a new CNN
         if (self.cfg.mode in ("fwdPass", "hybrid")) and "gesture" in self.cfg.dataset :
@@ -385,6 +387,15 @@ class neural_network:
             except Exception:
                 self.flops = None  # FLOPs computation failed; ignore
                 self.nparams = None
+        if "hardware_module" in self.cfg.mod_list:
+            # Compute total latency cost
+            try:
+                HW_module = HardwareModule(weight_cost=0.3)
+                HW_module.update_state(self.model)
+                self.tot_latency_cost = HW_module.total_cost
+            except Exception:
+                self.tot_latency_cost = None  # FLOPs computation failed; ignore
+
 
     # ------------------------------ Training ---------------------------------
 

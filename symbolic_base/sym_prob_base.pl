@@ -9,10 +9,10 @@
 0.50::action(remove_reg_l2,underfitting):- problem(underfitting).
 0.50::action(dec_dropout,underfitting):- problem(underfitting).
 0.50::action(decr_lr,underfitting):- problem(underfitting).
-0.40::action(inc_neurons,underfitting):- problem(underfitting).
-0.70::action(new_fc_layers,underfitting):- problem(underfitting).
+0.70::action(inc_neurons,underfitting):- problem(underfitting).
+0.40::action(new_fc_layers,underfitting):- problem(underfitting).
 0.70::action(inc_conv_layers,underfitting):- problem(underfitting).
-0.70::action(new_conv_block,underfitting):- problem(underfitting).
+0.40::action(new_conv_block,underfitting):- problem(underfitting).
 0.60::action(decr_lr,inc_loss):- problem(inc_loss).
 0.99::action(decr_lr,high_lr):- problem(high_lr).
 0.80::action(inc_batch_size,floating_loss):- problem(floating_loss).
