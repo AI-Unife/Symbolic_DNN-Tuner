@@ -284,6 +284,7 @@ class controller:
             self.modules.print()
             # self.modules.log()
             self.score = 1e10 #float('inf')
+            self.score = 1e10 #float('inf')
         # Track the best score and persist the model artifact
         if self.score < self.best_score:
             self.best_score = self.score
@@ -382,7 +383,7 @@ class controller:
 
             # Run rule-based reasoning to produce candidate repairs and diagnoses
             self.symbolic_tuning, self.symbolic_diagnosis = self.nsb.symbolic_reasoning(
-                facts_list_module, diagnosis_logs, tuning_logs, self.rules, self
+                facts_list_module, diagnosis_logs, tuning_logs, self.rules, self, const_space
             )
 
 

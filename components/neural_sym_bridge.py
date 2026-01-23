@@ -239,7 +239,7 @@ class NeuralSymbolicBridge:
     # Reasoning
     # -------------------------------------------------------------------------
 
-    def symbolic_reasoning(self, facts, diagnosis_logs, tuning_logs, rules, controller):
+    def symbolic_reasoning(self, facts, diagnosis_logs, tuning_logs, rules, controller, space):
         """
         Run the symbolic reasoning pipeline:
           1) build the model from facts + problems + base + rules
@@ -288,19 +288,21 @@ class NeuralSymbolicBridge:
         # 5) Turn map into ordered action/diagnosis lists
         for prob in res.keys():
             diagnosis.append(prob)
+
             if res[prob]:
                 # Choose argmax action for this problem (with random tie-breaking)
 
                 # --- Regularization, and DA controls ---
-                if True in controller.space['reg_l2'][1].categories and "reg_l2" in res[prob]:
+                if True in space['reg_l2'][1].categories and "reg_l2" in res[prob]:
                     res[prob]["reg_l2"] = 0
-                elif True not in controller.space['reg_l2'][1].categories and "remove_reg_l2" in res[prob]:
+                elif True not in space['reg_l2'][1].categories and "remove_reg_l2" in res[prob]:
                     res[prob]["remove_reg_l2"] = 0
 
 
-                if True in controller.space['data_augmentation'][1].categories and "data_augmentation" in res[prob]:
+                if True in space['data_augmentation'][1].categories and "data_augmentation" in res[prob]:
                     res[prob]["data_augmentation"] = 0
-
+                print("[DEBUG] prob in res: ", res[prob])
+                print(space['data_augmentation'][1].categories)
                 # --- Architectural constraints ---
                 tot_conv = controller.count_new_cv
 
