@@ -14,7 +14,7 @@ from components.dataset import TunerDataset
 def main():
 
     dataset = TunerDataset()
-    dataset.cifar_data()
+    dataset.load_cifar_10()
 
     config = TunerConfig(
         neural_network_cls=neural_network.NeuralNetwork,

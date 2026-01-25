@@ -75,6 +75,13 @@ class NeuralNetwork (NeuralNetwork):
     def __init__(self, dataset: TunerDataset):
         super().__init__(dataset)
 
+        # Framework-specific preprocessing
+        self.dataset.Y_train = tf.keras.utils.to_categorical(self.dataset.Y_train, self.dataset.n_classes)
+        self.dataset.Y_test = tf.keras.utils.to_categorical(self.dataset.Y_test, self.dataset.n_classes)
+        if self.dataset.X_train.ndim == 3:
+            self.dataset.X_train = self.dataset.X_train[..., None]
+            self.dataset.X_test = self.dataset.X_test[..., None]
+
         self.activation_map = {
             "relu": "relu",
             "elu": "elu",
@@ -213,8 +220,8 @@ class NeuralNetwork (NeuralNetwork):
         tensorboard = callbacks.TensorBoard(
             log_dir="log_folder/logs/{}".format(model_name_id))
 
-        # losses, lrs = self.lolr_checking(model, space, params['learning_rate'], params['batch_size'], self.train_data,
-        #                                  self.train_labels, self.test_data, self.test_labels)
+        # losses, lrs = self.lolr_checking(model, space, params['learning_rate'], params['batch_size'], self.dataset.X_train,
+        #                                  self.dataset.Y_train, self.dataset.X_test, self.dataset.Y_test)
 
         # compiling and training
         _opt = params['optimizer'] + "(learning_rate=" + str(params['learning_rate']) + ")"
@@ -253,22 +260,22 @@ class NeuralNetwork (NeuralNetwork):
                 fill_mode='nearest',
                 cval=0.,
                 horizontal_flip=True)
-            datagen.fit(self.train_data)
+            datagen.fit(self.dataset.X_train)
 
             # train the model
             history = self.model.model.fit(
-                datagen.flow(self.train_data, self.train_labels, batch_size=params['batch_size']), epochs=self.epochs,
-                verbose=1, validation_data=(self.test_data, self.test_labels),
+                datagen.flow(self.dataset.X_train, self.dataset.Y_train, batch_size=params['batch_size']), epochs=self.epochs,
+                verbose=1, validation_data=(self.dataset.X_test, self.dataset.Y_test),
                 callbacks=[tensorboard, reduce_lr, es1, es2]).history
         else:
             # train the network without data augmentation
-            history = self.model.model.fit(self.train_data, self.train_labels, epochs=self.epochs, batch_size=params['batch_size'],
+            history = self.model.model.fit(self.dataset.X_train, self.dataset.Y_train, epochs=self.epochs, batch_size=params['batch_size'],
                                 verbose=1,
-                                validation_data=(self.test_data, self.test_labels),
+                                validation_data=(self.dataset.X_test, self.dataset.Y_test),
                                 callbacks=[tensorboard, reduce_lr, es1, es2]).history
 
         # evaluates model performance on test data
-        score = self.model.model.evaluate(self.test_data, self.test_labels)
+        score = self.model.model.evaluate(self.dataset.X_test, self.dataset.Y_test)
 
         # save the neural network weights and then reload them from the same json file you just saved
         # this avoids errors because of the changes in the network structure before training

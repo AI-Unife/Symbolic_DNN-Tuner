@@ -18,7 +18,7 @@ os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
 
 def build_config() -> TunerConfig:
     dataset = TunerDataset()
-    dataset.cifar_data()
+    dataset.load_cifar_10()
 
     return TunerConfig(
         neural_network_cls=neural_network.NeuralNetwork,

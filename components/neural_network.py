@@ -41,15 +41,9 @@ class NeuralNetwork (ABC):
         for example the number of convolutional or dense layers.
         """
         
-        self.train_data = dataset.X_train
-        self.train_labels = dataset.Y_train
-        self.test_data = dataset.X_test
-        self.test_labels = dataset.Y_test
-        self.train_data = self.train_data.astype('float32')
-        self.test_data = self.test_data.astype('float32')
-        self.train_data /= 255
-        self.test_data /= 255
-        self.n_classes = dataset.n_classes
+        self.dataset = dataset
+        self.dataset.normalize_data()
+
         self.epochs = 2
         self.last_dense = 0
         self.counter_fc = 0
@@ -295,7 +289,7 @@ class NeuralNetwork (ABC):
 
         except:
             print("=============== NUOVO MODELLO =================")
-            return self.from_scratch(self.train_data.shape[1:], self.n_classes, params)
+            return self.from_scratch(self.dataset.X_train.shape[1:], self.dataset.n_classes, params)
 
     @abstractmethod
     def training(self, params, new, new_fc, new_conv, rem_conv, rem_fc, da, space):
