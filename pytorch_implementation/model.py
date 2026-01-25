@@ -269,9 +269,12 @@ class TorchModel(TunerModel, nn.Module):
         elif layer_type in [LayerTypes.ELU, LayerTypes.ReLU, LayerTypes.Sigmoid, LayerTypes.SiLU, LayerTypes.SeLU]:
             return LayerSpec(
                 name=module_name, 
-                type=layer_type,
+                type=LayerTypes.Activation,
                 module=module,
-                is_activation=True
+                is_activation=True,
+                params={
+                    "activation_type": layer_type
+                }
             )
         elif layer_type in [LayerTypes.BatchNormalization1D, LayerTypes.BatchNormalization2D]:
             return LayerSpec(
@@ -295,7 +298,7 @@ class TorchModel(TunerModel, nn.Module):
         else:
             raise Exception("Missing LayerSpec for layer of type " + module.__class__.__name__)
 
-    def from_spec(self, layer_spec):
+    def from_spec(self, layer_spec: LayerSpec):
         if layer_spec.type == LayerTypes.Conv2D:
             return nn.Conv2d(
                 in_channels=layer_spec.get(Params.IN_CHANNELS),
@@ -326,5 +329,7 @@ class TorchModel(TunerModel, nn.Module):
                 start_dim=layer_spec.get("start_dim"),
                 end_dim=layer_spec.get("end_dim")
             )
+        elif layer_spec.type == LayerTypes.Activation:
+            return self.from_type(layer_spec.get("activation_type"))()
         else:
             return self.from_type(layer_spec.type)()
