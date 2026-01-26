@@ -319,7 +319,7 @@ class controller:
                 quantizer.log_function()
             
             # Caso 2: Moduli esterni attivi (es. Hardware, Power)
-            elif (len(self.modules.modules_obj) > 0) and self.modules.ready() and not self.modules.all_zeros_weights():
+            if (len(self.modules.modules_obj) > 0) and self.modules.ready() and self.modules.all_zeros_weights():
                 _, _, opt_value = self.modules.optimiziation()
                 # Formula: Score moduli - (Accuracy * Peso)
                 # Esempio: Minimizzare (Watts - 10 * Accuracy)
