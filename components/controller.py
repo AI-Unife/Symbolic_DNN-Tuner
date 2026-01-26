@@ -292,6 +292,7 @@ class controller:
             else:
                 self.score = -float(self.scoreNN[1])
 
+            self.iter += 1
         else:
             # --- CONSTRAINT VIOLATION ---
             self.scoreNN, self.history, self.model = None, None, self.nn.model
@@ -306,7 +307,6 @@ class controller:
         self.modules.log()
 
         # 6. Best Model Tracking
-        self.iter += 1
         if self.score < self.best_score:
             logger.info(f"New Best Score: {self.score:.4f} (Previous: {self.best_score:.4f})")
             self.best_score = self.score
