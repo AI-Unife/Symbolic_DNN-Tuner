@@ -44,6 +44,7 @@ class tuning_rules_symbolic:
         """
         self.space = params
         self.ss = ss
+        self.ss.search_space = self.space
         self.controller = controller
         self.count_no_probs = 0
 
@@ -336,6 +337,7 @@ class tuning_rules_symbolic:
             del self.controller.model
 
         self.space = const_space
+        #self.ss.search_space = self.space
         diag_list = list(diagnosis)
         for i, action_name in enumerate(sym_tuning):
             # Preserve original control flow semantics:
