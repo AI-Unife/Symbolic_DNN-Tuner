@@ -5,8 +5,7 @@ from time import time
 
 from torch import nn, optim
 from torchvision import transforms
-import torchvision
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import DataLoader, Dataset
 from torchinfo import summary
 
 from components.colors import colors
@@ -16,12 +15,41 @@ from pytorch_implementation.model import TorchModel
 from components.dataset import TunerDataset
 
 
+class TorchTunerDataset(Dataset):
+    def __init__(self, images: torch.Tensor, labels: torch.Tensor, transform=None):
+        self.images = images
+        self.labels = labels
+        self.transform = transform
+
+    def __len__(self):
+        return self.images.shape[0]
+
+    def __getitem__(self, index):
+        image = self.images[index]
+        if self.transform:
+            image = self.transform(image)
+        return image, self.labels[index]
+
+
 class NeuralNetwork (NeuralNetwork):
 
     def __init__(self, dataset: TunerDataset):
         super().__init__(dataset)
 
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+        # Framework-specific preprocessing
+        if self.dataset.X_train.ndim == 3:
+            self.dataset.X_train = self.dataset.X_train[..., None]
+            self.dataset.X_test = self.dataset.X_test[..., None]
+
+        self.train_data = self.dataset.X_train
+        self.test_data = self.dataset.X_test
+
+        self.train_images = self.to_tensor(self.train_data)
+        self.test_images = self.to_tensor(self.test_data)
+        self.train_labels = torch.from_numpy(self.dataset.Y_train).long().view(-1)
+        self.test_labels = torch.from_numpy(self.dataset.Y_test).long().view(-1)
 
         self.activation_map = {
             "relu": nn.ReLU,
@@ -37,6 +65,12 @@ class NeuralNetwork (NeuralNetwork):
             "Adagrad": optim.Adagrad,
             "Adadelta": optim.Adadelta
         }
+
+    @staticmethod
+    def to_tensor(array):
+        if array.ndim == 3:
+            array = array[..., None]
+        return torch.from_numpy(array).permute(0, 3, 1, 2).contiguous().float()
 
     def from_checkpoint(self, checkpoint):
         params = checkpoint["params"]
@@ -92,7 +126,7 @@ class NeuralNetwork (NeuralNetwork):
     def training(self, params, new, new_fc, new_conv, rem_conv, rem_fc, da, space):
 
         self.model = self.build_network(params, new)
-        input_shape = self.train_data.shape[1:]
+        input_shape = self.dataset.X_train.shape[1:]
         
         # summary(self.model, [1, input_shape[2], input_shape[0], input_shape[1]])
         # print(self.model)
@@ -144,8 +178,9 @@ class NeuralNetwork (NeuralNetwork):
         except Exception as e:
             print(colors.FAIL, e, colors.ENDC)
 
-        input_shape = self.train_data.shape[1:]
+        input_shape = self.dataset.X_train.shape[1:]
         summary(self.model, [1, input_shape[2], input_shape[0], input_shape[1]])
+        self.model.to(self.device)
 
         # Save weights
         model_name_id = time()
@@ -160,7 +195,7 @@ class NeuralNetwork (NeuralNetwork):
             "state_dict": model_path,
             "params": params,
             "input_shape": list(input_shape),
-            "n_classes": self.n_classes,
+            "n_classes": self.dataset.n_classes,
         }
         manifest_path = f"Model/pytorch-{model_name_id}.json"
         with open(manifest_path, "w") as f:
@@ -201,20 +236,15 @@ class NeuralNetwork (NeuralNetwork):
             transform = transforms.Compose([
                 transforms.RandomHorizontalFlip(),
                 transforms.RandomAffine(degrees=0, translate=(0.1, 0.1)),
-                transforms.ToTensor(),
             ])
         else:
-            transform = transforms.Compose([transforms.ToTensor()])
+            transform = None
 
-        train_dataset = torchvision.datasets.CIFAR10(root='./data', train=True,
-                                        download=True, transform=transform)
-        train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=params['batch_size'],
-                                          shuffle=True, num_workers=0)
+        train_dataset = TorchTunerDataset(self.train_images, self.train_labels, transform=transform)
+        train_loader = DataLoader(train_dataset, batch_size=params['batch_size'], shuffle=True, num_workers=0)
 
-        test_dataset = torchvision.datasets.CIFAR10(root='./data', train=False,
-                                        download=True, transform=transform)
-        test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=params['batch_size'],
-                                          shuffle=False, num_workers=0)
+        test_dataset = TorchTunerDataset(self.test_images, self.test_labels, transform=None)
+        test_loader = DataLoader(test_dataset, batch_size=params['batch_size'], shuffle=False, num_workers=0)
 
         # Training loop
         history = {'loss': [], 'val_loss': [], 'accuracy': [], 'val_accuracy': []}
@@ -244,7 +274,7 @@ class NeuralNetwork (NeuralNetwork):
                 correct += (outputs.argmax(1) == labels).sum().item()
 
             train_loss = running_loss / len(train_loader)
-            train_acc = correct / len(self.train_data)
+            train_acc = correct / len(self.train_labels)
 
             # Validation
             self.model.eval()
@@ -258,7 +288,7 @@ class NeuralNetwork (NeuralNetwork):
                     val_correct += (outputs.argmax(1) == labels).sum().item()
 
             val_loss /= len(test_loader)
-            val_acc = val_correct / len(self.test_data)
+            val_acc = val_correct / len(self.test_labels)
 
             # Update history
             history['loss'].append(train_loss)
