@@ -8,10 +8,9 @@
 4. [Symbolic Reasoning System](#symbolic-reasoning-system)
 5. [Training Pipeline](#training-pipeline)
 6. [Search Space Management](#search-space-management)
-7. [Analysis & Evaluation](#analysis--evaluation)
-8. [Configuration System](#configuration-system)
-9. [Usage Examples](#usage-examples)
-10. [Extending the Framework](#extending-the-framework)
+7. [Configuration System](#configuration-system)
+8. [Usage Examples](#usage-examples)
+9. [Extending the Framework](#extending-the-framework)
 
 ---
 
@@ -33,8 +32,7 @@ The **Symbolic DNN Tuner** is a neuro-symbolic framework for automated deep le
 
 - CIFAR-10/100
 - Tiny ImageNet
-- DVS Gesture (event-based, with ROI support)
-- ImageNet-16 (NAS-Bench-201 format)
+- Light version of CIFAR-10
 
 ---
 
@@ -53,7 +51,7 @@ The **Symbolic DNN Tuner** is a neuro-symbolic framework for automated deep le
                │
    ┌───────────┼───────────┐
    │           │           │
-┌──▼──┐   ┌───▼────┐  ┌──▼──────┐
+┌──▼──┐   ┌────▼───┐  ┌────▼────┐
 │ NN  │   │ Search │  │Symbolic │
 │Build│   │ Space  │  │Reasoning│
 └─────┘   └────────┘  └─────────┘
@@ -374,49 +372,9 @@ history = self.model.fit(
 )
 ```
 
-### 2. Event-Based Datasets (DVS Gesture)
-
-**Temporal Unrolling** (`components/custom_train.py`):
-
-```python
-@tf.function
-def train_step(batch_x, batch_y):
-    """
-    batch_x: [B, T, H, W, C]  # T = time steps
-    batch_y: [B, T, num_classes]
-    """
-    time_steps = tf.shape(batch_x)[1]
-
-    with tf.GradientTape() as tape:
-        ta = tf.TensorArray(dtype=tf.float32, size=time_steps)
-
-        # Frame-wise forward pass
-        for t in tf.range(time_steps):
-            out_t = model(batch_x[:, t], training=True)  # [B, C]
-            ta = ta.write(t, out_t)
-
-        outputs = tf.transpose(ta.stack(), [1, 0, 2])  # [B, T, C]
-        loss = loss_fn(batch_y, outputs)
-
-    grads = tape.gradient(loss, model.trainable_variables)
-    optimizer.apply_gradients(zip(grads, model.trainable_variables))
-```
-
-**ROI (Region of Interest) Support**:
-
-```python
-# Dual-input model for position-aware classification
-if self.is_roi:
-    pos_input = Input(shape=self.train_pos.shape[1:])
-    pos_flat = Flatten()(pos_input)
-    x = Concatenate()([x, pos_flat])  # Merge spatial features + ROI coords
-
-    model = Model(inputs=[inputs, pos_input], outputs=outputs)
-```
-
 ---
 
-### 3. Early Stopping & Callbacks
+### 2. Early Stopping & Callbacks
 
 ```python
 es = EarlyStopping(
@@ -509,77 +467,6 @@ class ConstraintsWrapper:
         return True
 ```
 
----
-
-## Analysis & Evaluation
-
-### 1. Experiment Parsing (`analyse_components/parsing.py`)
-
-**Data Extraction Pipeline**:
-
-```python
-def parse_experiment_data(experiment_dir: Path, root_path: Path):
-    """
-    1. Load acc_report.txt (one accuracy per network)
-    2. Load hyper-neural.txt (hyperparams per network)
-    3. Parse .out log for losses/scores
-    4. Merge into list of network dictionaries
-    """
-
-    network_data = {
-        'epochs': ...,
-        'dataset': ...,
-        'accuracy': ...,
-        'loss': ...,        # From log backtracking
-        'score': ...,       # Optimization objective
-        'flops': ...,
-        'hyperparams': {...}
-    }
-```
-
-**Loss Extraction**:
-
-```python
-def parse_final_losses_from_log(log_path: Path):
-    """
-    Backtracks from 'ACCURACY:' markers to find Keras output lines.
-    Extracts: 'loss: X.XX - accuracy: Y.YY'
-    """
-```
-
----
-
-### 2. Database Management (`analyse_components/database.py`)
-
-**Deduplication Strategy**:
-
-```python
-def create_key_from_record(record: Dict) -> str:
-    """
-    Unique key = sorted hyperparams (excluding accuracy).
-    Example: "dataset:CIFAR|epochs:50|lr:0.001|..."
-
-    Ensures same config from different runs → same key.
-    """
-```
-
-**File Outputs**:
-
-| File          | Purpose                                  | Format   |
-| ------------- | ---------------------------------------- | -------- |
-| `results.csv` | Best model per experiment                | CSV/XLSX |
-| `total.csv`   | Summary of all experiments (current run) | CSV/XLSX |
-| `mean.csv`    | Grouped statistics (Tuner × Dataset)     | CSV/XLSX |
-
-**Aggregation** (`--aggregate-only` mode):
-
-```python
-# Fast mode: skip parsing, just merge existing results.csv files
-for results_csv in base_dir.rglob('results.csv'):
-    df = pd.read_csv(results_csv)
-    best_row = df.loc[df['score'].idxmin()]
-    summaries.append(best_row)
-```
 
 ---
 
@@ -679,28 +566,8 @@ python main.py \
 
 ---
 
-### 3. Event-Based Dataset (DVS Gesture)
 
-```bash
-python main.py \
-    --dataset gesture \
-    --mode depth \
-    --frames 16 \
-    --polarity both \
-    --epochs 200 \
-    --eval 50
-```
-
-**Pipeline**:
-
-1. Loads DVS events via Tonic
-2. Converts to frames (16 time steps, 2 polarities → 32 channels)
-3. Trains with temporal unrolling (`custom_train.py`)
-4. Evaluates via majority-vote accuracy
-
----
-
-### 4. Analysis (Post-Training)
+### 3. Analysis (Post-Training)
 
 ```bash
 # Full analysis (parsing + plots + retraining)
@@ -881,25 +748,6 @@ python main.py --seed 42
 ```bash
 pip freeze > requirements.txt
 git rev-parse HEAD > git_commit.txt
-```
-
-### 3. Debugging Symbolic Reasoning
-
-**Inspect ProbLog model**:
-
-```prolog
-# File: {exp_name}/symbolic/final.pl
-l([1.56, 1.22, ...]).
-problem(overfitting) :- gap_tr_te_acc.
-0.70::action(dec_dropout, overfitting).
-query(action(_,_)).
-```
-
-**Check evidence**:
-
-```bash
-cat algorithm_logs/evidence.txt
-# (action(dec_dropout, overfitting), True)
 ```
 
 ---
