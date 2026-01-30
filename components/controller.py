@@ -1,19 +1,17 @@
 import os
-from typing import Callable, Optional
+from typing import Callable, Optional, Any, Dict, List, Tuple
+import numpy as np
 
-import matplotlib.pyplot as plt
 
 from components.colors import colors
-from components.diagnosis import diagnosis
 from components.search_space import search_space
-from components.tuning_rules import tuning_rules
 from components.tuning_rules_symbolic import tuning_rules_symbolic
 from components.neural_sym_bridge import NeuralSymbolicBridge
 from components.lfi_integration import LfiIntegration
 from components.storing_experience import StoringExperience
 from components.improvement_checker import ImprovementChecker
 from components.integral import integrals
-from shutil import copyfile
+from exp_config import load_cfg
 
 from modules.module import module
 
@@ -35,256 +33,440 @@ class controller:
         as well as auxiliary classes such as the one for interfacing with the symbolic part
         and the one for storing the training progress on DB.
         """
-        self.nn = neural_network
+        self.nn_cls = neural_network
         self.dataset = dataset
+        self.exp_cfg = load_cfg()
+        
+        # Internal counters
+        self.count_new_fc = 0
+        self.count_new_cv = 0
+        self.max_fc = 10
+        self.start_conv = 2
+        self.max_conv = self.count_max_conv(base_blocks=self.start_conv)
+        self.count_no_probs = 0
+        self.layer_x_block = 2
+        self.max_layer_x_block = 6
+
+        # Search space + tuning rules
         self.ss = search_space()
-        self.space = self.ss.search_sp()
+        self.space = self.ss.search_sp(max_block=self.max_conv, max_dense=self.max_fc)
         self.tr = tuning_rules_symbolic(self.space, self.ss, self)
-        self.nsb = NeuralSymbolicBridge() # problems e initial_facts
+
+        # Symbolic reasoning & learning-from-interpretations
+        self.nsb = NeuralSymbolicBridge()
         self.db = StoringExperience()
         self.db.create_db()
         self.lfi = LfiIntegration(self.db)
-        self.symbolic_tuning = []
-        self.symbolic_diagnosis = []
-        self.issues = []
-        self.weight = 0.6
-        #self.epsilon = 0.33
-        self.new = None
-        self.new_fc = None
-        self.new_conv = None
-        self.rem_conv = None
-        self.rem_fc = None
-        self.da = None
-        self.model = None
-        self.params = None
-        self.iter = 0
-        self.lacc = 0.15
-        self.hloss = 1.2
-        self.levels = [7, 10, 13]
+
+        # Iterative evidence from symbolic reasoning
+        self.symbolic_tuning: List[str] = []
+        self.symbolic_diagnosis: List[str] = []
+        self.issues: List[str] = []
+
+        # Exponential smoothing weight for history curves
+        self.weight: float = 0.6
+
+        # Action flags (reset each training call)
+        self.da: Optional[bool] = None
+        self.reg: Optional[bool] = None
+        self.residual: Optional[bool] = None
+
+        # Model/training bookkeeping
+        self.model: Any = None
+        self.params: Optional[Dict[str, Any]] = None
+        self.iter: int = 0
+
+        # Dynamic thresholds (updated at given epochs)
+        lacc_dict: dict = {
+            'cifar10': 0.10,
+            'cifar100': 0.40,
+            'tiniimagenet': 0.30,
+            'gesture': 0.10
+        }
+        self.lacc: float = lacc_dict.get(self.exp_cfg.dataset, 0.20)
+        self.hloss: float = np.log(self.dataset.n_classes)
+        self.acc_w = 0.77  # weight of accuracy in combined score
+        self.vanish_th = 1e-8
+        self.exploding_th = 100.0
+
+        # Improvement checker + modules
         self.imp_checker = ImprovementChecker(self.db, self.lfi)
-        self.modules = module(module_backend, self.dataset.X_train.shape[1:], self.dataset.n_classes, ["hardware_module", "accuracy_module"])
+        self.modules = module(self.exp_cfg.mod_list)
+        if "flops_module" in self.exp_cfg.mod_list:
+            self.flops_th = self.modules.get_module("flops_module").flops_th
+        if "hardware_module" in self.exp_cfg.mod_list:
+            max_latency = self.modules.get_module("hardware_module").max_latency
+            max_cost = self.modules.get_module("hardware_module").max_cost
+            weight_cost = self.modules.get_module("hardware_module").weight_cost
+            self.latency_th = round((max_cost * weight_cost) + (max_latency * (1-weight_cost)), 4)
+
+        # Optimization objective bookkeeping
+        self.best_score: float = 1e10 #float("inf")  # lower is better if we minimize
+        self.convergence: bool = False
+        self.best_iter: int = -1
 
         self.clear_session_callback = clear_session_callback
 
-    # The following methods are used to determine actions to be applied to the network structure,
-    # for example addition or removal of convolutions and dense layers
+    # # ------------------- Signals from tuning_rules_symbolic -------------------
 
-    def set_case(self, new):
-        """
-        indicates if batch norm needs to be added
-        """
-        self.new = new
-
-    def add_fc_layer(self, new_fc, c):
-        """
-        indicates if one or more dense layers needs to be added, with 'c' the number of dense layers
-        """
-        self.new_fc = [new_fc, c]
-
-    def add_conv_section(self, new_conv, c):
-        """
-        indicates if one or more convolutional layers needs to be added, with 'c' the number of conv layers
-        """
-        self.new_conv = [new_conv, c]
-        
-    def remove_conv_section(self, rem_conv):
-        """
-        indicates, based on the value of the boolean 'rem_conv', if a convolutional layer needs to be removed
-        """
-        self.rem_conv = rem_conv
-
-    def remove_fully_connected(self, rem_fc):
-        """
-        indicates, based on the value of the boolean 'rem_fc', if a dense layer needs to be removed
-        """
-        self.rem_fc = rem_fc
-
-    def set_data_augmentation(self, da):
-        """
-        indicates, based on the value of the boolean 'da', if data augmentation is necessary
-        """
+    def set_data_augmentation(self, da: bool) -> None:
+        """Enable/disable data augmentation for the next training call."""
         self.da = da
 
-    def smooth(self, scalars):
-        """
-        This function allows the smoothing of values in a list of values,
-        weighing the last value and the next one during the iterations.
-        :param scalars: scalars list to be smoothed (acc or loss history)
-        :return: list of smoothed values
-        """
-        # init variables, last will be the first el of the list,
-        # smoothed is initialized as an empty list
-        last = scalars[0]
-        smoothed = list()
+    def set_residual(self, residual: bool) -> None:
+        """Enable/disable residual connection for the next training call."""
+        self.residual = residual
 
-        # iterate over each value
+    def set_reg_l2(self, reg: bool) -> None:
+        """Enable/disable data augmentation for the next training call."""
+        self.reg = reg
+
+    # ----------------------------- Utilities ---------------------------------
+
+    def count_max_conv(self, base_blocks: int = 2) -> int:
+        """
+        Compute how many additional (Conv... -> MaxPool(2x2)) blocks can fit
+        given the current input spatial size.
+
+        Assumptions (matching `build_network`):
+        - Convs use `padding="same"` → do NOT change H/W.
+        - Each conv block ends with MaxPooling2D(2,2) → halves H and W.
+        - After all conv stacks you use GlobalAveragePooling2D → only need H,W >= 1.
+        - We exclude the initial 2 pools (c1 & c2 blocks) via `base_blocks`.
+
+        Args:
+            base_blocks: number of pool operations already used by the fixed stem
+                        (default 2 for the c1 and c2 sections).
+
+        Returns:
+            int: maximum number of *additional* conv+pool blocks that can be appended.
+        """
+        # Extract (H, W) robustly from train_data:
+        # - gesture fwdPass/hybrid: (N, T, H, W, C)  -> H=shape[2], W=shape[3]
+        # - generic images:         (N, H, W, C)     -> H=shape[1], W=shape[2]
+        # - single sample:          (H, W, C)        -> H=shape[0], W=shape[1]
+        td = getattr(self, "train_data", None)
+        if td is None or not hasattr(td, "shape"):
+            # Fallback to controller.X_train if presente nel tuo progetto
+            td = getattr(self, "X_train", None)
+            if td is None or not hasattr(td, "shape"):
+                # ultimo fallback
+                return 0
+
+        dims = td.shape
+        if len(dims) >= 5:
+            # (N, T, H, W, C)
+            h, w = int(dims[2]), int(dims[3])
+        elif len(dims) == 4:
+            # (N, H, W, C)
+            h, w = int(dims[1]), int(dims[2])
+        elif len(dims) == 3:
+            # (H, W, C)
+            h, w = int(dims[0]), int(dims[1])
+        else:
+            return 0
+
+        # Number of MaxPool(2,2) steps possible until min(H,W) would drop below 1:
+        # after k pools: floor(min(h,w) / 2^k) >= 1  ->  k <= floor(log2(min(h,w)))
+        from math import log2, floor
+        min_side = max(1, min(h, w))
+        max_pools_total = floor(log2(min_side))  # e.g., 32→5, 28→4, 3→1, 2→1, 1→0
+
+        # Additional blocks available beyond the fixed stem (base_blocks):
+        extra_blocks = max(0, max_pools_total - max(0, int(base_blocks)))
+        return extra_blocks
+    
+    def smooth(self, scalars: List[float]) -> List[float]:
+        """
+        Exponential moving average smoothing over a scalar sequence.
+
+        Args:
+            scalars: Values to be smoothed (e.g., accuracy or loss history).
+
+        Returns:
+            Smoothed values (same length). If input is empty/len=1, returns input.
+        """
+        if not scalars:
+            return []
+        if len(scalars) == 1:
+            return scalars[:]
+
+        last = scalars[0]
+        smoothed: List[float] = []
         for point in scalars:
-            # Calculate smoothed value
-            smoothed_val = last * self.weight + (1 - self.weight) * point
+            smoothed_val = last * self.weight + (1.0 - self.weight) * point
             smoothed.append(smoothed_val)
             last = smoothed_val
         return smoothed
 
-    def manage_configuration(self):
+    def manage_configuration(self) -> None:
         """
-        this function calls, if initially loaded, the function in the 'energy module' for managing the power consumed,
-        searching for the best available configuration.
+        If present, invoke the energy module to select a better runtime configuration.
         """
         energy_name = "energy_module"
-
-        # if the module has been loaded
         if energy_name in self.modules.modules_name:
-            # get the index from the loaded modules and, once the object is obtained, call the function
             index = self.modules.modules_name.index(energy_name)
-            self.modules.modules_obj[index].fix_configuration()
+            try:
+                self.modules.modules_obj[index].fix_configuration()
+            except Exception as e:  # robust to module-specific issues
+                print("[ERROR]Energy module failed to fix configuration: %s", e)
+                
+                
+    # ------------------------------ Training ---------------------------------
 
     def training(self, params):
         """
-        Training and tasting the neural network
-        training(Train, Labels_train, Test, Label_test)
-        :return: model and training history self.nn = neural_network(X_train, Y_train, X_test, Y_test, n_classes)
+        Train and evaluate the neural network once.
+
+        Args:
+            params: Hyperparameters for this run.
+
+        Returns:
+            Objective score to minimize (negative accuracy by default or module-provided).
         """
         self.params = params
-
-        print(colors.OKBLUE, "|  --> START TRAINING\n", colors.ENDC)
+        PENALTY_SCORE = 1e10 
+        
+        print(f"{colors.OKBLUE}\n|  --> START TRAINING ITERATION {self.iter}{colors.ENDC}")
+        
+        # 1. Reset Session
         if self.clear_session_callback:
             self.clear_session_callback()
 
-        self.score, self.history, self.model = self.nn.training(params, self.new, self.new_fc, self.new_conv, self.rem_conv, self.rem_fc, self.da,
-                                                                self.space)
-
-        # update state of modules
-        # each module will take the necessary args internally
-        self.modules.state(self.score[0], self.score[1], self.model)
-
-        # print modules informations
-        self.modules.print()
+        # 2. Setup Flags & Build Network
+        self.set_data_augmentation(params.get("data_augmentation", False))
+        self.set_reg_l2(params.get("reg_l2", False))
+        self.set_residual(params.get("skip_connection", False))
         
-        # log module values of training
+        print(f"[INFO] Flags -> DA: {self.da}, L2: {self.reg}, Skip: {self.residual}")
+        
+        self.nn = self.nn_cls(
+            self.dataset, self.reg, self.da, self.residual
+        )
+        
+        self.nn.build_network(params, self.layer_x_block)
+        
+        # 3. Check Constraints 
+        flops_ok = (self.nn.flops is None) or (self.nn.flops <= self.flops_th)
+        latency_ok = (self.nn.tot_latency_cost is None) or (self.nn.tot_latency_cost <= self.latency_th)
+
+        if not flops_ok:
+            print(f"[WARNING] Constraint Violated: FLOPs {self.nn.flops} > {self.flops_th}")
+        if not latency_ok:
+            print(f"[WARNING] Constraint Violated: Latency Cost {self.nn.tot_latency_cost} > {self.latency_th}")
+
+        # 4. Training Decision
+        if flops_ok and latency_ok:
+            # --- START TRAINING ---
+            self.scoreNN, self.history, self.model = self.nn.training(params)
+            
+            # Update Modules State (passiamo il modello addestrato)
+            self.modules.state(self.model, self.nn.flops, self.nn.nparams)
+            
+            # --- SCORING LOGIC ---
+            ### TODO: Refactor this section for correct score return ###
+            if self.exp_cfg.quantization:
+                quantizer = quantizer_module(opt=params["optimizer"])
+                _ = quantizer.quantizer_function(self.model) 
+                q_loss, q_acc = quantizer.evaluate_quantized_model(self.dataset.X_test, self.dataset.Y_test)
+                self.score = -float(q_acc) 
+                quantizer.log_function()
+            
+            if (len(self.modules.modules_obj) > 0) and self.modules.ready() and self.modules.all_zeros_weights():
+                _, _, opt_value = self.modules.optimiziation()
+                val_acc = self.scoreNN[1]
+                self.score = float(opt_value) - (val_acc * self.acc_w)
+            
+            else:
+                self.score = -float(self.scoreNN[1]) 
+
+        else:
+            # --- CONSTRAINT VIOLATION ---
+            self.scoreNN, self.history, self.model = None, None, self.nn.model
+            
+            self.modules.state(self.model, self.nn.flops, self.nn.nparams)
+            self.score = PENALTY_SCORE
+
+        # 5. Logging
+        self.log()
+        self.modules.print()
         self.modules.log()
 
-        # increase the number of iterations
-        self.new_fc = False
-        self.rem_conv = False
-        self.rem_fc = False
+        # 6. Best Model Tracking
         self.iter += 1
+        if self.score < self.best_score:
+            print(f"[INFO] New Best Score: {self.score:.4f} (Previous: {self.best_score:.4f})")
+            self.best_score = self.score
+            self.best_iter = self.iter
+            self.nn.save_model() # Helper function call
 
-        # if no module has been loaded or is incorrect for the symbolic part
-        # or all the weights of the loaded modules are zero
-        # accuracy will be the value to be optimized
-        # otherwise return the finale function value to be optimized
-        if (len(self.modules.modules_obj) == 0) or not self.modules.all_zeros_weights() or not self.modules.ready():
-            return -self.score[1]
-        else:
-            _, _, opt_value = self.modules.optimiziation()
-            return opt_value
+        # 7. Early Stopping Check
+        if self.iter > self.best_iter + self.exp_cfg.early_stop:
+            print("[INFO]Early Stopping triggered.")
+            self.convergence = True
 
-    def diagnosis(self):
+        # 8. Cleanup
+        if self.clear_session_callback:
+            self.clear_session_callback()
+        
+        return self.score
+    
+
+    def diagnosis(self, const_space) -> Tuple[Any]:
         """
-        method for diagnose possible issue like overfitting
-        :return: call to tuning method or hp_space, model and accuracy(*-1)
+        Diagnose potential issues (e.g., overfitting) and propose tuning actions.
+
+        Returns:
+            (new_search_space, objective_value) where objective_value is what the
+            Bayesian optimizer should minimize on the next iteration.
         """
         print(colors.CYAN, "| START SYMBOLIC DIAGNOSIS ----------------------------------  |\n", colors.ENDC)
-        diagnosis_logs = open("algorithm_logs/diagnosis_symbolic_logs.txt", "a")
-        tuning_logs = open("algorithm_logs/tuning_symbolic_logs.txt", "a")
 
-        # check if there has been an improvement from the last iteration 
-        # also saves loss and accuracy values in the DB
-        improv = self.imp_checker.checker(self.score[1], self.score[0])
-        self.db.insert_ranking(self.score[1], self.score[0])
+        # Open logs with context managers to guarantee closure
+        os.makedirs(f"{self.exp_cfg.name}/algorithm_logs", exist_ok=True)
+        diag_path = f"{self.exp_cfg.name}/algorithm_logs/diagnosis_symbolic_logs.txt"
+        tune_path = f"{self.exp_cfg.name}/algorithm_logs/tuning_symbolic_logs.txt"
 
-        # integral of loss history, useful in the symbolic part
-        int_loss, int_slope = integrals(self.history['val_loss'])
+        with open(diag_path, "a") as diagnosis_logs, open(tune_path, "a") as tuning_logs:
+            # Check last-iteration improvement; persist scores (score and loss) to DB
+            improv = self.imp_checker.checker(self.score)
+            self.db.insert_ranking(self.score)
 
-        # at specific epochs, change  the threshold values for low accuracy and high loss detection
-        for level in self.levels:
-            if self.iter == level:
-                self.lacc = self.lacc/2 + 0.05
-                self.hloss = self.hloss/2 + 0.15
+            if self.nn.flops is None or self.nn.flops <= self.flops_th:
+                # Integral features of validation loss (used by symbolic layer)
+                val_loss_hist = self.history.get("val_loss", [])
+                int_loss, int_slope = integrals(val_loss_hist)
 
-        # base facts list
-        facts_list_module = [self.history['loss'], self.smooth(self.history['loss']),
-             self.history['accuracy'], self.smooth(self.history['accuracy']),
-             self.history['val_loss'], self.history['val_accuracy'], int_loss, int_slope, self.lacc, self.hloss]
+                # Base fact list (raw + smoothed histories)
+                gnorm = getattr(self.model.optimizer, "last_grad_global_norm", 1.0)
+                if not isinstance(gnorm, float):
+                    gnorm = float(gnorm.numpy())
+                facts_list_module = [
+                    self.history.get("loss", []),
+                    self.smooth(self.history.get("loss", [])),
+                    self.history.get("accuracy", []),
+                    self.smooth(self.history.get("accuracy", [])),
+                    self.history.get("val_loss", []),
+                    self.history.get("val_accuracy", []),
+                    int_loss,
+                    int_slope,
+                    self.lacc,
+                    self.hloss,
+                    gnorm,
+                    self.vanish_th,
+                    self.exploding_th
+                ]
 
-        # add facts values from loaded modules
-        facts_list_module += self.modules.values().values()
+                # Add facts from loaded modules
+                facts_list_module += list(self.modules.values().values())
+                self.only_modules = False
 
-        # add facts and problems to NeuralSymbolicBridge
-        # and create dynamic prolog file contains a list of possible problems
-        # only during first diagnosis iteration
-        if self.iter == 1:
-            self.rules, self.actions, self.problems = self.modules.get_rules()
+            else:
+                # Add facts from loaded modules
+                facts_list_module = list(self.modules.values().values())
+                self.only_modules = True
 
-            for module, no_err in zip(self.modules.modules_obj, self.modules.modules_ready):
-                # if there are no errors in the module, dynamically add facts and problems to the symbolic part
-                if no_err:
-                    self.nsb.initial_facts += module.facts
-                    self.nsb.problems += module.problems
+            if self.nn.tot_latency_cost is None or self.nn.tot_latency_cost <= self.latency_th:
+                # Integral features of validation loss (used by symbolic layer)
+                val_loss_hist = self.history.get("val_loss", [])
+                int_loss, int_slope = integrals(val_loss_hist)
 
-            # create a file containing all the logical rules for detecting problems in the network
-            self.nsb.build_sym_prob(self.problems)
+                # Base fact list (raw + smoothed histories)
+                gnorm = getattr(self.model.optimizer, "last_grad_global_norm", 1.0)
+                if not isinstance(gnorm, float):
+                    gnorm = float(gnorm.numpy())
+                facts_list_module = [
+                    self.history.get("loss", []),
+                    self.smooth(self.history.get("loss", [])),
+                    self.history.get("accuracy", []),
+                    self.smooth(self.history.get("accuracy", [])),
+                    self.history.get("val_loss", []),
+                    self.history.get("val_accuracy", []),
+                    int_loss,
+                    int_slope,
+                    self.lacc,
+                    self.hloss,
+                    gnorm,
+                    self.vanish_th,
+                    self.exploding_th
+                ]
 
-        # if there's data on improvement during training
-        # analyse the problems in the neural network, as well as possible solutions,
-        # and modify the probability with which these can be applied
-        if improv is not None:
-            _, lfi_problem = self.lfi.learning(improv, self.symbolic_tuning, self.symbolic_diagnosis, self.actions)
-            sy_model = lfi_problem.get_model()
-            self.nsb.edit_probs(sy_model)
+                # Add facts from loaded modules
+                facts_list_module += list(self.modules.values().values())
+                self.only_modules = False
+            
+            else:
+                # Add facts from loaded modules
+                facts_list_module = list(self.modules.values().values())
+                self.only_modules = True
+            # First diagnosis iteration: assemble rule base from modules and build logic program
+            if self.iter == 1:
+                self.rules, self.actions, self.problems = self.modules.get_rules()
 
-        # analysing the neurla network through rule-based reasoning,
-        # determining possible anomalies and solutions to these problems
-        self.symbolic_tuning, self.symbolic_diagnosis = self.nsb.symbolic_reasoning(
-            facts_list_module, diagnosis_logs, tuning_logs, self.rules)
+                for module, no_err in zip(self.modules.modules_obj, self.modules.modules_ready):
+                    # if there are no errors in the module, dynamically add facts and problems to the symbolic part
+                    if no_err:
+                        self.nsb.initial_facts += module.facts
+                        self.nsb.problems += module.problems
 
-        # close log files in which previous informations are stored
-        diagnosis_logs.close()
-        tuning_logs.close()
-        
-        #print(self.symbolic_tuning)
-        #print(self.symbolic_diagnosis)
+                # Create/refresh the symbolic problem file
+                self.nsb.build_sym_prob(self.problems)
+
+            # If we have improvement data, update the symbolic model probabilities
+            if improv is not None:
+                _, lfi_problem = self.lfi.learning(
+                    improv, self.symbolic_tuning, self.symbolic_diagnosis, self.actions
+                )
+                sy_model = lfi_problem.get_model()
+                self.nsb.edit_probs(sy_model)
+
+            # Run rule-based reasoning to produce candidate repairs and diagnoses
+            self.symbolic_tuning, self.symbolic_diagnosis = self.nsb.symbolic_reasoning(
+                facts_list_module, diagnosis_logs, tuning_logs, self.rules, self, const_space
+            )
+
 
         print(colors.CYAN, "| END SYMBOLIC DIAGNOSIS   ----------------------------------  |\n", colors.ENDC)
 
-        # if the network has anomalies, try to correct them through tuning operations,
-        # returning the new hyper-parameter space at the end
+        # If we have candidate repairs, perform tuning; otherwise return current space
         if self.symbolic_tuning:
-            self.space, to_optimize, self.model = self.tuning()
-            return self.space, to_optimize
+            new_space = self.tuning(const_space)
+            return new_space
         else:
-            return self.space, -self.score[1]
+            return self.space
 
-    def tuning(self):
+    # ------------------------------- Tuning ----------------------------------
+
+    def tuning(self, const_space) -> Tuple[Any]:
         """
-        tuning the hyper-parameter space or add new hyper-parameters
-        :return: new hp_space, new_model and accuracy(*-1) for the Bayesian Optimization
+        Apply symbolic tuning actions to the hyperparameter space and/or architecture.
+
+        Returns:
+            (new_hp_space, objective_value, model)
         """
         print(colors.FAIL, "| START SYMBOLIC TUNING    ----------------------------------  |\n", colors.ENDC)
-        # tuning_logs = open("algorithm_logs/tuning_logs.txt", "a")
-        # new_space, self.model = self.tr.repair(self, self.symbolic_tuning, tuning_logs, self.model, self.params)
-        new_space, self.model = self.tr.repair(self.symbolic_tuning, self.model, self.params)
-        # tuning_logs.close()
+
+        # Perform the actual repairs via the tuning rules engine
+        new_space = self.tr.repair(
+            self.symbolic_tuning, self.symbolic_diagnosis, self.params or {}, const_space
+        )
+
+        # Simple convergence heuristic: too many iterations without clear problems
+        if self.tr.count_no_probs > 5:
+            self.convergence = True
+
         self.issues = []
         print(colors.FAIL, "| END SYMBOLIC TUNING      ----------------------------------  |\n", colors.ENDC)
 
-        return new_space, -self.score[1], self.model
+        return new_space
 
-    def plotting_obj_function(self):
-        """
-        plot graphs from each loaded module
-        """
-        self.modules.plot()
+    def log(self) -> None:
+        f = open(f"{self.exp_cfg.name}/algorithm_logs/acc_report.txt", "a")
+        if self.scoreNN is not None:
+            print(f"\nACCURACY: {self.scoreNN[1]}\n")
+            f.write(str(self.scoreNN[1]) + "\n")
+        else:
+            print(f"\nACCURACY: {0.0}\n")
+            f.write("None \n")
+        f.close()
 
-    def save_experience(self):
-        """
-        the function saves a database containing the progress of the last training of the neural network
-        """
-        # separate the path from the database extension on which the data are stored
-        # and add the name of the model to identify the db associated more easily
-        db_split = os.path.splitext(self.db.db_name)
-        db_dir = (db_split[0] + "-{}" + db_split[1]).format(self.nn.last_model_id)
-        try:
-            copyfile(self.db.db_name, db_dir)
-        except:
-            print(colors.FAIL, "|  -------------- FAILED TO SAVE DB -------------  |\n", colors.ENDC)

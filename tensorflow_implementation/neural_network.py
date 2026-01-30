@@ -1,80 +1,164 @@
-import json
-from time import time
-import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras import layers, models, regularizers, callbacks, preprocessing
-from tensorflow.keras import backend as K
-from tensorflow.keras.optimizers import *
+import re
+import numpy as np
+from typing import Any, Dict, List, Tuple
+from datetime import datetime
+import random
+import os
+
 from components.colors import colors
 from components.neural_network import NeuralNetwork
 from components.dataset import TunerDataset
-from components.model_interface import LayerTypes, TunerModel, LayerSpec, InsertPosition, Params
-from tensorflow_implementation.model import TFModel
+from modules.loss.hardware_module import HardwareModule
+from tensorflow_implementation.flops.flops_calculator import analyze_model
+
+import tensorflow as tf
+from tensorflow.keras import Model
+from tensorflow import keras
+from tensorflow.keras.callbacks import TensorBoard, EarlyStopping
+from tensorflow.keras.optimizers import Optimizer
+from tensorflow.keras import backend as K
+from tensorflow.keras import regularizers as reg
+from tensorflow.keras.layers import (
+    Activation,
+    Conv2D,
+    Dense,
+    GlobalAveragePooling2D,
+    BatchNormalization,
+    Flatten,
+    MaxPooling2D,
+    Dropout,
+    Input,
+    Add
+)
+
+# ----------------------------- Utilities -------------------------------------
+
+
+
+def _optimizer_from_name(name: str, lr: float) -> Optimizer:
+    """
+    Build a Keras optimizer instance from a name string safely (no eval).
+    Accepts canonical names like 'Adam', 'RMSprop', 'SGD' etc.
+    """
+    # tf.keras.optimizers.get accepts either a string or a config dict.
+    try:
+        # Prefer a config so we can set LR explicitly regardless of defaults.
+        return tf.keras.optimizers.get({"class_name": name, "config": {"learning_rate": lr}})
+    except Exception:
+        # Fallback: try to resolve by attribute (case sensitive)
+        opt_cls = getattr(tf.keras.optimizers, name, None)
+        if opt_cls is None:
+            raise ValueError(f"Unknown optimizer '{name}'.")
+        return opt_cls(learning_rate=lr)
+
+
+# ----------------------- Layer-wise LR wrapper -------------------------------
 
 # class wrapper used to add the functionality of the layer wise learning rate
 @keras.utils.register_keras_serializable()
 class LayerWiseLR(Optimizer):
     def __init__(self, optimizer, multiplier, learning_rate=0.001, name="LWLR", **kwargs):
-        if hasattr(optimizer, 'update_step'):
-            super().__init__(learning_rate, **kwargs)
-        else:
+        """
+        class wrapper used to add the functionality of the layer wise learning rate
+        """
+        # checks for the presence of the _HAS_AGGREGATE_GRAD attribute,
+        # present since version 2.11 with the introduction of the new optimizer APIs,
+        # to determine how to initialize the wrapper instance
+        if hasattr(Optimizer, "_HAS_AGGREGATE_GRAD"):
+            # wrapper initialization with new APIs, with learning rate stored in an internal slot
             super().__init__(name, **kwargs)
             self._set_hyper("learning_rate", learning_rate)
+        else:
+            # wrapper initialization with the old API, with the learning rate as an argument
+            super().__init__(name=name, **kwargs)
+
+        # storage of the attributes in the wrapper instance
+        self._learning_rate = learning_rate #tf.Variable(learning_rate, trainable=False, dtype=tf.float32)
         self._optimizer = optimizer
         self._multiplier = multiplier
 
-    # function used to apply a multiplier to a specific layer
-    def mul_param(self, param, var):
-        # get layer name
-        layer_key = var.name.split('/')[0]      
-        # if there's a multiplier value associated with the layer, apply it to the parameter
-        if layer_key in self._multiplier:
-            param *= self._multiplier[layer_key]
-        return param
-            
-    # update step used in keras 3.X
-    def update_step(self, grad, var, learning_rate):
-        new_lr = self.mul_param(learning_rate, var)
-        self._optimizer.update_step(grad, var, new_lr)
+        self.last_grad_global_norm = tf.Variable(0.0, trainable=False, dtype=tf.float32)
+        self.last_grad_max_norm    = tf.Variable(0.0, trainable=False, dtype=tf.float32)
+        self.last_grad_mean_norm   = tf.Variable(0.0, trainable=False, dtype=tf.float32)
 
-    def build(self, var_list):
-        super().build(var_list)
-        self._optimizer.build(var_list)
-        
-    # update step used in keras 2.X
-    @tf.function
-    def _resource_apply_dense(self, grad, var):       
-        new_lr = K.eval(self._get_hyper("learning_rate"))
-        new_lr = self.mul_param(new_lr, var)
-        self._optimizer.learning_rate.assign(new_lr)
-        self._optimizer._resource_apply_dense(grad, var)
+    def apply_gradients(self, grads_and_vars, name: str = None, experimental_aggregate_gradients: bool = True):
+        updated = []
+        per_var_norms = []
+        clean_grads = []
 
+        for grad, var in grads_and_vars:
+            if grad is not None:
+                layer_name = (getattr(var, "path", None) or var.name).split("/")[0]
+                scale = self._multiplier.get(layer_name, 1.0)
+                g = grad * scale
+                updated.append((g, var))
+                clean_grads.append(g)
+                per_var_norms.append(tf.norm(g))
+            else:
+                updated.append((grad, var))
+
+        # Compute and save graph
+        if clean_grads:
+            gnorm = tf.linalg.global_norm(clean_grads)
+            gmax  = tf.reduce_max(per_var_norms)
+            gmean = tf.reduce_mean(per_var_norms)
+            self.last_grad_global_norm.assign(gnorm)
+            self.last_grad_max_norm.assign(gmax)
+            self.last_grad_mean_norm.assign(gmean)
+        else:
+            self.last_grad_global_norm.assign(0.0)
+            self.last_grad_max_norm.assign(0.0)
+            self.last_grad_mean_norm.assign(0.0)
+
+        self._optimizer.learning_rate.assign(self._learning_rate)
+
+        return self._optimizer.apply_gradients(updated)
+
+    # Delegate required slots/config to the base optimizer
     def _create_slots(self, var_list):
-        super()._create_slots(var_list)
-        self._optimizer._create_slots(var_list)
+        if hasattr(self._optimizer, "_create_slots"):
+            self._optimizer._create_slots(var_list)
 
     def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "optimizer": keras.optimizers.serialize(self._optimizer),
-                "multiplier": self._multiplier,
-            }
-        )
-        return config
+        # Config del parent (include clipnorm/clipvalue, ecc.)
+        cfg = super().get_config()
+
+        # serializza l'optimizer interno in modo Keras-friendly
+        base_opt_cfg = serialize_keras_object(self._optimizer)
+
+        # multiplier deve essere JSON-serializzabile
+        mult_cfg = {str(k): float(v) if hasattr(v, "__float__") else v
+                    for k, v in self._multiplier.items()}
+
+        cfg.update({
+            "name": getattr(self, "name", self.__class__.__name__),
+            "optimizer": base_opt_cfg,
+            "multiplier": mult_cfg
+        })
+        return cfg
 
     @classmethod
     def from_config(cls, config):
-        optimizer_config = config.pop("optimizer")
-        multiplier = config.pop("multiplier")
-        optimizer = keras.optimizers.deserialize(optimizer_config)
-        return cls(optimizer=optimizer, multiplier=multiplier, **config)
+        # Estrai ciò che serve alla __init__
+        name = config.pop("name", "LWLR")
+
+        opt_cfg = config.pop("optimizer", None)
+        optimizer = deserialize_keras_object(opt_cfg) if isinstance(opt_cfg, dict) else opt_cfg
+        mult = config.pop("multiplier", None)
+
+        lr = config.get("learning_rate", None)
+
+        return cls(optimizer=optimizer,
+                   multiplier=mult,
+                   learning_rate=lr,
+                   name=name,
+                   **config)
+
 
 
 class NeuralNetwork (NeuralNetwork):
-    def __init__(self, dataset: TunerDataset):
-        super().__init__(dataset)
-
+    def __init__(self, dataset: TunerDataset, da: bool, reg: bool, residual: bool):
+        super().__init__(dataset, da, reg, residual)
         # Framework-specific preprocessing
         self.dataset.Y_train = tf.keras.utils.to_categorical(self.dataset.Y_train, self.dataset.n_classes)
         self.dataset.Y_test = tf.keras.utils.to_categorical(self.dataset.Y_test, self.dataset.n_classes)
@@ -82,212 +166,267 @@ class NeuralNetwork (NeuralNetwork):
             self.dataset.X_train = self.dataset.X_train[..., None]
             self.dataset.X_test = self.dataset.X_test[..., None]
 
-        self.activation_map = {
-            "relu": "relu",
-            "elu": "elu",
-            "selu": "selu",
-            "swish": "swish"
-        }
 
-    def from_checkpoint(self, checkpoint):
-        checkpoint_json = json.dumps(checkpoint)
-        keras_model = models.model_from_json(checkpoint_json)
+    # --------------------------- Build the model -----------------------------
+
+    def _add_residual(self, shortcut, x, output_channels, activation, reg_layer):
+        # If input and output channel dimensions differ, align them via 1x1 conv
+        if shortcut.shape[-1] != output_channels:
+            shortcut = Conv2D(output_channels, (1, 1), padding="same", kernel_regularizer=reg_layer)(shortcut)
+        # Add skip connection
+        x = Add()([shortcut, x])
+        # Apply activation after addition (ResNet-style)
     
-        tf_model = TFModel.__new__(TFModel)   # bypass __init__
-        tf_model.model = keras_model
-        tf_model.input_shape = keras_model.input_shape[1:]
-        tf_model.n_classes = keras_model.output_shape[-1]
-        # tf_model.params = checkpoint.get("params")
-        # tf_model.activation = checkpoint.get("activation")
-        tf_model.create_specs()
+        x = Activation(activation)(x)
+        return x
 
-        return tf_model
-
-    def from_scratch(self, input_shape, n_classes, params):
-        return TFModel(input_shape, params, n_classes, params["activation"])
-
-    def insert_batch(self, model: TunerModel, params):
+    def _validate_labels(self, train_labels, test_labels):
         """
-        method used for inserting batchNormalization operations
-        :param model params n_conv: insert in 'model' batchNormalization and regularization with 'params' parameters
-        :return: model with batchNormalization and regularization
+        Validate that labels are not None and contain valid data.
+        Critical for catching issues in ROI depth mode.
         """
-
-        # If BatchNormalization is already in the model, return it
-        if (self.dnet.count_layer_type(model, LayerTypes.BatchNormalization1D) > 1 or
-                self.dnet.count_layer_type(model, LayerTypes.BatchNormalization2D) > 1):
-            return model
-
-        # otherwise add regularization to each convolutional layer
-        if self.rgl:
-            for layer in model.model.layers:
-                if 'Conv2D' in layer.__class__.__name__:
-                    layer.kernel_regularizer = regularizers.l2(params['reg'])
-
-        # Collect activations to which BatchNormalization should be added
-        activation_list = [layer.type for layer in model.layers.values() if layer.is_activation and layer.type != LayerTypes.Softmax]
-
-        new_section = [
-            LayerSpec(
-                type=LayerTypes.BatchNormalization
-            )
-        ]
-
-        # apply batchNormalization to all saved activations
-        return self.dnet.insert_section(model, 1, new_section, InsertPosition.After, activation_list)
-
-    def training(self, params, new, new_fc, new_conv, rem_conv, rem_fc, da, space):
-        """
-        Function for compiling and running training
-        :param params, new, new_fc, new_conv, rem_conv, da, space: parameters to indicate a possible operation on the network structure and hyperparameter search space
-        :return: training history, trained model and and performance evaluation score 
-        """
-        # build neural network
-        self.model = self.build_network(params, new)
-        print("\n\nBuilt network with new:", new)
-        print("\n\n| ------------- LayerSpecs ------------- |")
-        for k in self.model.layers:
-            print(self.model.layers[k])
-
-        # print(self.model.model.summary())
-
-        # self.model = self.insert_batch(self.model, params)
-        # params['new_fc'] = 512
-        # self.model = self.insert_fc_section(self.model, params, 1)
-        # self.model = self.insert_conv_section(self.model, params, 1)
-        # self.model = self.remove_conv_section(self.model)
-        # self.model = self.remove_fc_section(self.model)
-
-        # print(self.model.model.summary())
-        # exit()
+        if train_labels is None:
+            raise ValueError("train_labels is None - data loading failed in ROI depth mode")
+        if test_labels is None:
+            raise ValueError("test_labels is None - data loading failed in ROI depth mode")
         
-        try:
-            # try adding or removing a layer in the neural network based on the anomalies diagnosis
-            if new or new_fc or new_conv or rem_conv:
-                # if the flag for the addition of a dense layer is true
-                if new_fc:
-                    if new_fc[0]:
-                        self.dense = True
-                        self.model = self.insert_fc_section(self.model, params, new_fc[1])
-                # if the flag for the addition of regularization is true
-                if new:
-                    self.rgl = True
-                    self.dense = False
-                    self.model = self.insert_batch(self.model, params)
-                # if the flag for the addition of a convolutional layer
-                if new_conv:
-                    if new_conv[0]:
-                        self.conv = True
-                        self.dense = False
-                        self.rgl = False
-                        self.model = self.insert_conv_section(self.model, params, new_conv[1])
-                # if the flag for the removal of a convolutional layer is true
-                if rem_conv:
-                    self.conv = False
-                    self.dense = False
-                    self.rgl = False
-                    self.model = self.remove_conv_section(self.model, params)
-                # if the flag for the removal of a dense layer is true
-                if rem_fc:
-                    self.conv = False
-                    self.dense = False
-                    self.rgl = False
-                    self.model = self.remove_fc_section(self.model, params)
+        # Check for object arrays containing None
+        if isinstance(train_labels, np.ndarray) and train_labels.dtype == object:
+            if any(x is None for x in train_labels.flat):
+                raise ValueError("train_labels contains None values")
 
-        except Exception as e:
-            print(colors.FAIL, "Error modifying network:", e, colors.ENDC)
+
+    def build_network(self, params, layer_x_block=2):
+        """
+        Define (or reload) the network architecture from params.
+
+        Strategy:
+          1) Try to resume from latest dashboard model if present.
+          2) Otherwise build a new model based on `params`.
+        """
+        # 1) clear session
+        tf.keras.backend.clear_session()
+        batch = True #self.exp_cfg.dataset == 'tinyimagenet'
+        self.model = None
+        # 2) Build a new CNN
+        input_shape = self.dataset.X_train.shape[1:]  # generic (H, W, C)
+
+        reg_layer = reg.l2() if self.reg else None
+
+        inputs = Input(input_shape)
+        if self.da:
+            inputs = tf.keras.layers.RandomFlip("horizontal")(inputs)
+            inputs = tf.keras.layers.RandomTranslation(height_factor=0.1, width_factor=0.1, fill_mode="nearest")(inputs)
+
+        x = Conv2D(params["unit_c1"] * params['num_neurons'], (3, 3), padding="same")(inputs)
+        x = Activation(params["activation"])(x)
+        x = BatchNormalization()(x) if batch else x
+        for _ in range(1, layer_x_block-1):
+            x = Conv2D(params["unit_c1"] * params['num_neurons'], (3, 3), padding="same")(x)
+            x = Activation(params["activation"])(x)
+            x = BatchNormalization()(x) if batch else x
+        if self.residual:
+            x = Conv2D(params["unit_c1"] * params['num_neurons'] , (3, 3), padding="same")(x)
+            x = self._add_residual(inputs, x, params['unit_c1'] * params['num_neurons'], params['activation'], reg_layer)
+        else:
+            x = Conv2D(params["unit_c1"] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
+            x = Activation(params["activation"])(x)
+            x = BatchNormalization()(x) if batch else x
+        x = MaxPooling2D(pool_size=(2, 2))(x)
+
+        shortcut = x
+        for _ in range(layer_x_block-1):
+            x = Conv2D(params["unit_c2"] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
+            x = Activation(params["activation"])(x)
+            x = BatchNormalization()(x) if batch else x
+        if self.residual:
+            x = Conv2D(params["unit_c2"] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
+            x = self._add_residual(shortcut, x, params['unit_c2'] * params['num_neurons'], params['activation'], reg_layer)
+        else:
+            x = Conv2D(params["unit_c2"] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
+            x = Activation(params["activation"])(x)
+            x = BatchNormalization()(x) if batch else x
+        x = MaxPooling2D(pool_size=(2, 2))(x)
+
+
+        # Dynamically added conv blocks (conv -> act -> conv -> act -> pool -> dropout)
+        added_convs = [k for k in params if re.match(r"new_conv_\d+$", k) and params[k] > 0]
+        for layer_key in sorted(added_convs, key=lambda s: int(s.split("_")[-1])):  # stable order
+            shortcut = x
+            for _ in range(layer_x_block-1):
+                x = Conv2D(params[layer_key] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
+                x = Activation(params["activation"])(x)
+                x = BatchNormalization()(x) if batch else x
+            if self.residual:
+                x = Conv2D(params[layer_key] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
+                x = self._add_residual(shortcut, x, params[layer_key] * params['num_neurons'], params['activation'], reg_layer)
+            else:
+                x = Conv2D(params[layer_key] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
+                x = Activation(params["activation"])(x)
+                x = BatchNormalization()(x) if batch else x
+            x = MaxPooling2D(pool_size=(2, 2))(x)
+
+        x = GlobalAveragePooling2D()(x) if batch else Flatten()(x)
         
-        # print the structure of the neural network and save it in a json file,
-        # using the current time as identifier of the model
-        print(self.model.model.summary())
 
-        model_name_id = time()
-        model_json = self.model.model.to_json()
-        model_name = "Model/model-{}.json".format(model_name_id)
-        with open(model_name, 'w') as json_file:
-            json_file.write(model_json)
+        # Dynamically added FC layers
+        added_fcs = [k for k in params if re.match(r"new_fc_\d+$", k) and params[k] > 0]
+        for layer_key in sorted(added_fcs, key=lambda s: int(s.split("_")[-1])):  # stable order
+            x = Dense(params[layer_key] * params['num_neurons'], kernel_regularizer=reg_layer)(x)
+            x = Activation(params["activation"])(x)
+            x = Dropout(params["dr_f"])(x)
 
-        # save the id of the model in an attribute, so that it can be used later to save an associated db with the same id
+        outputs = Dense(self.n_classes, kernel_regularizer=reg_layer, activation="softmax")(x)
+
+        # Build model with appropriate inputs
+        self.model = Model(inputs=inputs, outputs=outputs)
+        if self.exp_cfg.verbose > 1:
+            self.model.summary()
+        if "flops_module" in self.exp_cfg.mod_list:
+            # Compute FLOPs (approximate; counts MACs as 2 FLOPs)
+            try:
+                self.flops = analyze_model(self.model)[0].total_float_ops
+                trainableParams = np.sum([np.prod(v.shape) for v in self.model.trainable_weights])
+                nonTrainableParams = np.sum([np.prod(v.shape) for v in self.model.non_trainable_weights])
+                self.nparams = trainableParams + nonTrainableParams
+            except Exception:
+                self.flops = None  # FLOPs computation failed; ignore
+                self.nparams = None
+        if "hardware_module" in self.exp_cfg.mod_list:
+            # Compute total latency cost
+            try:
+                HW_module = HardwareModule(weight_cost=0.3)
+                HW_module.update_state(self.model)
+                self.tot_latency_cost = HW_module.total_cost
+            except Exception:
+                self.tot_latency_cost = None  # FLOPs computation failed; ignore
+
+    def training(self, params: Dict[str, Any]) -> Tuple[List[float], Dict[str, List[float]], Model]:
+        """
+        Compile and train the model.
+
+        Args:
+            params: Hyperparameters (expects keys like unit_c1, unit_c2, unit_d, activation,
+                    dr1_2, dr_f, optimizer (str), learning_rate (float), batch_size (int), [reg]).
+
+        Returns:
+            (score, history, model) where:
+              - score: [loss, accuracy] from evaluation
+              - history: Keras-like history dict
+              - model: trained (and reloaded) Keras model
+        """
+        if self.model is None:
+            print("Error: Model is not built.")
+            exit(1)
+        # Unique id for artifacts of this run
+        model_name_id = datetime.now().strftime("%y_%m_%d_%H_%M_%S_%f")
         self.last_model_id = model_name_id
 
-        # try to load a set of weights 
+        # Persist the (fresh) architecture JSON for later reloading
+        model_json_path = f"{self.exp_cfg.name}/Model/model-{model_name_id}.json"
+        with open(model_json_path, "w") as json_file:
+            json_file.write(self.model.to_json())
+
+        # Try loading previous weights if available (fine-tune / warm start)
         try:
-            self.model.model.load_weights("Weights/weights.h5")
-        except:
-            print("Restart\n")
+            prev_weights = f"{self.exp_cfg.name}/Weights/weights.h5"
+            if os.path.exists(prev_weights):
+                self.model.load_weights(prev_weights)
+        except Exception:
+            pass  # ignore if incompatible
 
-        # tensorboard logs
-        tensorboard = callbacks.TensorBoard(
-            log_dir="log_folder/logs/{}".format(model_name_id))
+        # TensorBoard callback
+        tb_log_dir = f"{self.exp_cfg.name}/log_folder/logs/{model_name_id}"
+        tensorboard = TensorBoard(log_dir=tb_log_dir)
 
-        # losses, lrs = self.lolr_checking(model, space, params['learning_rate'], params['batch_size'], self.dataset.X_train,
-        #                                  self.dataset.Y_train, self.dataset.X_test, self.dataset.Y_test)
+        # --- Optimizer (safe construction, then wrap with LayerWiseLR) ---
+        base_opt = _optimizer_from_name(params["optimizer"], float(params["learning_rate"]))
 
-        # compiling and training
-        _opt = params['optimizer'] + "(learning_rate=" + str(params['learning_rate']) + ")"
-        opt = eval(_opt)
+        # Build per-layer multipliers (decay by sqrt(2) across Conv2D feature hierarchy)
+        multiplier: Dict[str, float] = {}
+        trainable_names = [
+            (getattr(var, "path", None) or var.name).split("/")[0]
+            for var in self.model.trainable_variables
+        ]
 
-        # create a dictionary with which to associate model layers with a multiplier (layer wise learning rate)
-        multiplier = {}
-        # trainable variables names
-        new_keras = hasattr(opt, 'update_step')
-        trainable = [(layer.path if new_keras else layer.name).split('/')[0] for layer in self.model.model.trainable_variables]
-        # for each successive variable, i'll have a reduction by a factor of sqrt(2)
-        current_mul = 1
-        lr_factor = 1.414213
-        # iterate over each trainable layer, skipping one (kernel and bias pairs)
-        for layer in trainable[::2]:
-            # get layer class name
-            layer_type = self.model.model.get_layer(layer).__class__.__name__
-            # if the current layer is a type on which we want to apply a multiplier
-            if layer_type in ['Conv2D']:
-                multiplier |= {layer : current_mul}
+        current_mul = 1.0
+        lr_factor = 1.414213  # sqrt(2)
+        for layer_name in trainable_names[::2]:  # skip bias variables (kernel/bias pairs)
+            layer_type = self.model.get_layer(layer_name).__class__.__name__
+            if layer_type in {"Conv2D"}:
+                multiplier[layer_name] = current_mul
                 current_mul /= lr_factor
 
-        opt = LayerWiseLR(opt, multiplier, learning_rate=params['learning_rate'])
+        opt = LayerWiseLR(base_opt, multiplier, learning_rate=float(params["learning_rate"]))
 
-        self.model.model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=['accuracy'])
-        es1 = callbacks.EarlyStopping(monitor='val_loss', min_delta=0.005, patience=15, verbose=1, mode='min')
-        es2 = callbacks.EarlyStopping(monitor='val_accuracy', min_delta=0.005, patience=15, verbose=1, mode='max')
-        reduce_lr = callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=5, verbose=1, min_lr=1e-4)
+        # --- Callbacks ---
+        es = EarlyStopping(monitor="val_accuracy", min_delta=0.005, patience=20, verbose=1,
+                            mode="max", restore_best_weights=True)
+        # --- Compile ---
+        self.model.compile(loss="categorical_crossentropy", optimizer=opt, metrics=["accuracy"])
 
-        # if the flag of data augmentation is true
-        if da:
-            # define a generator in which are present the values of the data augmentation parameters
-            datagen = preprocessing.image.ImageDataGenerator(
-                width_shift_range=0.1,
-                height_shift_range=0.1,
-                fill_mode='nearest',
-                cval=0.,
-                horizontal_flip=True)
-            datagen.fit(self.dataset.X_train)
-
-            # train the model
-            history = self.model.model.fit(
-                datagen.flow(self.dataset.X_train, self.dataset.Y_train, batch_size=params['batch_size']), epochs=self.epochs,
-                verbose=1, validation_data=(self.dataset.X_test, self.dataset.Y_test),
-                callbacks=[tensorboard, reduce_lr, es1, es2]).history
-        else:
-            # train the network without data augmentation
-            history = self.model.model.fit(self.dataset.X_train, self.dataset.Y_train, epochs=self.epochs, batch_size=params['batch_size'],
-                                verbose=1,
-                                validation_data=(self.dataset.X_test, self.dataset.Y_test),
-                                callbacks=[tensorboard, reduce_lr, es1, es2]).history
-
-        # evaluates model performance on test data
-        score = self.model.model.evaluate(self.dataset.X_test, self.dataset.Y_test)
-
-        # save the neural network weights and then reload them from the same json file you just saved
-        # this avoids errors because of the changes in the network structure before training
-        weights_name = "Weights/weights-{}.weights.h5".format(model_name_id)
-        self.model.model.save_weights(weights_name)
-        self.model.model.save("dashboard/model/model.keras")
+        # --- Train ---
         
-        f = open("Model/model-{}.json".format(model_name_id))
-        self.model = self.from_checkpoint(json.load(f))
-        self.model.model.load_weights(weights_name)
+        if "debug" in self.exp_cfg.name:
+            history = {k: [] for k in ["loss", "accuracy", "val_loss", "val_accuracy"]}
+            for _ in range(self.exp_cfg.epochs):
+                history["val_loss"].append(random.uniform(0.1, 0.5))
+                history["val_accuracy"].append(random.uniform(0.1, 1.0))
+                history["loss"].append(random.uniform(0.1, 0.5))
+                history["accuracy"].append(random.uniform(0.1, 1.0))
+        else:
+            
+            train_input = self.train_data
+            test_input = self.test_data
+            
+            # Validate labels before model.fit() - critical for ROI depth mode
+            self._validate_labels(self.train_labels, self.test_labels)
+            
+            history = self.model.fit(
+                train_input, self.train_labels,
+                epochs=self.epochs,
+                batch_size=int(params["batch_size"]),
+                verbose=2,
+                validation_data=(test_input, self.test_labels),
+                callbacks=[tensorboard, es],
+            ).history
+        # --- Evaluate ---
+        score = self.eval_model()
+        # --- Save weights and canonical dashboard model ---
+        # weights_tmp = f"{self.exp_cfg.name}/Weights/weights-{model_name_id}.weights.h5"
+        # self.model.save_weights(weights_tmp)
 
-        print("\n\n Reloaded model to avoid errors.\n\n")
+        try:
+            dash_model_path = f"{self.exp_cfg.name}/dashboard/model/model.keras"
+            self.model.save(dash_model_path)
 
-        # score is [val_loss, accuracy]
-        return score, history, self.model 
+            if not getattr(self.model, "built", False) or self.model.inputs is None:
+                # print("\n\n\n\n\n\n rebuilding model\n\n\n\n\n")
+                self.model = tf.keras.models.load_model(dash_model_path, custom_objects={"LayerWiseLR": LayerWiseLR})
+        except:
+            pass
+        try:
+            os.remove(model_json_path)
+        except OSError:
+            pass
+
+        return score, history, self.model
+    
+    def eval_model(self):
+        if "debug" in self.exp_cfg.name:
+            score = [random.uniform(0.1, 0.5), random.uniform(0.1, 1.0)]
+        else:
+            test_input = self.test_data
+            score = self.model.evaluate(test_input, self.test_labels, verbose=2)
+        return score
+    
+    
+    def save_model(self):
+        """Helper to handle safe model saving."""
+        if self.model is None: return
+        try:
+            save_path = os.path.join(self.exp_cfg.name, "Model")
+            os.makedirs(save_path, exist_ok=True)
+            self.model.save(os.path.join(save_path, "best-model.keras"))
+        except Exception as e:
+            print(f"[ERROR] Failed to save best model: {e}")

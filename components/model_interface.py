@@ -182,22 +182,3 @@ class TunerModel(ABC):
 
         return s
 
-    @abstractmethod
-    def create_specs(self):
-        raise NotImplementedError
-    
-    @abstractmethod
-    def add_layers(self, layers: List[LayerSpec], targets: List[LayerTypes], position: InsertPosition):
-        raise NotImplementedError
-
-    @abstractmethod
-    def remove_layers(self, target: LayerSpec, linked_layers: List[LayerTypes], delimiter: bool, first_found: bool):
-        raise NotImplementedError
-
-    @abstractmethod
-    def from_type(self, layer_type: LayerTypes):
-        raise NotImplementedError
-
-    @abstractmethod
-    def to_type(self, cls: Any):
-        raise NotImplementedError

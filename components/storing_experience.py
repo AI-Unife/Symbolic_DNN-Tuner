@@ -1,6 +1,8 @@
 import sqlite3 as db
 from sqlite3 import Error
-import re
+
+from exp_config import load_cfg
+import numpy as np
 
 
 class StoringExperience:
@@ -11,7 +13,8 @@ class StoringExperience:
         """
         initialise attributes in which to store into the db operations of creation and cleaning of tables
         """
-        self.db_name = "database/experience.db"
+        cfg = load_cfg()
+        self.db_name = "{}/database/experience.db".format(cfg.name)
         self.destroy1 = """
             DROP TABLE IF EXISTS ranking
         """
@@ -21,8 +24,7 @@ class StoringExperience:
         self.create1 = """
             CREATE TABLE IF NOT EXISTS ranking (
             id integer PRIMARY KEY,
-            val_acc real,
-            val_loss real)
+            score real)
         """
         self.create2 = """
             CREATE TABLE IF NOT EXISTS experience (
@@ -60,14 +62,14 @@ class StoringExperience:
         conn.commit()
         conn.close()
 
-    def insert_ranking(self, val_acc, val_loss):
+    def insert_ranking(self, score):
         """
-        method used to insert accuracy and loss values into the db
+        method used to insert accuracy and score values into the db
         """
         conn = self.connection()
         c = conn.cursor()
         try:
-            c.execute('INSERT INTO ranking (val_acc, val_loss) VALUES (' + str(val_acc) + ',' + str(val_loss) + ')')
+            c.execute('INSERT INTO ranking (score) VALUES (' + str(1e10) + ')')
         except Error as e:
             print(e)
         conn.commit()
@@ -90,16 +92,14 @@ class StoringExperience:
 
     def formatting(self, res):
         """
-        method used to split loss and accuracy values into two lists
+        method used to obtain score values into list
         :param res: list of lists, each of which will contain two values, one of acc and one of loss
-        :return: two lists containing loss and acc values
+        :return: list containing score values
         """
-        acc = []
-        loss = []
+        scores = []
         for i in res:
-            acc.append(i[1])
-            loss.append(i[2])
-        return acc, loss
+            scores.append(i[1])
+        return scores
 
     def get(self):
         """

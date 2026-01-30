@@ -8,7 +8,7 @@ class module:
     """
     Class for creating and managing loss module instances
     """
-    def __init__(self, backend, input_shape, n_classes, modules = []):
+    def __init__(self, modules = []):
         """
         This method initialises the initial attributes in which the informations
         required to manage module instances will be stored:
@@ -27,29 +27,27 @@ class module:
         After the attributes have been initialised, the method to instantiate the modules 'load_modules()' is called 
         """ 
         self.modules_list = modules
-        self.backend = backend
         self.modules_obj = []
         self.modules_name = []
         self.modules_ready = []
-        self.input_shape = input_shape
-        self.n_classes = n_classes
         self.load_modules()
+
+    def get_module(self, name):
+        for i, module in enumerate(self.modules_list):
+            if module == name:
+                return self.modules_obj[i]
 
     def load_modules(self):
         """
         Creation of module instances
         """
         for module in self.modules_list:
-            try:
+            # try:
                 # each module is stored in the 'loss' folder
                 base_dir = "modules.loss." + module
 
                 # with the help of importlib, i try to import the current module
                 # if this works, proceed to obtain the class with the same name as the module
-
-                print(base_dir)
-                print(importlib.import_module(base_dir))
-
                 module_class = getattr(importlib.import_module(base_dir), module)
 
                 # each module must use 'common interface' as interface
@@ -58,18 +56,19 @@ class module:
 
                     # if the module is instantiated, put the instance and the name in the dedicated lists.
                     # in addition, set the boolean for inclusion in the prolog model to 'True'
-                    self.modules_obj.append(module_class(self.backend, self.input_shape, self.n_classes))
+                    self.modules_obj.append(module_class())
                     self.modules_name.append(module)
                     self.modules_ready.append(True)
                 else:
                     print(colors.FAIL, f"|  --------- {module} DOESN'T IMPLEMENT INTERFACE  -------  |\n", colors.ENDC)
-            except AttributeError:
-                print(colors.FAIL, f"|  ----------- {module} CLASS DOESN'T EXIST ----------  |\n", colors.ENDC)
-            except ModuleNotFoundError as error:
-                print(colors.FAIL, f"|  ----------- FAILED TO INSTANCIATE {module} ----------  |\n", colors.ENDC)
-                print(error)
-            except NotImplementedError:
-                print(colors.FAIL, f"|  -------------- ERROR IN {module} STRUCTURE -------------  |\n", colors.ENDC)
+            # except AttributeError:
+            #     print(colors.FAIL, f"|  ----------- {module} CLASS DOESN'T EXIST ----------  |\n", colors.ENDC)
+            # except ModuleNotFoundError:
+            #     print(colors.FAIL, f"|  ----------- FAILED TO INSTANCIATE {module} ----------  |\n", colors.ENDC)
+            #     exit()
+            # except NotImplementedError:
+            #     print(colors.FAIL, f"|  -------------- ERROR IN {module} STRUCTURE -------------  |\n", colors.ENDC)
+
 
     def ready(self):
         """
@@ -95,9 +94,9 @@ class module:
         # rules contains prolog rules useful for defining problems that might affect the network
         # actions contains the rules for tuning probabilities
         # problems contains the definition of actions to use given a certain problem
-        rules = ""
-        actions = ""
-        problems = ""
+        rules = "\n"
+        actions = "\n"
+        problems = "\n"
 
         for index, name in enumerate(self.modules_name):
 
@@ -185,7 +184,7 @@ class module:
 
         # Normalise the values of the weights dividing each of them
         # by the sum of all the accumulated weights
-        norm_weights = [w / np.sum(weights) for w in weights]
+        norm_weights = [w for w in weights]
 
         # The final value is the sum of the products of the weights by the corresponding values
         final_opt = np.sum([w*v for w,v in zip(norm_weights,values)])

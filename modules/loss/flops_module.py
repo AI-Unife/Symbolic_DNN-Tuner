@@ -1,37 +1,34 @@
 from modules.common_interface import common_interface
-from tensorflow.keras.models import load_model
-from components.colors import colors
 import os
 import matplotlib.pyplot as plt
 import numpy as np
 
 import flops.flops_calculator as fc
+from exp_config import load_cfg
 
-class flops_module(common_interface):
+class FlopsModule(common_interface):
 
     #facts and problems for creating the prolog model
     facts = ['flops', 'flops_th', 'nparams', 'nparams_th']
     problems = ['latency', 'model_size']
 
     #weight of the module for the final loss calculation
-    weight = 0.5
+    weight = 0.33
+
 
     def __init__(self):
-        self.epsilon = 0.33
-        self.flops_th = 120000000
-        self.nparams_th = 23851784 # inceptionV3 total params
+        # self.epsilon = 0.33
+        self.cfg = load_cfg()
+        self.flops_th = 150000000 # 150 MFLOPs
+        self.nparams_th = 2500000 # 2.5M params
         self.tuner_opt_function = []
         self.flops_gap = []
         self.tuner_steps = 0
 
     def update_state(self, *args):
-        self.accuracy = args[1]
-        self.model = args[2]
-        self.flops, _ = fc.analyze_model(self.model)
-        self.flops = self.flops.total_float_ops
-        trainableParams = np.sum([np.prod(v.shape)for v in self.model.trainable_weights])
-        nonTrainableParams = np.sum([np.prod(v.shape)for v in self.model.non_trainable_weights])
-        self.nparams = trainableParams + nonTrainableParams
+        self.model = args[0]
+        self.flops = args[1]
+        self.nparams = args[2]
 
     def obtain_values(self):
         # has to match the list of facts
@@ -45,8 +42,8 @@ class flops_module(common_interface):
         # norm flops between 0 - 1
         flops_th = 1
         nflops = self.flops / self.flops_th
-        fit_up_flops = abs(flops_th - nflops)
-        res = -(abs(self.accuracy - fit_up_flops*self.epsilon))
+        fit_up_flops = flops_th - nflops
+        res = -fit_up_flops
         self.flops_gap.append(fit_up_flops)
         self.tuner_steps += 1
         self.tuner_opt_function.append(res)
@@ -59,11 +56,11 @@ class flops_module(common_interface):
         y2 = self.flops_gap
         plt.plot(x, y1, color='black', label="Total Object Function")
         plt.plot(x, y2, color='blue', label="FLOPS gap")
-        plt.savefig("objective_funct.png")
+        plt.savefig("{}/objective_funct.png".format(self.cfg.name))
 
     def log_function(self):
-        if os.path.exists("graph_report.txt"):
-            os.remove("graph_report.txt")
-        f = open("graph_report.txt", "a")
-        f.write(str(self.flops_th) + " " + str(self.flops) + " " + str(self.accuracy) + "\n")
+        # if os.path.exists("{}/graph_report.txt".format(cfg.NAME_EXP)):
+        #     os.remove("{}/graph_report.txt".format(cfg.NAME_EXP))
+        f = open("{}/flops_report.txt".format(self.cfg.name), "a")
+        f.write(str(self.flops_th) + " " + str(self.flops) + "\n")
         f.close()

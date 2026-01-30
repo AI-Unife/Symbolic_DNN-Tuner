@@ -1,14 +1,39 @@
-class objFunction:
-    def __init__(self, search, controller):
-        self.search_space = search
-        self.controller = controller
-        self.space = {}
+from components.colors import colors
+from components.controller import controller
+from exp_config import load_cfg
+from skopt.space import Space
+from typing import List
+from pathlib import Path
 
-    def objective(self, params):
-        for i,j in zip(self.search_space, params):
-            self.space[i.name] = j
 
-        f = open("algorithm_logs/hyperparameters.txt", "a")
-        to_optimize = self.controller.training(self.space)
-        f.close()
-        return to_optimize
+class ObjectiveWrapper:
+    """
+    Helper to convert a sampled vector from skopt Space to a `dict` for the controller.
+    """
+    def __init__(self, space: Space, ctrl: controller):
+        self.search_space = space
+        self.controller = ctrl
+        self.exp_cfg = load_cfg()
+
+    def objective(self, params: List) -> float:
+        """
+        Convert vector `params` to {name: value}, log it, train once, and return the score.
+        """
+        # 1. Convert list of parameters to a dictionary
+        space_dict = {dim.name: val for dim, val in zip(self.search_space.dimensions, params)}
+        print("Chosen point:", space_dict)
+
+        # 2. Log the chosen parameters
+        log_path = Path(self.exp_cfg.name) / "algorithm_logs" / "hyper-neural.txt"
+        try:
+            with open(log_path, "a") as f:
+                f.write(str(space_dict) + "\n")
+        except OSError as e:
+            print(colors.WARNING, f"Could not write to log file {log_path}: {e}", colors.ENDC)
+        
+        # 3. Run the training and get the score
+        score = self.controller.training(space_dict)
+        
+        
+        print("Score:", score, flush=True)
+        return float(score)
