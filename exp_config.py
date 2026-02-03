@@ -23,17 +23,13 @@ class ConfigSchema:
     mod_list: List[str] = None
     dataset: str = "cifar-10"
     name: str = "debug"
-    frames: int = 16
-    mode: str = "fwdPass"            # fwdPass | depth | hybrid
-    channels: int = 2
-    polarity: str = "both"           # both | sum | sub | drop
     seed: int = 42
+    backend: str = "tf"            # tf | torch
     opt: str = "RS_ruled"            # standard | filtered | basic | RS | RS_ruled
 
 # ---------------- Validazione (stesse regole del tuo parser) ----------------
 _VALID_MODULES = {"hardware_module", "flops_module"}
-_VALID_MODES = {"fwdPass", "depth", "hybrid"}
-_VALID_POLARITY = {"both", "sum", "sub", "drop"}
+
 _VALID_OPT = {"standard", "filtered", "basic", "RS", "RS_ruled"}
 
 def create_config_file(exp_dir: str | Path, overrides: Optional[Dict[str, Any]] = None) -> Path:
@@ -54,17 +50,12 @@ def create_config_file(exp_dir: str | Path, overrides: Optional[Dict[str, Any]] 
         "mod_list": schema.mod_list or [],
         "dataset": schema.dataset,
         "name": schema.name,
-        "frames": schema.frames,
-        "mode": schema.mode,
-        "channels": schema.channels,
-        "polarity": schema.polarity,
         "seed": schema.seed,
         "opt": schema.opt,
         "verbose": schema.verbose if hasattr(schema, "verbose") else 0,
         "quantization": schema.quantization if hasattr(schema, "quantization") else False,
         "early_stop": schema.early_stop if hasattr(schema, "early_stop") else 20,
-        "dataset_path": schema.dataset_path if hasattr(schema, "dataset_path") else "./data",
-        "cache_dataset": schema.cache_dataset if hasattr(schema, "chache_dataset") else "./cache",
+        "backend": schema.backend if hasattr(schema, "backend") else "tf",
     }
     if overrides:
         base.update(overrides)
@@ -87,13 +78,6 @@ def _validate(d: Dict[str, Any]) -> None:
     bad = [m for m in mods if m not in _VALID_MODULES]
     if bad:
         raise ValueError(f"Invalid module(s) {bad}. Choose from: {sorted(_VALID_MODULES)}")
-    # mode
-    if d.get("mode") not in _VALID_MODES:
-        raise ValueError(f"Invalid mode '{d.get('mode')}'. Choose from: {sorted(_VALID_MODES)}")
-    # polarity
-    if d.get("polarity") not in _VALID_POLARITY:
-        raise ValueError(f"Invalid polarity '{d.get('polarity')}'. Choose from: {sorted(_VALID_POLARITY)}")
-    # opt
     if d.get("opt") not in _VALID_OPT:
         print(f"Invalid opt '{d.get('opt')}'. Choose from: {sorted(_VALID_OPT)}. Set RS_ruled")
         d['opt'] = 'RS_ruled'
@@ -129,17 +113,12 @@ def _apply_defaults(d: Dict[str, Any]) -> Dict[str, Any]:
         "mod_list": d.get("mod_list", schema.mod_list or []),
         "dataset": d.get("dataset", schema.dataset),
         "name": d.get("name", schema.name),
-        "frames": d.get("frames", schema.frames),
-        "mode": d.get("mode", schema.mode),
-        "channels": d.get("channels", schema.channels),
-        "polarity": d.get("polarity", schema.polarity),
         "seed": d.get("seed", schema.seed),
         "opt": d.get("opt", schema.opt),
         "verbose": d.get("verbose", getattr(schema, "verbose", 0)),
         "quantization": d.get("quantization", getattr(schema, "quantization", False)),
         "early_stop": d.get("early_stop", getattr(schema, "early_stop", 20)),
-        "dataset_path": d.get("dataset_path", getattr(schema, "dataset_path", "./data")),
-        "cache_dataset": d.get("cache_dataset", getattr(schema, "cache_dataset", "./cache")),
+        "backend": d.get("backend", getattr(schema, "backend", "tf")),
     }
     return merged
 

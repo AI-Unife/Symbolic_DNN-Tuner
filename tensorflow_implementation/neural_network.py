@@ -5,10 +5,8 @@ from datetime import datetime
 import random
 import os
 
-from components.colors import colors
 from components.neural_network import NeuralNetwork
 from components.dataset import TunerDataset
-from modules.loss.hardware_module import HardwareModule
 from tensorflow_implementation.flops.flops_calculator import analyze_model
 
 import tensorflow as tf
@@ -295,7 +293,8 @@ class NeuralNetwork (NeuralNetwork):
         if "hardware_module" in self.exp_cfg.mod_list:
             # Compute total latency cost
             try:
-                HW_module = HardwareModule(weight_cost=0.3)
+                from modules.loss.hardware_module import hardware_module
+                HW_module = hardware_module(weight_cost=0.3)
                 HW_module.update_state(self.model)
                 self.tot_latency_cost = HW_module.total_cost
             except Exception:
@@ -376,32 +375,23 @@ class NeuralNetwork (NeuralNetwork):
                 history["accuracy"].append(random.uniform(0.1, 1.0))
         else:
             
-            train_input = self.train_data
-            test_input = self.test_data
-            
-            # Validate labels before model.fit() - critical for ROI depth mode
-            self._validate_labels(self.train_labels, self.test_labels)
             
             history = self.model.fit(
-                train_input, self.train_labels,
+                self.dataset.X_train, self.dataset.Y_train,
                 epochs=self.epochs,
                 batch_size=int(params["batch_size"]),
                 verbose=2,
-                validation_data=(test_input, self.test_labels),
+                validation_data=(self.dataset.X_test, self.dataset.Y_test),
                 callbacks=[tensorboard, es],
             ).history
         # --- Evaluate ---
         score = self.eval_model()
-        # --- Save weights and canonical dashboard model ---
-        # weights_tmp = f"{self.exp_cfg.name}/Weights/weights-{model_name_id}.weights.h5"
-        # self.model.save_weights(weights_tmp)
 
         try:
             dash_model_path = f"{self.exp_cfg.name}/dashboard/model/model.keras"
             self.model.save(dash_model_path)
 
             if not getattr(self.model, "built", False) or self.model.inputs is None:
-                # print("\n\n\n\n\n\n rebuilding model\n\n\n\n\n")
                 self.model = tf.keras.models.load_model(dash_model_path, custom_objects={"LayerWiseLR": LayerWiseLR})
         except:
             pass
@@ -416,8 +406,7 @@ class NeuralNetwork (NeuralNetwork):
         if "debug" in self.exp_cfg.name:
             score = [random.uniform(0.1, 0.5), random.uniform(0.1, 1.0)]
         else:
-            test_input = self.test_data
-            score = self.model.evaluate(test_input, self.test_labels, verbose=2)
+            score = self.model.evaluate(self.dataset.X_test, self.dataset.Y_test, verbose=2)
         return score
     
     

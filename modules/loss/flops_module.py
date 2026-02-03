@@ -1,9 +1,6 @@
 from modules.common_interface import common_interface
-import os
 import matplotlib.pyplot as plt
-import numpy as np
 
-import flops.flops_calculator as fc
 from exp_config import load_cfg
 
 class FlopsModule(common_interface):

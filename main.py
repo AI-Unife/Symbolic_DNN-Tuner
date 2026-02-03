@@ -9,16 +9,14 @@ from typing import List
 from pathlib import Path 
 
 from skopt.space import Categorical, Space
-import tensorflow as tf
 
 from components.colors import colors
 from components.controller import controller
-from components.dataset import get_datasets
 from components.search_space import search_space
 from components.random_search import RandomSearch
-from components.objective_wrapper import ObjectiveWrapper
-from components.constraints_wrapper import ConstraintsWrapper
-from components.tuner_dataset import TunerDataset
+from components.objFunction import ObjectiveWrapper
+from components.constraints import ConstraintsWrapper
+from components.dataset import TunerDataset
 from exp_config import create_config_file, set_active_config, load_cfg
 
 # ------------------------------ filesystem -----------------------------------
@@ -206,7 +204,9 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Symbolic DNN Tuner Configuration"
     )
-
+    parser.add_argument("--backend", type=str, default="tf",
+                        choices=["tf", "torch"],
+                        help="Backend framework to use (TensorFlow or PyTorch)")
     parser.add_argument("--eval", type=int, default=300,
                         help="Max number of evaluations")
     parser.add_argument("--early_stop", type=int, default=30,
@@ -262,12 +262,6 @@ if __name__ == "__main__":
     if os.name == 'nt':
         os.system("")
 
-    # TensorFlow GPU setup and logging toggles
-    gpus = tf.config.list_physical_devices('GPU')
-    for gpu in gpus:
-        tf.config.experimental.set_memory_growth(gpu, True)
-    os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
-    os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
     # --- 1. Configuration Setup ---
     args = parse_args()
@@ -285,12 +279,16 @@ if __name__ == "__main__":
     if cfg.opt == 'basic':
         from skopt import gp_minimize
     else:
-        from components.gp import gp_minimize
+        from components.bo.gp import gp_minimize
     
-    if True:
+    if cfg.backend == "tf":
         from tensorflow_implementation import module_backend, neural_network
         from tensorflow.keras import backend as K
         clear_session_callback = K.clear_session
+    elif cfg.backend == "torch":
+        from pytorch_implementation import module_backend, neural_network
+    else:
+        raise ValueError(f"Unsupported backend: {cfg.backend}")
 
     # --- 2. Filesystem and Dataset Setup ---
     create_experiment_folders() # Uses new pathlib version

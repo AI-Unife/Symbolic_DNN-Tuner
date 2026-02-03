@@ -2,16 +2,14 @@ from modules.common_interface import common_interface
 from components.colors import colors
 import os
 
-import flops.flops_calculator as fc
 from pathlib import Path
-from tensorflow.keras import layers, models
 
 import torch
 
 import nvdla.profiler as profiler
 from exp_config import load_cfg
 
-class HardwareModule(common_interface):
+class hardware_module(common_interface):
 
     #facts and problems for creating the prolog model
     facts = ['hw_latency', 'max_latency']
@@ -59,18 +57,11 @@ class HardwareModule(common_interface):
             raise ModuleNotFoundError("No NVDLA configuration found")
 
         # maximum cost
-        self.last_flops = 0
         self.nvdla  = dict(sorted(self.nvdla.items(), key=lambda item: item[1]['cost'], reverse=True))
 
     def update_state(self, *args):
         # import current model reference
         self.model = args[0]
-
-        self.flops, _ = fc.analyze_model(self.model)
-        self.flops = self.flops.total_float_ops
-        
-        if self.last_flops == self.flops:
-            return
 
         # for each configuration calculate the latency and the total cost
         for config_key in self.nvdla:
@@ -89,8 +80,6 @@ class HardwareModule(common_interface):
         self.cost = self.nvdla[first_el]['cost']
         self.total_cost = self.nvdla[first_el]['total_cost']
         self.current_config = first_el
-
-        self.last_flops = self.flops
 
     def obtain_values(self):
         # has to match the list of facts
@@ -113,24 +102,6 @@ class HardwareModule(common_interface):
             self.current_config) + "\n")
         f.close()
 
-    def LENET(self):
-        """
-        test method to build LeNet
-        :return: LeNet model
-        """
-        model = models.Sequential()
-        model.add(layers.Conv2D(6, 5, activation='tanh', padding="same", input_shape=(28, 28, 1))) 
-        model.add(layers.AveragePooling2D(2))
-        model.add(layers.Activation('sigmoid'))
-        model.add(layers.Conv2D(16, 5, activation='tanh'))
-        model.add(layers.AveragePooling2D(2))
-        model.add(layers.Activation('sigmoid'))
-        #model.add(layers.Conv2D(120, 5, activation='tanh'))
-        model.add(layers.Flatten())
-        model.add(layers.Dense(120, activation='tanh'))
-        model.add(layers.Dense(84, activation='tanh'))
-        model.add(layers.Dense(10, activation='softmax'))
-        return model
 
     def get_model_latency(self, model, config_path):
         """
@@ -142,16 +113,7 @@ class HardwareModule(common_interface):
         input_size = [1, input_size[3], input_size[1], input_size[2]]
         X = torch.Tensor(torch.randn(input_size))
         print(f"[INFO] Profiling model with configuration: {config_path}...")
-        #### EMBER IMPLEMENTATION USING THE NEW PROFILER ####
-        # onnx_model = tf2onnx.convert.from_keras(model, output_path="{}/model.onnx".format(self.cfg.name))
-        # onnx_model = onnx.load("{}/model.onnx".format(self.cfg.name))
-        # print("[INFO] ONNX model created.")
-        # torch_model = onnx2torch.convert(onnx_model)
-        # print("[INFO] PyTorch model created.")
-        # print("[INFO] Starting profiling, log files will be saved in {} directory...".format(self.cfg.name))
-        # total_latency = profiler.profile_network(torch_model, X, config_path, self.cfg.name+'/')
-        
-        #### OLD IMPLEMENTATION USING THE OLDER PROFILER - TO BE DEPRECATED ####
+
         # counter to accumulate the latencies of each network layer
         total_latency = 0
         
