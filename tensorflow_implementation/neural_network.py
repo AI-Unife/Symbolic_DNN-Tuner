@@ -165,6 +165,7 @@ class NeuralNetwork (NeuralNetwork):
             self.dataset.X_test = self.dataset.X_test[..., None]
 
 
+
     # --------------------------- Build the model -----------------------------
 
     def _add_residual(self, shortcut, x, output_channels, activation, reg_layer):
@@ -380,7 +381,7 @@ class NeuralNetwork (NeuralNetwork):
                 self.dataset.X_train, self.dataset.Y_train,
                 epochs=self.epochs,
                 batch_size=int(params["batch_size"]),
-                verbose=2,
+                verbose=1,
                 validation_data=(self.dataset.X_test, self.dataset.Y_test),
                 callbacks=[tensorboard, es],
             ).history
@@ -406,7 +407,7 @@ class NeuralNetwork (NeuralNetwork):
         if "debug" in self.exp_cfg.name:
             score = [random.uniform(0.1, 0.5), random.uniform(0.1, 1.0)]
         else:
-            score = self.model.evaluate(self.dataset.X_test, self.dataset.Y_test, verbose=2)
+            score = self.model.evaluate(self.dataset.X_test, self.dataset.Y_test, verbose=1)
         return score
     
     

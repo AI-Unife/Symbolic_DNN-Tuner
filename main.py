@@ -296,7 +296,7 @@ if __name__ == "__main__":
 
     # Load dataset by normalized key
     dataset = TunerDataset()
-    dataset.load_cifar_10()
+    dataset.load_light_cifar()
 
     # --- 3. Controller and Space Setup ---
     neural_network_cls = neural_network.NeuralNetwork

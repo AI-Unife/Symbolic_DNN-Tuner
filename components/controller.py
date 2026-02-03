@@ -72,6 +72,9 @@ class controller:
         self.residual: Optional[bool] = None
 
         # Model/training bookkeeping
+        self.nn = self.nn_cls(
+            self.dataset, self.reg, self.da, self.residual
+        )
         self.model: Any = None
         self.params: Optional[Dict[str, Any]] = None
         self.iter: int = 0
@@ -112,14 +115,17 @@ class controller:
     def set_data_augmentation(self, da: bool) -> None:
         """Enable/disable data augmentation for the next training call."""
         self.da = da
+        self.nn.da = da
 
     def set_residual(self, residual: bool) -> None:
         """Enable/disable residual connection for the next training call."""
         self.residual = residual
+        self.nn.residual = residual
 
     def set_reg_l2(self, reg: bool) -> None:
         """Enable/disable data augmentation for the next training call."""
         self.reg = reg
+        self.nn.reg = reg
 
     # ----------------------------- Utilities ---------------------------------
 
@@ -240,9 +246,7 @@ class controller:
         
         print(f"[INFO] Flags -> DA: {self.da}, L2: {self.reg}, Skip: {self.residual}")
         
-        self.nn = self.nn_cls(
-            self.dataset, self.reg, self.da, self.residual
-        )
+
         
         self.nn.build_network(params, self.layer_x_block)
         
