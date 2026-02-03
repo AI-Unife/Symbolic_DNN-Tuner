@@ -3,7 +3,7 @@ from itertools import product
 
 datasets_cifar = ['CIFAR-10', 'CIFAR-100', 'tinyImageNet']
 optimizers = ['filtered', 'RS_ruled']
-seeds = [42]
+seeds = [42, 123, 96, 7]
 
 
 def generate_jobs():
