@@ -253,7 +253,7 @@ class NeuralNetwork(BaseNeuralNetwork):
             if val_loss < best_val_loss - min_delta:
                 best_val_loss = val_loss
                 counter_loss = 0
-                torch.save(self.model.state_dict(), 'best_model_loss.pth')
+                self.save_model(params)
                 best_model_wts = copy.deepcopy(self.model.state_dict()) # Copia in RAM
                 saved = True
                 print(f"  -> Model Saved (Best Loss: {best_val_loss:.4f})")
@@ -265,7 +265,7 @@ class NeuralNetwork(BaseNeuralNetwork):
                 best_val_acc = val_acc
                 counter_acc = 0
                 if not saved: # Evita doppio salvataggio se ha già salvato per la loss
-                    torch.save(self.model.state_dict(), 'best_model_acc.pth')
+                    self.save_model(params)
                     print(f"  -> Model Saved (Best Acc: {best_val_acc:.4f})")
             else:
                 counter_acc += 1
