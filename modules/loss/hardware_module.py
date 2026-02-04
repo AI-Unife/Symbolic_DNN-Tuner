@@ -113,9 +113,8 @@ class hardware_module(common_interface):
         nvdla_profiler = profiler.nvdla(config_p)
         log_file = "profiler_logs.txt"
 
-
-        for layer_spec in model.layers:
-            if type(layer_spec) == LayerTypes.Conv2D:
+        for layer_spec in self.model.layers.values():
+            if layer_spec.type == LayerTypes.Conv2D:
                 out_size = [batch, layer_spec.get(Params.OUT_CHANNELS), layer_spec.get(Params.OUT_HEIGHT), layer_spec.get(Params.OUT_WIDTH)]
 
                 if layer_spec.get(Params.PADDING) == 'valid': 
@@ -130,7 +129,7 @@ class hardware_module(common_interface):
                                            padding, 1, layer_spec.get(Params.BIAS))
                 total_latency += conv_obj.forward(input_size)
 
-            elif type(layer_spec) == LayerTypes.Dense:
+            elif layer_spec.type == LayerTypes.Dense:
                 out_size = [batch, layer_spec.get(Params.OUT_FEATURES)]
                 dense_obj = profiler.Linear(nvdla_profiler, log_file, layer_spec.name, out_size, layer_spec.get(Params.IN_FEATURES), layer_spec.get(Params.OUT_FEATURES), layer_spec.get(Params.BIAS))
                 total_latency += dense_obj.forward([batch, layer_spec.get(Params.IN_FEATURES)])

@@ -95,7 +95,7 @@ class NeuralNetwork(BaseNeuralNetwork):
         ).to(self.device)
 
         print("Model Summary:")
-        summary(self.model, input_size=(1, *self.input_shape))
+        self.model.summary()
 
         # Collect parameters for L2 regularization if needed
         self.l2_params = [p for p in self.model.parameters() if p.requires_grad]

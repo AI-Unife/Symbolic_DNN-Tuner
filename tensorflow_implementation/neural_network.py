@@ -207,7 +207,7 @@ class NeuralNetwork(BaseNeuralNetwork):
             # Compute total latency cost
             from modules.loss.hardware_module import hardware_module
             HW_module = hardware_module(weight_cost=0.3)
-            HW_module.update_state(self.model.model)
+            HW_module.update_state(self.model)
             self.tot_latency_cost = HW_module.total_cost
 
 
@@ -268,6 +268,7 @@ class NeuralNetwork(BaseNeuralNetwork):
                 current_mul /= lr_factor
 
         opt = LayerWiseLR(base_opt, multiplier, learning_rate=float(params["learning_rate"]))
+        self.model.optimizer = opt
 
         # --- Callbacks ---
         es = EarlyStopping(monitor="val_accuracy", min_delta=0.005, patience=20, verbose=1,
@@ -311,7 +312,7 @@ class NeuralNetwork(BaseNeuralNetwork):
         except OSError:
             pass
 
-        return score, history, self.model.model
+        return score, history, self.model
     
     def eval_model(self):
         if "debug" in self.exp_cfg.name:

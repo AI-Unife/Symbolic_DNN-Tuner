@@ -213,6 +213,122 @@ class TorchModel(TunerModel, nn.Module):
         if name == 'selu': return nn.SELU(inplace=True)
         return nn.ReLU(inplace=True)
 
+    def summary(self):
+        """
+        Print a custom model summary in TensorFlow-style format.
+        Displays model architecture, layer information, and parameter count.
+        Expands ConvBlock to show internal layers.
+        """
+        print("=" * 80)
+        print("Model Summary - TorchModel")
+        print("=" * 80)
+        
+        # Count total parameters
+        total_params = sum(p.numel() for p in self.parameters())
+        trainable_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
+        non_trainable_params = total_params - trainable_params
+        
+        print(f"\nInput shape: {self.input_shape}")
+        print(f"Number of classes: {self.n_classes}")
+        print(f"Residual connections: {self.use_residual}")
+        print(f"Batch normalization: {self.batch}\n")
+        
+        # Create dummy input and trace through features to get actual shapes
+        dummy_input = torch.zeros(1, *self.input_shape)
+        
+        was_training = self.training
+        self.eval()
+        
+        # Print features layers
+        print("Features (Convolutional layers):")
+        print("-" * 80)
+        print(f"{'Layer (type)':<30} {'Output Shape':<25} {'Param #':<15}")
+        print("-" * 80)
+        
+        with torch.no_grad():
+            x = dummy_input
+            for name, module in self.features.named_children():
+                x = module(x)
+                params = sum(p.numel() for p in module.parameters())
+                module_name = f"{name} ({module.__class__.__name__})"
+                output_shape = f"{tuple(x.shape)}"
+                
+                # Print the module
+                print(f"{module_name:<30} {output_shape:<25} {params:>14,}")
+                
+                # If it's a ConvBlock, expand and show internal layers
+                if isinstance(module, ConvBlock):
+                    # Trace through ConvBlock's internal layers
+                    x_block = x  # This is the output, but we need to trace from input
+                    # We need to re-trace from the input to this block
+                    if name == "block_c1":
+                        x_in = dummy_input
+                    else:
+                        # Re-run features up to this point to get input
+                        x_in = dummy_input
+                        for n2, m2 in self.features.named_children():
+                            if n2 == name:
+                                break
+                            x_in = m2(x_in)
+                    
+                    with torch.no_grad():
+                        x_internal = x_in
+                        # Show internal Conv layers
+                        for i, layer in enumerate(module.layers):
+                            x_internal = layer(x_internal)
+                            layer_params = sum(p.numel() for p in layer.parameters())
+                            print(f"  ├─ conv_block_{i} (Sequential)     {str(tuple(x_internal.shape)):<25} {layer_params:>14,}")
+                        
+                        # Show last conv
+                        x_internal = module.last_conv(x_internal)
+                        last_conv_params = sum(p.numel() for p in module.last_conv.parameters())
+                        print(f"  ├─ last_conv (Conv2d)            {str(tuple(x_internal.shape)):<25} {last_conv_params:>14,}")
+                        
+                        # Show last bn
+                        x_internal = module.last_bn(x_internal)
+                        last_bn_params = sum(p.numel() for p in module.last_bn.parameters())
+                        print(f"  ├─ last_bn (BatchNorm2d)         {str(tuple(x_internal.shape)):<25} {last_bn_params:>14,}")
+                        
+                        if module.use_residual:
+                            # Show shortcut
+                            shortcut_params = sum(p.numel() for p in module.shortcut.parameters())
+                            print(f"  └─ shortcut (Identity/Conv)      {str(tuple(x_internal.shape)):<25} {shortcut_params:>14,}")
+        
+        print("-" * 80)
+        
+        # Compute classifier input shape and trace through it
+        print("\nClassifier (Fully Connected layers):")
+        print("-" * 80)
+        print(f"{'Layer (type)':<30} {'Output Shape':<25} {'Param #':<15}")
+        print("-" * 80)
+        
+        with torch.no_grad():
+            x = dummy_input
+            x = self.features(x)
+            if self.batch:
+                x = F.adaptive_avg_pool2d(x, (1, 1))
+            x = torch.flatten(x, 1)
+            
+            for name, module in self.classifier.named_children():
+                x = module(x)
+                params = sum(p.numel() for p in module.parameters())
+                module_name = f"{name} ({module.__class__.__name__})"
+                output_shape = f"{tuple(x.shape)}"
+                
+                print(f"{module_name:<30} {output_shape:<25} {params:>14,}")
+        
+        print("-" * 80)
+        
+        # Summary statistics
+        print("\nTotal params: {:,}".format(total_params))
+        print("Trainable params: {:,}".format(trainable_params))
+        print("Non-trainable params: {:,}".format(non_trainable_params))
+        print("=" * 80)
+        
+        if was_training:
+            self.train()
+
+
     def forward(self, x):
         x = self.features(x)
         if self.batch:
