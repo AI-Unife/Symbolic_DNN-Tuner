@@ -35,6 +35,10 @@ class ModuleBackend(BackendInterface):
             return 'other', {}
         
     def get_flops(self, base_model, input_shapes):
+        """
+        Calculate FLOPs and parameters for the model.
+        Counts only forward pass to match TensorFlow implementation.
+        """
         model = base_model
         istrain = model.training
         model.eval()
@@ -44,9 +48,9 @@ class ModuleBackend(BackendInterface):
 
         flop_counter = FlopCounterMode(mods=model, display=False, depth=None)
         with flop_counter:
-            model(input_shapes).sum().backward() # Forward and backward
-            # model(input_shapes) # Forward only
-            total_flops =  flop_counter.get_total_flops()
+            # Forward only (to match TensorFlow's forward-only counting)
+            model(input_shapes)
+            total_flops = flop_counter.get_total_flops()
             total_params = sum(p.numel() for p in model.parameters())
 
         if istrain:

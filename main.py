@@ -217,7 +217,7 @@ def parse_args() -> argparse.Namespace:
         "--mod_list", nargs="+", default=[],
         help="List of active modules (e.g., hardware_module flops_module)"
     )
-    parser.add_argument("--dataset", type=str, default="cifar10",
+    parser.add_argument("--dataset", type=str, default="light",
                         help="Dataset name")
     parser.add_argument("--name", type=str, default="debug",
                         help="Experiment name")
@@ -295,9 +295,20 @@ if __name__ == "__main__":
     create_experiment_folders() # Uses new pathlib version
     copy_symbolic_files()   # Uses new pathlib version
 
-    # Load dataset by normalized key
+    # Load dataset based on command-line argument
     dataset = TunerDataset()
-    dataset.load_light_cifar()
+    dataset_name = cfg.dataset.lower()
+    
+    if dataset_name == "cifar10":
+        dataset.load_cifar_10()
+    elif dataset_name == "cifar100":
+        dataset.load_cifar_100()
+    elif dataset_name == "mnist":
+        dataset.load_mnist()
+    elif dataset_name == "cifar10_light" or dataset_name == "light_cifar" or dataset_name == "light":
+        dataset.load_light_cifar()
+    else:
+        raise ValueError(f"Unknown dataset: {cfg.dataset}. Supported: cifar10, cifar100, mnist, cifar10_light")
 
     # --- 3. Controller and Space Setup ---
     neural_network_cls = neural_network.NeuralNetwork
