@@ -11,6 +11,7 @@ from components.lfi_integration import LfiIntegration
 from components.storing_experience import StoringExperience
 from components.improvement_checker import ImprovementChecker
 from components.integral import integrals
+from quantizer.quantizer_POTQ import quantizer_module
 from exp_config import load_cfg
 
 from modules.module import module
@@ -276,12 +277,12 @@ class controller:
             
             # --- SCORING LOGIC ---
             ### TODO: Refactor this section for correct score return ###
-            # if self.exp_cfg.quantization:
-            #     quantizer = quantizer_module(opt=params["optimizer"])
-            #     _ = quantizer.quantizer_function(self.model) 
-            #     q_loss, q_acc = quantizer.evaluate_quantized_model(self.dataset.X_test, self.dataset.Y_test)
-            #     self.score = -float(q_acc) 
-            #     quantizer.log_function()
+            if self.exp_cfg.quantization:
+                quantizer = quantizer_module(opt=params["optimizer"])
+                _ = quantizer.quantizer_function(self.model) 
+                q_loss, q_acc = quantizer.evaluate_quantized_model(self.dataset.X_test, self.dataset.Y_test)
+                self.score = -float(q_acc) 
+                quantizer.log_function()
             
             if (len(self.modules.modules_obj) > 0) and self.modules.ready() and self.modules.all_zeros_weights():
                 _, _, opt_value = self.modules.optimiziation()

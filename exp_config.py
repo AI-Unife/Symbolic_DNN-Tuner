@@ -1,10 +1,11 @@
 # exp_config.py
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Optional, Any, Dict
 from pathlib import Path
 import os, threading, yaml
 import datetime
+
 # ---------------- Dot-dict semplice ----------------
 class DotDict(dict):
     __getattr__ = dict.get
@@ -15,21 +16,30 @@ class DotDict(dict):
                 self[k] = DotDict(v).freeze()
         return self
 
-# ---------------- Schema con default (identici al tuo argparse) ----------------
+# ---------------- Schema con default (identici al parser di symbolic_tuner.py) ----------------
 @dataclass
 class ConfigSchema:
-    eval: int = 30
-    epochs: int = 2
-    mod_list: List[str] = None
-    dataset: str = "cifar-10"
-    name: str = "debug"
-    seed: int = 42
-    backend: str = "tf"            # tf | torch
-    opt: str = "RS_ruled"            # standard | filtered | basic | RS | RS_ruled
+    backend: str = "tf"                          # tf | torch
+    eval: int = 300                              # Max number of evaluations
+    early_stop: int = 30                         # Early stopping patience
+    epochs: int = 2                              # Epochs for training
+    mod_list: List[str] = field(default_factory=list)  # List of active modules
+    dataset: str = "light"                       # Dataset name
+    name: str = "experiment"                     # Experiment name
+    seed: int = 42                               # Random seed
+    quantization: bool = False                   # Quantize the network
+    verbose: int = 2                             # Verbosity level (0: silent, 1: space, 2: space+model)
+    w_FLOPS: float = 0.33                        # Weight Flops loss
+    w_HW: float = 0.33                           # Weight HW loss
+    lacc: float = 0.10                           # Accuracy loss threshold (underfitting)
+    flops_th: int = 150000000                    # Max number of FLOPS
+    nparams_th: int = 2500000                    # Max number of PARAMS
+    opt: str = "filtered"                        # Optimizer type (standard | filtered | basic | RS | RS_ruled)
 
-# ---------------- Validazione (stesse regole del tuo parser) ----------------
+# ---------------- Validazione (stesse regole del parser) ----------------
 _VALID_MODULES = {"hardware_module", "flops_module"}
 _VALID_OPT = {"standard", "filtered", "basic", "RS", "RS_ruled"}
+_VALID_BACKENDS = {"tf", "torch"}
 
 def create_config_file(exp_dir: str | Path, overrides: Optional[Dict[str, Any]] = None) -> Path:
     """
@@ -41,24 +51,28 @@ def create_config_file(exp_dir: str | Path, overrides: Optional[Dict[str, Any]] 
     cfg_path = p / "config.yaml"
 
     # defaults + override
-    _validate(overrides)
+    _validate(overrides or {})
     schema = ConfigSchema()
     base = {
+        "backend": schema.backend,
         "eval": schema.eval,
+        "early_stop": schema.early_stop,
         "epochs": schema.epochs,
-        "mod_list": schema.mod_list or [],
+        "mod_list": schema.mod_list,
         "dataset": schema.dataset,
         "name": schema.name,
         "seed": schema.seed,
+        "quantization": schema.quantization,
+        "verbose": schema.verbose,
+        "w_FLOPS": schema.w_FLOPS,
+        "w_HW": schema.w_HW,
+        "lacc": schema.lacc,
+        "flops_th": schema.flops_th,
+        "nparams_th": schema.nparams_th,
         "opt": schema.opt,
-        "verbose": schema.verbose if hasattr(schema, "verbose") else 0,
-        "quantization": schema.quantization if hasattr(schema, "quantization") else False,
-        "early_stop": schema.early_stop if hasattr(schema, "early_stop") else 20,
-        "backend": schema.backend if hasattr(schema, "backend") else "tf",
     }
     if overrides:
         base.update(overrides)
-
 
     # timestamp utile per tracciabilità
     base["created_at"] = datetime.datetime.now().isoformat(timespec="seconds")
@@ -74,12 +88,23 @@ def create_config_file(exp_dir: str | Path, overrides: Optional[Dict[str, Any]] 
 def _validate(d: Dict[str, Any]) -> None:
     # mod_list
     mods = d.get("mod_list") or []
+    if isinstance(mods, str):  # In case it's a string, convert to list
+        mods = [mods]
     bad = [m for m in mods if m not in _VALID_MODULES]
     if bad:
         raise ValueError(f"Invalid module(s) {bad}. Choose from: {sorted(_VALID_MODULES)}")
-    if d.get("opt") not in _VALID_OPT:
-        print(f"Invalid opt '{d.get('opt')}'. Choose from: {sorted(_VALID_OPT)}. Set RS_ruled")
-        d['opt'] = 'RS_ruled'
+    
+    # opt
+    opt = d.get("opt", "filtered")
+    if opt not in _VALID_OPT:
+        print(f"WARNING: Invalid opt '{opt}'. Choose from: {sorted(_VALID_OPT)}. Set to 'filtered'")
+        d['opt'] = 'filtered'
+    
+    # backend
+    backend = d.get("backend", "tf")
+    if backend not in _VALID_BACKENDS:
+        print(f"WARNING: Invalid backend '{backend}'. Choose from: {sorted(_VALID_BACKENDS)}. Set to 'tf'")
+        d['backend'] = 'tf'
 
 # ---------------- Loader + discovery ----------------
 _ENV_KEY = "EXP_CONFIG"   # puoi impostarlo per puntare al config della run
@@ -104,20 +129,25 @@ def _read_yaml(path: Path) -> Dict[str, Any]:
     return data
 
 def _apply_defaults(d: Dict[str, Any]) -> Dict[str, Any]:
-    # riempi con i default dello schema
+    """Riempi con i default dello schema."""
     schema = ConfigSchema()
     merged = {
+        "backend": d.get("backend", schema.backend),
         "eval": d.get("eval", schema.eval),
+        "early_stop": d.get("early_stop", schema.early_stop),
         "epochs": d.get("epochs", schema.epochs),
-        "mod_list": d.get("mod_list", schema.mod_list or []),
+        "mod_list": d.get("mod_list", schema.mod_list),
         "dataset": d.get("dataset", schema.dataset),
         "name": d.get("name", schema.name),
         "seed": d.get("seed", schema.seed),
+        "quantization": d.get("quantization", schema.quantization),
+        "verbose": d.get("verbose", schema.verbose),
+        "w_FLOPS": d.get("w_FLOPS", schema.w_FLOPS),
+        "w_HW": d.get("w_HW", schema.w_HW),
+        "lacc": d.get("lacc", schema.lacc),
+        "flops_th": d.get("flops_th", schema.flops_th),
+        "nparams_th": d.get("nparams_th", schema.nparams_th),
         "opt": d.get("opt", schema.opt),
-        "verbose": d.get("verbose", getattr(schema, "verbose", 0)),
-        "quantization": d.get("quantization", getattr(schema, "quantization", False)),
-        "early_stop": d.get("early_stop", getattr(schema, "early_stop", 20)),
-        "backend": d.get("backend", getattr(schema, "backend", "tf")),
     }
     return merged
 

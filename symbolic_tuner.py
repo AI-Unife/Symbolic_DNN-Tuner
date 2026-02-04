@@ -219,7 +219,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--dataset", type=str, default="light",
                         help="Dataset name")
-    parser.add_argument("--name", type=str, default="debug",
+    parser.add_argument("--name", type=str, default="experiment",
                         help="Experiment name")
     parser.add_argument("--seed", type=int, default=42,
                         help="Random seed for reproducibility")
