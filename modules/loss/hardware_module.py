@@ -17,9 +17,12 @@ class hardware_module(common_interface):
     problems = ['out_range']
     
     #weight of the module for the final loss calculation
-    cfg = load_cfg()
-    # weight of the module for the final loss calculation
-    weight = cfg.get('w_HW', 0.33)
+    try:
+        cfg = load_cfg()
+        # weight of the module for the final loss calculation
+        weight = cfg.get('w_HW', 0.33)
+    except:
+        weight = 0.33
 
     def __init__(self, weight_cost: float = 0.3):    
         # cost value per square millimeter, 10K / mm2
