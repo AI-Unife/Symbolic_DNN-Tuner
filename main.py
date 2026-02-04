@@ -287,6 +287,7 @@ if __name__ == "__main__":
         clear_session_callback = K.clear_session
     elif cfg.backend == "torch":
         from pytorch_implementation import module_backend, neural_network
+        clear_session_callback = lambda: None
     else:
         raise ValueError(f"Unsupported backend: {cfg.backend}")
 

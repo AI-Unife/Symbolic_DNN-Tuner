@@ -1,3 +1,4 @@
+import numpy as np
 from tensorflow.keras import layers, models
 from components.backend_interface import BackendInterface
 
@@ -35,5 +36,9 @@ class ModuleBackend(BackendInterface):
             return 'other', {}  # unknown / ignored layers
         
     def get_flops(self, model, input_shapes):
-        from tensorflow_implementation.flops import flops_calculator
-        return flops_calculator.analyze_model(model)
+        from tensorflow_implementation.flops.flops_calculator import analyze_model
+        flops = analyze_model(model)[0].total_float_ops
+        trainableParams = np.sum([np.prod(v.shape) for v in model.model.trainable_weights])
+        nonTrainableParams = np.sum([np.prod(v.shape) for v in model.model.non_trainable_weights])
+        nparams = trainableParams + nonTrainableParams
+        return flops, nparams

@@ -5,9 +5,10 @@ from datetime import datetime
 import random
 import os
 
-from components.neural_network import NeuralNetwork
+from components.neural_network import NeuralNetwork as BaseNeuralNetwork
+from components.backend_interface import BackendInterface
 from components.dataset import TunerDataset
-from tensorflow_implementation.flops.flops_calculator import analyze_model
+from tensorflow_implementation.model import TFModel
 
 import tensorflow as tf
 from tensorflow.keras import Model
@@ -122,7 +123,7 @@ class LayerWiseLR(Optimizer):
         cfg = super().get_config()
 
         # serializza l'optimizer interno in modo Keras-friendly
-        base_opt_cfg = serialize_keras_object(self._optimizer)
+        base_opt_cfg = keras.optimizers.serialize(self._optimizer)
 
         # multiplier deve essere JSON-serializzabile
         mult_cfg = {str(k): float(v) if hasattr(v, "__float__") else v
@@ -141,7 +142,7 @@ class LayerWiseLR(Optimizer):
         name = config.pop("name", "LWLR")
 
         opt_cfg = config.pop("optimizer", None)
-        optimizer = deserialize_keras_object(opt_cfg) if isinstance(opt_cfg, dict) else opt_cfg
+        optimizer = keras.optimizers.deserialize(opt_cfg) if isinstance(opt_cfg, dict) else opt_cfg
         mult = config.pop("multiplier", None)
 
         lr = config.get("learning_rate", None)
@@ -154,9 +155,9 @@ class LayerWiseLR(Optimizer):
 
 
 
-class NeuralNetwork (NeuralNetwork):
-    def __init__(self, dataset: TunerDataset, da: bool, reg: bool, residual: bool):
-        super().__init__(dataset, da, reg, residual)
+class NeuralNetwork(BaseNeuralNetwork):
+    def __init__(self, backend:BackendInterface, dataset: TunerDataset, da: bool, reg: bool, residual: bool):
+        super().__init__(backend, dataset, da, reg, residual)
         # Framework-specific preprocessing
         self.dataset.Y_train = tf.keras.utils.to_categorical(self.dataset.Y_train, self.dataset.n_classes)
         self.dataset.Y_test = tf.keras.utils.to_categorical(self.dataset.Y_test, self.dataset.n_classes)
@@ -179,21 +180,6 @@ class NeuralNetwork (NeuralNetwork):
         x = Activation(activation)(x)
         return x
 
-    def _validate_labels(self, train_labels, test_labels):
-        """
-        Validate that labels are not None and contain valid data.
-        Critical for catching issues in ROI depth mode.
-        """
-        if train_labels is None:
-            raise ValueError("train_labels is None - data loading failed in ROI depth mode")
-        if test_labels is None:
-            raise ValueError("test_labels is None - data loading failed in ROI depth mode")
-        
-        # Check for object arrays containing None
-        if isinstance(train_labels, np.ndarray) and train_labels.dtype == object:
-            if any(x is None for x in train_labels.flat):
-                raise ValueError("train_labels contains None values")
-
 
     def build_network(self, params, layer_x_block=2):
         """
@@ -205,101 +191,25 @@ class NeuralNetwork (NeuralNetwork):
         """
         # 1) clear session
         tf.keras.backend.clear_session()
-        batch = True #self.exp_cfg.dataset == 'tinyimagenet'
-        self.model = None
-        # 2) Build a new CNN
-        input_shape = self.dataset.X_train.shape[1:]  # generic (H, W, C)
-
-        reg_layer = reg.l2() if self.reg else None
-
-        inputs = Input(input_shape)
-        if self.da:
-            inputs = tf.keras.layers.RandomFlip("horizontal")(inputs)
-            inputs = tf.keras.layers.RandomTranslation(height_factor=0.1, width_factor=0.1, fill_mode="nearest")(inputs)
-
-        x = Conv2D(params["unit_c1"] * params['num_neurons'], (3, 3), padding="same")(inputs)
-        x = Activation(params["activation"])(x)
-        x = BatchNormalization()(x) if batch else x
-        for _ in range(1, layer_x_block-1):
-            x = Conv2D(params["unit_c1"] * params['num_neurons'], (3, 3), padding="same")(x)
-            x = Activation(params["activation"])(x)
-            x = BatchNormalization()(x) if batch else x
-        if self.residual:
-            x = Conv2D(params["unit_c1"] * params['num_neurons'] , (3, 3), padding="same")(x)
-            x = self._add_residual(inputs, x, params['unit_c1'] * params['num_neurons'], params['activation'], reg_layer)
-        else:
-            x = Conv2D(params["unit_c1"] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
-            x = Activation(params["activation"])(x)
-            x = BatchNormalization()(x) if batch else x
-        x = MaxPooling2D(pool_size=(2, 2))(x)
-
-        shortcut = x
-        for _ in range(layer_x_block-1):
-            x = Conv2D(params["unit_c2"] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
-            x = Activation(params["activation"])(x)
-            x = BatchNormalization()(x) if batch else x
-        if self.residual:
-            x = Conv2D(params["unit_c2"] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
-            x = self._add_residual(shortcut, x, params['unit_c2'] * params['num_neurons'], params['activation'], reg_layer)
-        else:
-            x = Conv2D(params["unit_c2"] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
-            x = Activation(params["activation"])(x)
-            x = BatchNormalization()(x) if batch else x
-        x = MaxPooling2D(pool_size=(2, 2))(x)
-
-
-        # Dynamically added conv blocks (conv -> act -> conv -> act -> pool -> dropout)
-        added_convs = [k for k in params if re.match(r"new_conv_\d+$", k) and params[k] > 0]
-        for layer_key in sorted(added_convs, key=lambda s: int(s.split("_")[-1])):  # stable order
-            shortcut = x
-            for _ in range(layer_x_block-1):
-                x = Conv2D(params[layer_key] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
-                x = Activation(params["activation"])(x)
-                x = BatchNormalization()(x) if batch else x
-            if self.residual:
-                x = Conv2D(params[layer_key] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
-                x = self._add_residual(shortcut, x, params[layer_key] * params['num_neurons'], params['activation'], reg_layer)
-            else:
-                x = Conv2D(params[layer_key] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
-                x = Activation(params["activation"])(x)
-                x = BatchNormalization()(x) if batch else x
-            x = MaxPooling2D(pool_size=(2, 2))(x)
-
-        x = GlobalAveragePooling2D()(x) if batch else Flatten()(x)
-        
-
-        # Dynamically added FC layers
-        added_fcs = [k for k in params if re.match(r"new_fc_\d+$", k) and params[k] > 0]
-        for layer_key in sorted(added_fcs, key=lambda s: int(s.split("_")[-1])):  # stable order
-            x = Dense(params[layer_key] * params['num_neurons'], kernel_regularizer=reg_layer)(x)
-            x = Activation(params["activation"])(x)
-            x = Dropout(params["dr_f"])(x)
-
-        outputs = Dense(self.n_classes, kernel_regularizer=reg_layer, activation="softmax")(x)
-
-        # Build model with appropriate inputs
-        self.model = Model(inputs=inputs, outputs=outputs)
+        self.model = TFModel(
+            input_shape=self.dataset.X_train.shape[1:],
+            params=params,
+            n_classes=self.dataset.n_classes,
+            layer_x_block=layer_x_block
+            )
         if self.exp_cfg.verbose > 1:
-            self.model.summary()
+            self.model.model.summary()
         if "flops_module" in self.exp_cfg.mod_list:
-            # Compute FLOPs (approximate; counts MACs as 2 FLOPs)
-            try:
-                self.flops = analyze_model(self.model)[0].total_float_ops
-                trainableParams = np.sum([np.prod(v.shape) for v in self.model.trainable_weights])
-                nonTrainableParams = np.sum([np.prod(v.shape) for v in self.model.non_trainable_weights])
-                self.nparams = trainableParams + nonTrainableParams
-            except Exception:
-                self.flops = None  # FLOPs computation failed; ignore
-                self.nparams = None
+            # Compute FLOPs (approximate; counts MACs as 2 FLOPs
+            self.flops, self.nparams = self.backend.get_flops(self.model, [self.dataset.X_train.shape[1:]])
+            print(f"FLOPs: {self.flops}, Params: {self.nparams}")
         if "hardware_module" in self.exp_cfg.mod_list:
             # Compute total latency cost
-            try:
-                from modules.loss.hardware_module import hardware_module
-                HW_module = hardware_module(weight_cost=0.3)
-                HW_module.update_state(self.model)
-                self.tot_latency_cost = HW_module.total_cost
-            except Exception:
-                self.tot_latency_cost = None  # FLOPs computation failed; ignore
+            from modules.loss.hardware_module import hardware_module
+            HW_module = hardware_module(weight_cost=0.3)
+            HW_module.update_state(self.model.model)
+            self.tot_latency_cost = HW_module.total_cost
+
 
     def training(self, params: Dict[str, Any]) -> Tuple[List[float], Dict[str, List[float]], Model]:
         """
@@ -315,23 +225,23 @@ class NeuralNetwork (NeuralNetwork):
               - history: Keras-like history dict
               - model: trained (and reloaded) Keras model
         """
-        if self.model is None:
+        if self.model.model is None:
             print("Error: Model is not built.")
             exit(1)
         # Unique id for artifacts of this run
         model_name_id = datetime.now().strftime("%y_%m_%d_%H_%M_%S_%f")
-        self.last_model_id = model_name_id
+
 
         # Persist the (fresh) architecture JSON for later reloading
         model_json_path = f"{self.exp_cfg.name}/Model/model-{model_name_id}.json"
         with open(model_json_path, "w") as json_file:
-            json_file.write(self.model.to_json())
+            json_file.write(self.model.model.to_json())
 
         # Try loading previous weights if available (fine-tune / warm start)
         try:
             prev_weights = f"{self.exp_cfg.name}/Weights/weights.h5"
             if os.path.exists(prev_weights):
-                self.model.load_weights(prev_weights)
+                self.model.model.load_weights(prev_weights)
         except Exception:
             pass  # ignore if incompatible
 
@@ -346,13 +256,13 @@ class NeuralNetwork (NeuralNetwork):
         multiplier: Dict[str, float] = {}
         trainable_names = [
             (getattr(var, "path", None) or var.name).split("/")[0]
-            for var in self.model.trainable_variables
+            for var in self.model.model.trainable_variables
         ]
 
         current_mul = 1.0
         lr_factor = 1.414213  # sqrt(2)
         for layer_name in trainable_names[::2]:  # skip bias variables (kernel/bias pairs)
-            layer_type = self.model.get_layer(layer_name).__class__.__name__
+            layer_type = self.model.model.get_layer(layer_name).__class__.__name__
             if layer_type in {"Conv2D"}:
                 multiplier[layer_name] = current_mul
                 current_mul /= lr_factor
@@ -363,7 +273,7 @@ class NeuralNetwork (NeuralNetwork):
         es = EarlyStopping(monitor="val_accuracy", min_delta=0.005, patience=20, verbose=1,
                             mode="max", restore_best_weights=True)
         # --- Compile ---
-        self.model.compile(loss="categorical_crossentropy", optimizer=opt, metrics=["accuracy"])
+        self.model.model.compile(loss="categorical_crossentropy", optimizer=opt, metrics=["accuracy"])
 
         # --- Train ---
         
@@ -377,7 +287,7 @@ class NeuralNetwork (NeuralNetwork):
         else:
             
             
-            history = self.model.fit(
+            history = self.model.model.fit(
                 self.dataset.X_train, self.dataset.Y_train,
                 epochs=self.epochs,
                 batch_size=int(params["batch_size"]),
@@ -390,10 +300,10 @@ class NeuralNetwork (NeuralNetwork):
 
         try:
             dash_model_path = f"{self.exp_cfg.name}/dashboard/model/model.keras"
-            self.model.save(dash_model_path)
+            self.model.model.save(dash_model_path)
 
-            if not getattr(self.model, "built", False) or self.model.inputs is None:
-                self.model = tf.keras.models.load_model(dash_model_path, custom_objects={"LayerWiseLR": LayerWiseLR})
+            if not getattr(self.model.model, "built", False) or self.model.model.inputs is None:
+                self.model.model = tf.keras.models.load_model(dash_model_path, custom_objects={"LayerWiseLR": LayerWiseLR})
         except:
             pass
         try:
@@ -401,22 +311,22 @@ class NeuralNetwork (NeuralNetwork):
         except OSError:
             pass
 
-        return score, history, self.model
+        return score, history, self.model.model
     
     def eval_model(self):
         if "debug" in self.exp_cfg.name:
             score = [random.uniform(0.1, 0.5), random.uniform(0.1, 1.0)]
         else:
-            score = self.model.evaluate(self.dataset.X_test, self.dataset.Y_test, verbose=1)
+            score = self.model.model.evaluate(self.dataset.X_test, self.dataset.Y_test, verbose=1)
         return score
     
     
     def save_model(self):
         """Helper to handle safe model saving."""
-        if self.model is None: return
+        if self.model.model is None: return
         try:
             save_path = os.path.join(self.exp_cfg.name, "Model")
             os.makedirs(save_path, exist_ok=True)
-            self.model.save(os.path.join(save_path, "best-model.keras"))
+            self.model.model.save(os.path.join(save_path, "best-model.keras"))
         except Exception as e:
             print(f"[ERROR] Failed to save best model: {e}")

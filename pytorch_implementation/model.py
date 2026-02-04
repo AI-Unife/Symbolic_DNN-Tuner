@@ -1,3 +1,4 @@
+import re
 from typing import List
 import torch
 import torch.nn as nn
@@ -6,8 +7,78 @@ import copy
 from components.model_interface import InsertPosition, LayerSpec, TunerModel, LayerTypes, Params
 
 
-class TorchModel(TunerModel, nn.Module):
+class ConvBlock(nn.Module):
+    """
+    Gestisce un blocco di 'layer_x_block' convoluzioni.
+    Se use_residual=True, aggiunge l'input all'output (ResNet style).
+    """
+    def __init__(self, in_channels, out_channels, num_repeats, activation_fn, use_residual, batch=True):
+        super(ConvBlock, self).__init__()
+        self.use_residual = use_residual
+        self.layers = nn.ModuleList()
+        self.activation = activation_fn
+        self.batch = batch
+        
+        # 1. Costruiamo i primi N-1 layer (Conv -> Act -> BN)
+        # Nota: In PyTorch è comune l'ordine Conv -> BN -> Act, ma qui replico 
+        # la logica Keras Conv -> Act -> BN o simile a seconda delle preferenze.
+        # Standard moderno: Conv -> BN -> Act.
+        
+        current_in = in_channels
+        
+        # Aggiungiamo (num_repeats - 1) blocchi standard
+        for _ in range(num_repeats - 1):
+            self.layers.append(nn.Sequential(
+                nn.Conv2d(current_in, out_channels, kernel_size=3, padding=1, bias=False),
+                nn.BatchNorm2d(out_channels) if batch else nn.Identity(),
+                activation_fn
+            ))
+            current_in = out_channels # Dopo il primo, l'input è out_channels
 
+        # 2. L'ultimo layer del blocco (prima della somma residua)
+        self.last_conv = nn.Conv2d(current_in, out_channels, kernel_size=3, padding=1, bias=False)
+        self.last_bn = nn.BatchNorm2d(out_channels)
+
+        # 3. Gestione Skip Connection (Shortcut)
+        # Se i canali di input sono diversi da quelli di output (es. passaggio da blocco 1 a 2),
+        # serve una conv 1x1 per adattare le dimensioni (Projection Shortcut).
+        if use_residual:
+            self.shortcut = nn.Identity()
+            if (in_channels != out_channels):
+                self.shortcut = nn.Sequential(
+                    nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False),
+                    nn.BatchNorm2d(out_channels)
+                )
+
+    def forward(self, x):
+        out = x
+        
+        # Passaggio attraverso i primi N-1 layer
+        for layer in self.layers:
+            out = layer(out)
+            
+        # Ultimo layer convoluzionale (senza attivazione ancora)
+        out = self.last_conv(out)
+        out = self.last_bn(out) if self.batch else out
+        
+        # Applicazione Residuale
+        if self.use_residual:
+            # x + F(x)
+            out = out + self.shortcut(x)
+        
+        # Attivazione finale dopo la somma (ResNet standard)
+        out = self.activation(out)
+        return out
+
+
+class TorchModel(TunerModel, nn.Module):
+    """
+    PyTorch implementation of a TunerModel that extends nn.Module.
+    Provides bidirectional mapping between layer types and PyTorch modules,
+    along with utilities for converting between layer specifications and actual modules.
+    """
+
+    # Maps custom layer types to PyTorch neural network modules
     from_type_map = {
         LayerTypes.Conv2D: nn.Conv2d,
         LayerTypes.MaxPooling2D: nn.MaxPool2d,
@@ -22,200 +93,207 @@ class TorchModel(TunerModel, nn.Module):
         LayerTypes.BatchNormalization2D: nn.BatchNorm2d,
         LayerTypes.Flatten: nn.Flatten
     }
+    # Reverse mapping from PyTorch modules back to custom layer types
     to_type_map = {v: k for k, v in from_type_map.items()}
 
-    def __init__(self, input_shape, params, n_classes, activation_function):
+    def __init__(self, input_shape, params, n_classes, layer_x_block=2, batch=True):
+        """
+        Initialize the model with the given configuration.
+        
+        Args:
+            input_shape: Tuple of (height, width, channels) for input images
+            params: Dictionary containing hyperparameters for layer dimensions
+            n_classes: Number of output classes
+            activation_function: The activation function to use throughout the model
+        """
         super(TorchModel, self).__init__()
         
         self.input_shape = input_shape
         self.params = params
         self.n_classes = n_classes
-        self.activation = activation_function
-
-        # Layers
-        self.modules_list = nn.ModuleList([
-            nn.Conv2d(in_channels=input_shape[2], out_channels=params['unit_c1'], kernel_size=3, padding="same"),
-            self.activation(),
-            nn.Conv2d(in_channels=params['unit_c1'], out_channels=params['unit_c1'], kernel_size=3),
-            self.activation(),
-            nn.MaxPool2d(kernel_size=2),
-            nn.Dropout(params['dr1_2']),
-
-            nn.Conv2d(in_channels=params['unit_c1'], out_channels=params['unit_c2'], kernel_size=3, padding=1),
-            self.activation(),
-            nn.Conv2d(in_channels=params['unit_c2'], out_channels=params['unit_c2'], kernel_size=3),
-            self.activation(),
-            nn.MaxPool2d(kernel_size=2),
-            nn.Dropout(params['dr1_2'])
-        ])
-
-        # Compute the size of the flattened feature map
-        with torch.no_grad():
-            x = torch.zeros(1, input_shape[2], input_shape[0], input_shape[1])
-            for module in self.modules_list:
-                x = module(x)
-            self.flattened_size = x.view(1, -1).size(1)
+        self.activation = self._get_activation(params['activation'])
+        self.batch = batch
+        self.layer_x_block = layer_x_block
         
-        self.modules_list.extend([
-            nn.Flatten(),
-            nn.Linear(self.flattened_size, params['unit_d']),
-            self.activation(),
-            nn.Dropout(params['dr_f']),
-            nn.Linear(params['unit_d'], n_classes)
-        ])
+            # Parsing parametri
+        self.use_residual = params.get('skip_connection', False)
+        # Istanza dell'attivazione (es. ReLU) da riusare
+        act_fn = self._get_activation(params['activation'])
+        self.batch = batch
+        
+        # Calcolo numero canali
+        # unit_c * num_neurons
+        c1_channels = int(params['unit_c1'] * params['num_neurons'])
+        c2_channels = int(params['unit_c2'] * params['num_neurons'])
+        
+        # --- COSTRUZIONE DELLA RETE ---
+        self.features = nn.Sequential()
+        in_c = input_shape[0] # (Canali, H, W)
+        
+        # 1. Blocco C1
+        self.features.add_module("block_c1", ConvBlock(
+            in_channels=in_c, 
+            out_channels=c1_channels, 
+            num_repeats=layer_x_block, 
+            activation_fn=act_fn, 
+            use_residual=self.use_residual,
+            batch=self.batch
+        ))
+        self.features.add_module("pool1", nn.MaxPool2d(2))
+        
+        # 2. Blocco C2
+        self.features.add_module("block_c2", ConvBlock(
+            in_channels=c1_channels, 
+            out_channels=c2_channels, 
+            num_repeats=layer_x_block, 
+            activation_fn=act_fn, 
+            use_residual=self.use_residual,
+            batch=self.batch
+        ))
+        self.features.add_module("pool2", nn.MaxPool2d(2))
+        in_channels = c2_channels
+        added_convs = [k for k in params if re.match(r"new_conv_\d+$", k) and params[k] > 0]
+        for layer_key in sorted(added_convs, key=lambda s: int(s.split("_")[-1])):  # stable order
+            val = params[layer_key]
+            out_c = int(val * params['num_neurons'])
+            self.features.add_module(f"added_conv_{layer_key}", ConvBlock(
+                in_channels=in_channels,
+                out_channels=out_c,
+                num_repeats=layer_x_block,
+                activation_fn=act_fn,
+                use_residual=self.use_residual,
+                batch=self.batch
+            ))
+            self.features.add_module(f"pool_{layer_key}", nn.MaxPool2d(2))
+            in_channels = out_c  # Update for next layer if any
 
+        # --- CLASSIFICATORE (Fully Connected) ---
+        # Calcolo dimensione flatten automatico
+        with torch.no_grad():
+            dummy = torch.zeros(1, *input_shape)
+            out_feat = self.features(dummy)
+            
+            # SE nel forward fai pooling, devi farlo anche qui!
+            if self.batch:
+                out_feat = F.adaptive_avg_pool2d(out_feat, (1, 1))
+            
+            # Ora il flatten darà la dimensione corretta (es. 16 invece di 1024)
+            self.flat_dim = out_feat.view(1, -1).size(1)
+            
+        self.classifier = nn.Sequential()
+        current_dim = self.flat_dim
+        
+        # Aggiunta dinamica layer FC (new_fc_1, new_fc_2, ecc.)
+        fc_keys = sorted([k for k in params.keys() if re.match(r'new_fc_\d+', k)], 
+                         key=lambda x: int(x.split('_')[-1]))
+        
+        for i, key in enumerate(fc_keys):
+            val = params[key]
+            if val > 0:
+                out_dim = int(val * params['num_neurons'])
+                self.classifier.add_module(f"fc_{i}", nn.Linear(current_dim, out_dim))
+                self.classifier.add_module(f"act_{i}", act_fn)
+                self.classifier.add_module(f"drop_{i}", nn.Dropout(params['dr_f']))
+                current_dim = out_dim
+                
+        # Layer Output Finale
+        self.classifier.add_module("fc_out", nn.Linear(current_dim, self.n_classes))
+        
+        self.modules_list = nn.ModuleList()
+        for module in self.features:
+            self.modules_list.append(module)
+        for module in self.classifier:
+            self.modules_list.append(module)
+            
         self.create_specs()
 
-    def forward(self, x):
-        for module in self.modules_list:
-            x = module(x)
+    def _get_activation(self, name):
+        name = name.lower()
+        if name == 'elu': return nn.ELU(inplace=True)
+        if name == 'selu': return nn.SELU(inplace=True)
+        return nn.ReLU(inplace=True)
 
+    def forward(self, x):
+        x = self.features(x)
+        if self.batch:
+            # Global Average Pooling: (N, C, H, W) -> (N, C, 1, 1)
+            x = F.adaptive_avg_pool2d(x, (1, 1))
+        x = torch.flatten(x, 1)
+        x = self.classifier(x)
         return x
     
     def create_specs(self):
+        """
+        Create LayerSpec objects for each module in the network by hooking into
+        the forward pass and capturing input/output information for each layer.
+        """
         self.eval()
-        dummy_input = torch.zeros([1, self.input_shape[2], self.input_shape[0], self.input_shape[1]])
+        # input_shape is (C, H, W), so dummy_input should be (batch, C, H, W)
+        dummy_input = torch.zeros([1, self.input_shape[0], self.input_shape[1], self.input_shape[2]])
 
         def make_hook(module_name):
+            """Factory function to create a hook that captures layer specifications"""
             def hook_fn(module, input, output):
                 self.layers[module_name] = self.to_spec(module_name, module, input, output)
 
             return hook_fn
 
+        # Register forward hooks to capture layer information
+        # Only register hooks on supported layer types, skip custom modules like ConvBlock
         hooks = []
         for name, module in self.modules_list.named_children():
-            if not isinstance(module, TorchModel):
-                hooks.append(module.register_forward_hook(make_hook(name)))
+            if not isinstance(module, (TorchModel, ConvBlock)):
+                if module.__class__ in self.to_type_map:
+                    hooks.append(module.register_forward_hook(make_hook(name)))
 
+        # Perform forward pass to trigger hooks
         self.layers = {}
         with torch.no_grad():
             self(dummy_input)
 
+        # Clean up hooks
         for hook in hooks:
             hook.remove()
 
-    def add_layers(self, layers: List[LayerSpec], targets: List[LayerTypes], position: InsertPosition):
-        self.eval()
-        x = torch.zeros([1, self.input_shape[2], self.input_shape[0], self.input_shape[1]])
-
-        new_module_list = nn.ModuleList([])
-        reuse_weights = True
-
-        for name, layer in self.modules_list.named_children():
-            if self.to_type(layer.__class__) in targets and position != InsertPosition.After:
-                reuse_weights = False
-                x, modules = self.fix_shapes(x, layers)
-                new_module_list.extend(modules)
-
-                if position == InsertPosition.Replace:
-                    continue # Skip current layer (replace it)
-
-            if reuse_weights:
-                x = layer(x)
-                new_module_list.append(layer)
-            else:
-                layer_spec = self.layers[name]
-                x, modules = self.fix_shapes(x, [layer_spec])
-                new_module_list.extend(modules)
-
-            if self.to_type(layer.__class__) in targets and position == InsertPosition.After:
-                reuse_weights = False
-                x, modules = self.fix_shapes(x, layers)
-                new_module_list.extend(modules)
-
-            prev_layer = self.modules_list[-1]
-
-        self.modules_list = new_module_list
-        self.create_specs()
-
-    def remove_layers(self, target: LayerSpec, linked_layers: List[LayerTypes], delimiter: bool, first_found: bool):
-        self.eval()
-        x = torch.zeros([1, self.input_shape[2], self.input_shape[0], self.input_shape[1]])
-
-        removed_names = []
-        inside_section = False
-        found_section = False
-        reuse_weights = True
-        new_module_list = nn.ModuleList([])
-
-        for name, layer in self.modules_list.named_children():
-            layer_spec = self.layers[name]
-
-            if not inside_section and not found_section:
-                # Check if this layer starts a section
-                if name == target.name:
-                    inside_section = True
-                    reuse_weights = False
-                    removed_names.append(layer_spec.name)
-                    continue
-
-            if inside_section:
-                if layer_spec.type not in linked_layers:
-                    # End of section
-                    inside_section = False
-                    found_section = first_found
-                    if delimiter:
-                        layer_spec = self.layers[name]
-                        x, modules = self.fix_shapes(x, [layer_spec])
-                        new_module_list.extend(modules)
-                    else:
-                        # Remove the boundary layer as well
-                        removed_names.append(layer_spec.name)
-                    continue
-                
-                # Still inside section
-                removed_names.append(layer_spec.name)
-                continue
-
-            # Normal case: keep this layer
-            if reuse_weights:
-                x = layer(x)
-                new_module_list.append(layer)
-            else:
-                layer_spec = self.layers[name]
-                x, modules = self.fix_shapes(x, [layer_spec])
-                new_module_list.extend(modules)
-
-        print("\n#### removed ####")
-        for name in removed_names:
-            print(name)
-
-        self.modules_list = new_module_list
-        self.create_specs()
-
-    def fix_shapes(self, tensor: torch.Tensor, layer_specs: List[LayerSpec]):
-        modules = []
-        for layer_spec in copy.deepcopy(layer_specs):
-            if layer_spec.type == LayerTypes.Dense:
-                layer_spec.set("in_features", tensor.shape[1])
-            elif layer_spec.type == LayerTypes.Conv2D:
-                layer_spec.set(Params.IN_CHANNELS, tensor.shape[1])
-            elif layer_spec.type == LayerTypes.BatchNormalization:
-                layer_spec.set("num_features", tensor.shape[1])
-
-                if tensor.dim() == 4: # After Conv2D
-                    layer_spec.type = LayerTypes.BatchNormalization2D
-                else: # After Linear
-                    layer_spec.type = LayerTypes.BatchNormalization1D
-
-            print("Layer type:", layer_spec.type)
-            print("Input tensor shape:", tensor.shape)
-            print("Params:", layer_spec.params)
-        
-            module = self.from_spec(layer_spec)
-            module.eval()
-            modules.append(module)
-            tensor = module(tensor)
-
-        return tensor, modules
 
     def from_type(self, layer_type: LayerTypes):
+        """
+        Get the PyTorch module class for a given layer type.
+        
+        Args:
+            layer_type: Custom layer type enum
+            
+        Returns:
+            Corresponding PyTorch module class
+        """
         return self.from_type_map[layer_type]
 
     def to_type(self, cls: type[nn.Module]):
+        """
+        Convert a PyTorch module class to its corresponding custom layer type.
+        
+        Args:
+            cls: PyTorch module class
+            
+        Returns:
+            Corresponding custom layer type
+        """
         return self.to_type_map[cls]
 
     def to_spec(self, module_name, module, input, output):
+        """
+        Convert a PyTorch module into a LayerSpec object based on its type and
+        the input/output tensor information.
+        
+        Args:
+            module_name: Name identifier for the module
+            module: The PyTorch module to convert
+            input: Tuple containing input tensor(s) to the module
+            output: Output tensor from the module
+            
+        Returns:
+            LayerSpec object representing the module
+        """
         layer_type = self.to_type(module.__class__)
         if layer_type == LayerTypes.Conv2D:
             return LayerSpec(
@@ -234,8 +312,6 @@ class TorchModel(TunerModel, nn.Module):
                     Params.PADDING: 'valid' if module.padding[0] == 0 else 'same',
                     Params.BIAS: module.bias is not None
                 }
-                #input_shape=[input[0].shape[0], input[0].shape[2], input[0].shape[3], input[0].shape[1]],
-                #output_shape=[output.shape[0], output.shape[2], output.shape[3], output.shape[1]],
             )
         elif layer_type == LayerTypes.Dense:
             return LayerSpec(
@@ -266,6 +342,7 @@ class TorchModel(TunerModel, nn.Module):
                     Params.DROPOUT_RATE: module.p
                 }
             )
+        # Activation function layers
         elif layer_type in [LayerTypes.ELU, LayerTypes.ReLU, LayerTypes.Sigmoid, LayerTypes.SiLU, LayerTypes.SeLU]:
             return LayerSpec(
                 name=module_name, 
@@ -276,6 +353,7 @@ class TorchModel(TunerModel, nn.Module):
                     "activation_type": layer_type
                 }
             )
+        # Batch normalization layers
         elif layer_type in [LayerTypes.BatchNormalization1D, LayerTypes.BatchNormalization2D]:
             return LayerSpec(
                 name=module_name,
@@ -299,6 +377,15 @@ class TorchModel(TunerModel, nn.Module):
             raise Exception("Missing LayerSpec for layer of type " + module.__class__.__name__)
 
     def from_spec(self, layer_spec: LayerSpec):
+        """
+        Create a PyTorch module from a LayerSpec object.
+        
+        Args:
+            layer_spec: Layer specification containing type and parameters
+            
+        Returns:
+            Initialized PyTorch module
+        """
         if layer_spec.type == LayerTypes.Conv2D:
             return nn.Conv2d(
                 in_channels=layer_spec.get(Params.IN_CHANNELS),

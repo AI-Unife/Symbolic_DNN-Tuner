@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 
 from exp_config import load_cfg
 
-class FlopsModule(common_interface):
+class flops_module(common_interface):
 
     #facts and problems for creating the prolog model
     facts = ['flops', 'flops_th', 'nparams', 'nparams_th']

@@ -34,6 +34,7 @@ class controller:
         and the one for storing the training progress on DB.
         """
         self.nn_cls = neural_network
+        self.backend = module_backend
         self.dataset = dataset
         self.exp_cfg = load_cfg()
         
@@ -72,7 +73,7 @@ class controller:
         self.residual: Optional[bool] = None
 
         # Model/training bookkeeping
-        self.nn = self.nn_cls(
+        self.nn = self.nn_cls(self.backend,
             self.dataset, self.reg, self.da, self.residual
         )
         self.model: Any = None
@@ -251,16 +252,22 @@ class controller:
         self.nn.build_network(params, self.layer_x_block)
         
         # 3. Check Constraints 
-        flops_ok = (self.nn.flops is None) or (self.nn.flops <= self.flops_th)
-        latency_ok = (self.nn.tot_latency_cost is None) or (self.nn.tot_latency_cost <= self.latency_th)
+        if "flops_module" in self.exp_cfg.mod_list:
+            self.flops_ok = (self.nn.flops is None) or (self.nn.flops <= self.flops_th)
+        else:
+            self.flops_ok = True
+        if "hardware_module" in self.exp_cfg.mod_list:
+            self.latency_ok = (self.nn.tot_latency_cost is None) or (self.nn.tot_latency_cost <= self.latency_th)
+        else:
+            self.latency_ok = True
 
-        if not flops_ok:
+        if not self.flops_ok:
             print(f"[WARNING] Constraint Violated: FLOPs {self.nn.flops} > {self.flops_th}")
-        if not latency_ok:
+        if not self.latency_ok:
             print(f"[WARNING] Constraint Violated: Latency Cost {self.nn.tot_latency_cost} > {self.latency_th}")
 
         # 4. Training Decision
-        if flops_ok and latency_ok:
+        if self.flops_ok and self.latency_ok:
             # --- START TRAINING ---
             self.scoreNN, self.history, self.model = self.nn.training(params)
             
@@ -269,12 +276,12 @@ class controller:
             
             # --- SCORING LOGIC ---
             ### TODO: Refactor this section for correct score return ###
-            if self.exp_cfg.quantization:
-                quantizer = quantizer_module(opt=params["optimizer"])
-                _ = quantizer.quantizer_function(self.model) 
-                q_loss, q_acc = quantizer.evaluate_quantized_model(self.dataset.X_test, self.dataset.Y_test)
-                self.score = -float(q_acc) 
-                quantizer.log_function()
+            # if self.exp_cfg.quantization:
+            #     quantizer = quantizer_module(opt=params["optimizer"])
+            #     _ = quantizer.quantizer_function(self.model) 
+            #     q_loss, q_acc = quantizer.evaluate_quantized_model(self.dataset.X_test, self.dataset.Y_test)
+            #     self.score = -float(q_acc) 
+            #     quantizer.log_function()
             
             if (len(self.modules.modules_obj) > 0) and self.modules.ready() and self.modules.all_zeros_weights():
                 _, _, opt_value = self.modules.optimiziation()
@@ -336,7 +343,7 @@ class controller:
             improv = self.imp_checker.checker(self.score)
             self.db.insert_ranking(self.score)
 
-            if self.nn.flops is None or self.nn.flops <= self.flops_th:
+            if self.flops_ok and self.latency_ok:
                 # Integral features of validation loss (used by symbolic layer)
                 val_loss_hist = self.history.get("val_loss", [])
                 int_loss, int_slope = integrals(val_loss_hist)
@@ -365,40 +372,6 @@ class controller:
                 facts_list_module += list(self.modules.values().values())
                 self.only_modules = False
 
-            else:
-                # Add facts from loaded modules
-                facts_list_module = list(self.modules.values().values())
-                self.only_modules = True
-
-            if self.nn.tot_latency_cost is None or self.nn.tot_latency_cost <= self.latency_th:
-                # Integral features of validation loss (used by symbolic layer)
-                val_loss_hist = self.history.get("val_loss", [])
-                int_loss, int_slope = integrals(val_loss_hist)
-
-                # Base fact list (raw + smoothed histories)
-                gnorm = getattr(self.model.optimizer, "last_grad_global_norm", 1.0)
-                if not isinstance(gnorm, float):
-                    gnorm = float(gnorm.numpy())
-                facts_list_module = [
-                    self.history.get("loss", []),
-                    self.smooth(self.history.get("loss", [])),
-                    self.history.get("accuracy", []),
-                    self.smooth(self.history.get("accuracy", [])),
-                    self.history.get("val_loss", []),
-                    self.history.get("val_accuracy", []),
-                    int_loss,
-                    int_slope,
-                    self.lacc,
-                    self.hloss,
-                    gnorm,
-                    self.vanish_th,
-                    self.exploding_th
-                ]
-
-                # Add facts from loaded modules
-                facts_list_module += list(self.modules.values().values())
-                self.only_modules = False
-            
             else:
                 # Add facts from loaded modules
                 facts_list_module = list(self.modules.values().values())

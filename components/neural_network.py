@@ -10,13 +10,14 @@ from exp_config import load_cfg
 from abc import ABC, abstractmethod
 
 from components.dataset import TunerDataset
+from components.backend_interface import BackendInterface
 
 class NeuralNetwork (ABC):
     """
     class used for the management of the neural network architecture,
     offering methods for training the dnn and adding and removing convolutional layers
     """
-    def __init__(self, dataset: TunerDataset, da: bool, reg: bool, residual: bool):
+    def __init__(self, backend: BackendInterface, dataset: TunerDataset, da: bool, reg: bool, residual: bool):
         """
         initialized the attributes of the class.
         first part is used for storing the examples of the dataset,
@@ -25,6 +26,7 @@ class NeuralNetwork (ABC):
         """
         
         self.dataset = dataset
+        self.backend = backend
         self.dataset.normalize_data()
 
         self.exp_cfg = load_cfg()
@@ -39,7 +41,6 @@ class NeuralNetwork (ABC):
         self.conv = False
 
         # Populated during training
-        self.last_model_id: Optional[str] = None
         self.flops: Optional[float] = None
         self.nparams: Optional[float] = None
         self.tot_latency_cost: Optional[float] = None
