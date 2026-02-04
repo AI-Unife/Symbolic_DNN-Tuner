@@ -29,7 +29,6 @@ class ConfigSchema:
 
 # ---------------- Validazione (stesse regole del tuo parser) ----------------
 _VALID_MODULES = {"hardware_module", "flops_module"}
-
 _VALID_OPT = {"standard", "filtered", "basic", "RS", "RS_ruled"}
 
 def create_config_file(exp_dir: str | Path, overrides: Optional[Dict[str, Any]] = None) -> Path:

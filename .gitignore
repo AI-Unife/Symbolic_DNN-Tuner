@@ -11,3 +11,14 @@ database/*
 .idea
 .__pycache__
 .vscode
+.venv/
+depth_exp/*
+25_*/*
+results/*
+slurm-*.out
+*.slurm
+prova.py
+*.keras
+gesture/*
+*.h5
+test_gesture/*

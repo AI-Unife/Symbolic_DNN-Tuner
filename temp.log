@@ -1,0 +1,1153 @@
+[exp_config] Creato config.yaml in: /Users/alicebizzarri/Desktop/Work/AIDA4Edge/Symbolic_DNN-Tuner/debug/config.yaml
+shape of x_train: (50000, 32, 32, 3)
+shape of y_train: (50000, 10)
+shape of x_test: (10000, 32, 32, 3)
+shape of y_test: (10000, 10)
+num_classes: 10
+[1;35m |  ----------- BASIC SEARCH SPACE ----------  |
+ [0m
+Dimension 0: num_neurons - categories: (8, 16, 32, 64)
+Dimension 1: unit_c1 - Integer(low=1, high=4, prior='uniform', transform='identity')
+Dimension 2: unit_c2 - Integer(low=1, high=8, prior='uniform', transform='identity')
+Dimension 3: dr_f - Real(low=0.03, high=0.5, prior='uniform', transform='identity')
+Dimension 4: learning_rate - Real(low=0.0001, high=0.001, prior='uniform', transform='identity')
+Dimension 5: batch_size - categories: (8, 16, 32, 64)
+Dimension 6: optimizer - categories: ('Adam', 'Adamax', 'SGD', 'Adagrad', 'Adadelta')
+Dimension 7: activation - categories: ('relu', 'elu', 'selu', 'swish')
+Dimension 8: data_augmentation - categories: (False,)
+Dimension 9: reg_l2 - categories: (False,)
+Dimension 10: skip_connection - categories: (False,)
+[92m 
+STARTING ALGORITHM 
+ [0m
+[1;35m --- ITERATION 0 --- [0m
+Actual constrained space for this iteration:
+Dimension 0: num_neurons - categories: (8, 16, 32, 64)
+Dimension 1: unit_c1 - Integer(low=1, high=4, prior='uniform', transform='identity')
+Dimension 2: unit_c2 - Integer(low=1, high=8, prior='uniform', transform='identity')
+Dimension 3: dr_f - Real(low=0.03, high=0.5, prior='uniform', transform='identity')
+Dimension 4: learning_rate - Real(low=0.0001, high=0.001, prior='uniform', transform='identity')
+Dimension 5: batch_size - categories: (8, 16, 32, 64)
+Dimension 6: optimizer - categories: ('Adam', 'Adamax', 'SGD', 'Adagrad', 'Adadelta')
+Dimension 7: activation - categories: ('relu', 'elu', 'selu', 'swish')
+Dimension 8: data_augmentation - categories: (False,)
+Dimension 9: reg_l2 - categories: (False,)
+Dimension 10: skip_connection - categories: (False,)
+Actual base space for this iteration:
+Dimension 0: num_neurons - categories: (8, 16, 32, 64)
+Dimension 1: unit_c1 - Integer(low=1, high=4, prior='uniform', transform='identity')
+Dimension 2: unit_c2 - Integer(low=1, high=8, prior='uniform', transform='identity')
+Dimension 3: dr_f - Real(low=0.03, high=0.5, prior='uniform', transform='identity')
+Dimension 4: learning_rate - Real(low=0.0001, high=0.001, prior='uniform', transform='identity')
+Dimension 5: batch_size - categories: (8, 16, 32, 64)
+Dimension 6: optimizer - categories: ('Adam', 'Adamax', 'SGD', 'Adagrad', 'Adadelta')
+Dimension 7: activation - categories: ('relu', 'elu', 'selu', 'swish')
+Dimension 8: data_augmentation - categories: (False,)
+Dimension 9: reg_l2 - categories: (False,)
+Dimension 10: skip_connection - categories: (False,)
+Chosen point: {'num_neurons': 64, 'unit_c1': 2, 'unit_c2': 6, 'dr_f': 0.3105195742348489, 'learning_rate': 0.0005012494775682321, 'batch_size': 8, 'optimizer': 'SGD', 'activation': 'elu', 'data_augmentation': False, 'reg_l2': False, 'skip_connection': False, 'new_conv_1': 0, 'new_conv_2': 0, 'new_conv_3': -1, 'new_fc_1': 0, 'new_fc_2': 0, 'new_fc_3': 0, 'new_fc_4': -1, 'new_fc_5': -1, 'new_fc_6': 0, 'new_fc_7': -1, 'new_fc_8': -1, 'new_fc_9': 0, 'new_fc_10': -1}
+Model: "model"
+_________________________________________________________________
+ Layer (type)                Output Shape              Param #   
+=================================================================
+ input_1 (InputLayer)        [(None, 32, 32, 3)]       0         
+                                                                 
+ conv2d (Conv2D)             (None, 32, 32, 128)       3584      
+                                                                 
+ activation (Activation)     (None, 32, 32, 128)       0         
+                                                                 
+ batch_normalization (Batch  (None, 32, 32, 128)       512       
+ Normalization)                                                  
+                                                                 
+ conv2d_1 (Conv2D)           (None, 32, 32, 128)       147584    
+                                                                 
+ activation_1 (Activation)   (None, 32, 32, 128)       0         
+                                                                 
+ batch_normalization_1 (Bat  (None, 32, 32, 128)       512       
+ chNormalization)                                                
+                                                                 
+ max_pooling2d (MaxPooling2  (None, 16, 16, 128)       0         
+ D)                                                              
+                                                                 
+ conv2d_2 (Conv2D)           (None, 16, 16, 384)       442752    
+                                                                 
+ activation_2 (Activation)   (None, 16, 16, 384)       0         
+                                                                 
+ batch_normalization_2 (Bat  (None, 16, 16, 384)       1536      
+ chNormalization)                                                
+                                                                 
+ conv2d_3 (Conv2D)           (None, 16, 16, 384)       1327488   
+                                                                 
+ activation_3 (Activation)   (None, 16, 16, 384)       0         
+                                                                 
+ batch_normalization_3 (Bat  (None, 16, 16, 384)       1536      
+ chNormalization)                                                
+                                                                 
+ max_pooling2d_1 (MaxPoolin  (None, 8, 8, 384)         0         
+ g2D)                                                            
+                                                                 
+ global_average_pooling2d (  (None, 384)               0         
+ GlobalAveragePooling2D)                                         
+                                                                 
+ dense (Dense)               (None, 10)                3850      
+                                                                 
+=================================================================
+Total params: 1929354 (7.36 MB)
+Trainable params: 1927306 (7.35 MB)
+Non-trainable params: 2048 (8.00 KB)
+_________________________________________________________________
+
+ACCURACY: 0.5790596626495592
+
+[92m | MODULE VALUES ---------------------------------------------  |
+ [0m
+[92m 
+ | -----------------------------------------------------------  |
+ [0m
+Score: -0.5790596626495592
+
+
+
+ [INFO] Punti validi 10000/10000
+[1;36m | START SYMBOLIC DIAGNOSIS ----------------------------------  |
+ [0m
+[1;36m | END SYMBOLIC DIAGNOSIS   ----------------------------------  |
+ [0m
+[91m | START SYMBOLIC TUNING    ----------------------------------  |
+ [0m
+I've find underfitting and I'm trying to fix it with self.data_augmentation().
+I've find need_skip and I'm trying to fix it with self.add_residual().
+[91m | END SYMBOLIC TUNING      ----------------------------------  |
+ [0m
+DEBUG: Categorie estese per data_augmentation: Categorical(categories=(False, True), prior=None)
+DEBUG: Categorie estese per skip_connection: Categorical(categories=(False, True), prior=None)
+[1;35m --- ITERATION 1 --- [0m
+Actual constrained space for this iteration:
+Dimension 0: num_neurons - categories: (8, 16, 32, 64)
+Dimension 1: unit_c1 - Integer(low=1, high=4, prior='uniform', transform='identity')
+Dimension 2: unit_c2 - Integer(low=1, high=8, prior='uniform', transform='identity')
+Dimension 3: dr_f - Real(low=0.03, high=0.5, prior='uniform', transform='identity')
+Dimension 4: learning_rate - Real(low=0.0001, high=0.001, prior='uniform', transform='identity')
+Dimension 5: batch_size - categories: (8, 16, 32, 64)
+Dimension 6: optimizer - categories: ('Adam', 'Adamax', 'SGD', 'Adagrad', 'Adadelta')
+Dimension 7: activation - categories: ('relu', 'elu', 'selu', 'swish')
+Dimension 8: data_augmentation - categories: (True,)
+Dimension 9: reg_l2 - categories: (False,)
+Dimension 10: skip_connection - categories: (True,)
+Actual base space for this iteration:
+Dimension 0: num_neurons - categories: (8, 16, 32, 64)
+Dimension 1: unit_c1 - Integer(low=1, high=4, prior='uniform', transform='normalize')
+Dimension 2: unit_c2 - Integer(low=1, high=8, prior='uniform', transform='normalize')
+Dimension 3: dr_f - Real(low=0.03, high=0.5, prior='uniform', transform='normalize')
+Dimension 4: learning_rate - Real(low=0.0001, high=0.001, prior='uniform', transform='normalize')
+Dimension 5: batch_size - categories: (8, 16, 32, 64)
+Dimension 6: optimizer - categories: ('Adam', 'Adamax', 'SGD', 'Adagrad', 'Adadelta')
+Dimension 7: activation - categories: ('relu', 'elu', 'selu', 'swish')
+Dimension 8: data_augmentation - categories: (False, True)
+Dimension 9: reg_l2 - categories: (False,)
+Dimension 10: skip_connection - categories: (False, True)
+
+
+
+ [INFO] Punti validi 2493/10000
+Chosen point: {'num_neurons': 16, 'unit_c1': 4, 'unit_c2': 4, 'dr_f': 0.0639594097956395, 'learning_rate': 0.00038921810594685886, 'batch_size': 64, 'optimizer': 'Adamax', 'activation': 'relu', 'data_augmentation': True, 'reg_l2': False, 'skip_connection': True, 'new_conv_1': -1, 'new_conv_2': -1, 'new_conv_3': -1, 'new_fc_1': -1, 'new_fc_2': -1, 'new_fc_3': -1, 'new_fc_4': 0, 'new_fc_5': 0, 'new_fc_6': -1, 'new_fc_7': 0, 'new_fc_8': 0, 'new_fc_9': -1, 'new_fc_10': -1}
+Model: "model"
+__________________________________________________________________________________________________
+ Layer (type)                Output Shape                 Param #   Connected to                  
+==================================================================================================
+ input_1 (InputLayer)        [(None, 32, 32, 3)]          0         []                            
+                                                                                                  
+ conv2d (Conv2D)             (None, 32, 32, 64)           1792      ['input_1[0][0]']             
+                                                                                                  
+ activation (Activation)     (None, 32, 32, 64)           0         ['conv2d[0][0]']              
+                                                                                                  
+ batch_normalization (Batch  (None, 32, 32, 64)           256       ['activation[0][0]']          
+ Normalization)                                                                                   
+                                                                                                  
+ conv2d_2 (Conv2D)           (None, 32, 32, 64)           256       ['input_1[0][0]']             
+                                                                                                  
+ conv2d_1 (Conv2D)           (None, 32, 32, 64)           36928     ['batch_normalization[0][0]'] 
+                                                                                                  
+ add (Add)                   (None, 32, 32, 64)           0         ['conv2d_2[0][0]',            
+                                                                     'conv2d_1[0][0]']            
+                                                                                                  
+ activation_1 (Activation)   (None, 32, 32, 64)           0         ['add[0][0]']                 
+                                                                                                  
+ max_pooling2d (MaxPooling2  (None, 16, 16, 64)           0         ['activation_1[0][0]']        
+ D)                                                                                               
+                                                                                                  
+ conv2d_3 (Conv2D)           (None, 16, 16, 64)           36928     ['max_pooling2d[0][0]']       
+                                                                                                  
+ activation_2 (Activation)   (None, 16, 16, 64)           0         ['conv2d_3[0][0]']            
+                                                                                                  
+ batch_normalization_1 (Bat  (None, 16, 16, 64)           256       ['activation_2[0][0]']        
+ chNormalization)                                                                                 
+                                                                                                  
+ conv2d_4 (Conv2D)           (None, 16, 16, 64)           36928     ['batch_normalization_1[0][0]'
+                                                                    ]                             
+                                                                                                  
+ add_1 (Add)                 (None, 16, 16, 64)           0         ['max_pooling2d[0][0]',       
+                                                                     'conv2d_4[0][0]']            
+                                                                                                  
+ activation_3 (Activation)   (None, 16, 16, 64)           0         ['add_1[0][0]']               
+                                                                                                  
+ max_pooling2d_1 (MaxPoolin  (None, 8, 8, 64)             0         ['activation_3[0][0]']        
+ g2D)                                                                                             
+                                                                                                  
+ global_average_pooling2d (  (None, 64)                   0         ['max_pooling2d_1[0][0]']     
+ GlobalAveragePooling2D)                                                                          
+                                                                                                  
+ dense (Dense)               (None, 10)                   650       ['global_average_pooling2d[0][
+                                                                    0]']                          
+                                                                                                  
+==================================================================================================
+Total params: 113994 (445.29 KB)
+Trainable params: 113738 (444.29 KB)
+Non-trainable params: 256 (1.00 KB)
+__________________________________________________________________________________________________
+
+ACCURACY: 0.25015438551676716
+
+[92m | MODULE VALUES ---------------------------------------------  |
+ [0m
+[92m 
+ | -----------------------------------------------------------  |
+ [0m
+Score: -0.25015438551676716
+
+
+
+ [INFO] Punti validi 2491/10000
+[1;36m | START SYMBOLIC DIAGNOSIS ----------------------------------  |
+ [0m
+Skipping 'need_skip' — all actions are zero.
+[1;36m | END SYMBOLIC DIAGNOSIS   ----------------------------------  |
+ [0m
+[91m | START SYMBOLIC TUNING    ----------------------------------  |
+ [0m
+I've find underfitting and I'm trying to fix it with self.inc_conv_layers().
+[91m | END SYMBOLIC TUNING      ----------------------------------  |
+ [0m
+[1;35m --- ITERATION 2 --- [0m
+Actual constrained space for this iteration:
+Dimension 0: num_neurons - categories: (8, 16, 32, 64)
+Dimension 1: unit_c1 - Integer(low=1, high=4, prior='uniform', transform='identity')
+Dimension 2: unit_c2 - Integer(low=1, high=8, prior='uniform', transform='identity')
+Dimension 3: dr_f - Real(low=0.03, high=0.5, prior='uniform', transform='identity')
+Dimension 4: learning_rate - Real(low=0.0001, high=0.001, prior='uniform', transform='identity')
+Dimension 5: batch_size - categories: (8, 16, 32, 64)
+Dimension 6: optimizer - categories: ('Adam', 'Adamax', 'SGD', 'Adagrad', 'Adadelta')
+Dimension 7: activation - categories: ('relu', 'elu', 'selu', 'swish')
+Dimension 8: data_augmentation - categories: (True,)
+Dimension 9: reg_l2 - categories: (False,)
+Dimension 10: skip_connection - categories: (True,)
+Actual base space for this iteration:
+Dimension 0: num_neurons - categories: (8, 16, 32, 64)
+Dimension 1: unit_c1 - Integer(low=1, high=4, prior='uniform', transform='normalize')
+Dimension 2: unit_c2 - Integer(low=1, high=8, prior='uniform', transform='normalize')
+Dimension 3: dr_f - Real(low=0.03, high=0.5, prior='uniform', transform='normalize')
+Dimension 4: learning_rate - Real(low=0.0001, high=0.001, prior='uniform', transform='normalize')
+Dimension 5: batch_size - categories: (8, 16, 32, 64)
+Dimension 6: optimizer - categories: ('Adam', 'Adamax', 'SGD', 'Adagrad', 'Adadelta')
+Dimension 7: activation - categories: ('relu', 'elu', 'selu', 'swish')
+Dimension 8: data_augmentation - categories: (False, True)
+Dimension 9: reg_l2 - categories: (False,)
+Dimension 10: skip_connection - categories: (False, True)
+
+
+
+ [INFO] Punti validi 2493/10000
+Chosen point: {'num_neurons': 16, 'unit_c1': 2, 'unit_c2': 7, 'dr_f': 0.43390807203016024, 'learning_rate': 0.0002993268071969297, 'batch_size': 8, 'optimizer': 'SGD', 'activation': 'elu', 'data_augmentation': True, 'reg_l2': False, 'skip_connection': True, 'new_conv_1': 0, 'new_conv_2': 0, 'new_conv_3': 0, 'new_fc_1': -1, 'new_fc_2': 0, 'new_fc_3': -1, 'new_fc_4': -1, 'new_fc_5': -1, 'new_fc_6': 0, 'new_fc_7': -1, 'new_fc_8': -1, 'new_fc_9': 0, 'new_fc_10': -1}
+Model: "model"
+__________________________________________________________________________________________________
+ Layer (type)                Output Shape                 Param #   Connected to                  
+==================================================================================================
+ input_1 (InputLayer)        [(None, 32, 32, 3)]          0         []                            
+                                                                                                  
+ conv2d (Conv2D)             (None, 32, 32, 32)           896       ['input_1[0][0]']             
+                                                                                                  
+ activation (Activation)     (None, 32, 32, 32)           0         ['conv2d[0][0]']              
+                                                                                                  
+ batch_normalization (Batch  (None, 32, 32, 32)           128       ['activation[0][0]']          
+ Normalization)                                                                                   
+                                                                                                  
+ conv2d_1 (Conv2D)           (None, 32, 32, 32)           9248      ['batch_normalization[0][0]'] 
+                                                                                                  
+ activation_1 (Activation)   (None, 32, 32, 32)           0         ['conv2d_1[0][0]']            
+                                                                                                  
+ batch_normalization_1 (Bat  (None, 32, 32, 32)           128       ['activation_1[0][0]']        
+ chNormalization)                                                                                 
+                                                                                                  
+ conv2d_3 (Conv2D)           (None, 32, 32, 32)           128       ['input_1[0][0]']             
+                                                                                                  
+ conv2d_2 (Conv2D)           (None, 32, 32, 32)           9248      ['batch_normalization_1[0][0]'
+                                                                    ]                             
+                                                                                                  
+ add (Add)                   (None, 32, 32, 32)           0         ['conv2d_3[0][0]',            
+                                                                     'conv2d_2[0][0]']            
+                                                                                                  
+ activation_2 (Activation)   (None, 32, 32, 32)           0         ['add[0][0]']                 
+                                                                                                  
+ max_pooling2d (MaxPooling2  (None, 16, 16, 32)           0         ['activation_2[0][0]']        
+ D)                                                                                               
+                                                                                                  
+ conv2d_4 (Conv2D)           (None, 16, 16, 112)          32368     ['max_pooling2d[0][0]']       
+                                                                                                  
+ activation_3 (Activation)   (None, 16, 16, 112)          0         ['conv2d_4[0][0]']            
+                                                                                                  
+ batch_normalization_2 (Bat  (None, 16, 16, 112)          448       ['activation_3[0][0]']        
+ chNormalization)                                                                                 
+                                                                                                  
+ conv2d_5 (Conv2D)           (None, 16, 16, 112)          113008    ['batch_normalization_2[0][0]'
+                                                                    ]                             
+                                                                                                  
+ activation_4 (Activation)   (None, 16, 16, 112)          0         ['conv2d_5[0][0]']            
+                                                                                                  
+ batch_normalization_3 (Bat  (None, 16, 16, 112)          448       ['activation_4[0][0]']        
+ chNormalization)                                                                                 
+                                                                                                  
+ conv2d_7 (Conv2D)           (None, 16, 16, 112)          3696      ['max_pooling2d[0][0]']       
+                                                                                                  
+ conv2d_6 (Conv2D)           (None, 16, 16, 112)          113008    ['batch_normalization_3[0][0]'
+                                                                    ]                             
+                                                                                                  
+ add_1 (Add)                 (None, 16, 16, 112)          0         ['conv2d_7[0][0]',            
+                                                                     'conv2d_6[0][0]']            
+                                                                                                  
+ activation_5 (Activation)   (None, 16, 16, 112)          0         ['add_1[0][0]']               
+                                                                                                  
+ max_pooling2d_1 (MaxPoolin  (None, 8, 8, 112)            0         ['activation_5[0][0]']        
+ g2D)                                                                                             
+                                                                                                  
+ global_average_pooling2d (  (None, 112)                  0         ['max_pooling2d_1[0][0]']     
+ GlobalAveragePooling2D)                                                                          
+                                                                                                  
+ dense (Dense)               (None, 10)                   1130      ['global_average_pooling2d[0][
+                                                                    0]']                          
+                                                                                                  
+==================================================================================================
+Total params: 283882 (1.08 MB)
+Trainable params: 283306 (1.08 MB)
+Non-trainable params: 576 (2.25 KB)
+__________________________________________________________________________________________________
+
+ACCURACY: 0.9458453434896901
+
+[92m | MODULE VALUES ---------------------------------------------  |
+ [0m
+[92m 
+ | -----------------------------------------------------------  |
+ [0m
+Score: -0.9458453434896901
+
+
+
+ [INFO] Punti validi 2491/10000
+[1;36m | START SYMBOLIC DIAGNOSIS ----------------------------------  |
+ [0m
+Skipping 'need_skip' — all actions are zero.
+[1;36m | END SYMBOLIC DIAGNOSIS   ----------------------------------  |
+ [0m
+[91m | START SYMBOLIC TUNING    ----------------------------------  |
+ [0m
+I've find underfitting and I'm trying to fix it with self.inc_neurons(params).
+[91m | END SYMBOLIC TUNING      ----------------------------------  |
+ [0m
+[1;35m --- ITERATION 3 --- [0m
+Actual constrained space for this iteration:
+Dimension 0: num_neurons - categories: (8, 16, 32, 64)
+Dimension 1: unit_c1 - Integer(low=1, high=4, prior='uniform', transform='identity')
+Dimension 2: unit_c2 - Integer(low=6, high=8, prior='uniform', transform='identity')
+Dimension 3: dr_f - Real(low=0.03, high=0.5, prior='uniform', transform='identity')
+Dimension 4: learning_rate - Real(low=0.0001, high=0.001, prior='uniform', transform='identity')
+Dimension 5: batch_size - categories: (8, 16, 32, 64)
+Dimension 6: optimizer - categories: ('Adam', 'Adamax', 'SGD', 'Adagrad', 'Adadelta')
+Dimension 7: activation - categories: ('relu', 'elu', 'selu', 'swish')
+Dimension 8: data_augmentation - categories: (True,)
+Dimension 9: reg_l2 - categories: (False,)
+Dimension 10: skip_connection - categories: (True,)
+Actual base space for this iteration:
+Dimension 0: num_neurons - categories: (8, 16, 32, 64)
+Dimension 1: unit_c1 - Integer(low=1, high=4, prior='uniform', transform='normalize')
+Dimension 2: unit_c2 - Integer(low=1, high=8, prior='uniform', transform='normalize')
+Dimension 3: dr_f - Real(low=0.03, high=0.5, prior='uniform', transform='normalize')
+Dimension 4: learning_rate - Real(low=0.0001, high=0.001, prior='uniform', transform='normalize')
+Dimension 5: batch_size - categories: (8, 16, 32, 64)
+Dimension 6: optimizer - categories: ('Adam', 'Adamax', 'SGD', 'Adagrad', 'Adadelta')
+Dimension 7: activation - categories: ('relu', 'elu', 'selu', 'swish')
+Dimension 8: data_augmentation - categories: (False, True)
+Dimension 9: reg_l2 - categories: (False,)
+Dimension 10: skip_connection - categories: (False, True)
+
+
+
+ [INFO] Punti validi 867/10000
+Chosen point: {'num_neurons': 16, 'unit_c1': 2, 'unit_c2': 8, 'dr_f': 0.28270116226783093, 'learning_rate': 0.0008054841413756548, 'batch_size': 8, 'optimizer': 'Adam', 'activation': 'elu', 'data_augmentation': False, 'reg_l2': False, 'skip_connection': False, 'new_conv_1': -1, 'new_conv_2': 0, 'new_conv_3': 0, 'new_fc_1': -1, 'new_fc_2': -1, 'new_fc_3': -1, 'new_fc_4': 0, 'new_fc_5': 0, 'new_fc_6': 0, 'new_fc_7': -1, 'new_fc_8': 0, 'new_fc_9': 0, 'new_fc_10': 0}
+Model: "model"
+_________________________________________________________________
+ Layer (type)                Output Shape              Param #   
+=================================================================
+ input_1 (InputLayer)        [(None, 32, 32, 3)]       0         
+                                                                 
+ conv2d (Conv2D)             (None, 32, 32, 32)        896       
+                                                                 
+ activation (Activation)     (None, 32, 32, 32)        0         
+                                                                 
+ batch_normalization (Batch  (None, 32, 32, 32)        128       
+ Normalization)                                                  
+                                                                 
+ conv2d_1 (Conv2D)           (None, 32, 32, 32)        9248      
+                                                                 
+ activation_1 (Activation)   (None, 32, 32, 32)        0         
+                                                                 
+ batch_normalization_1 (Bat  (None, 32, 32, 32)        128       
+ chNormalization)                                                
+                                                                 
+ conv2d_2 (Conv2D)           (None, 32, 32, 32)        9248      
+                                                                 
+ activation_2 (Activation)   (None, 32, 32, 32)        0         
+                                                                 
+ batch_normalization_2 (Bat  (None, 32, 32, 32)        128       
+ chNormalization)                                                
+                                                                 
+ max_pooling2d (MaxPooling2  (None, 16, 16, 32)        0         
+ D)                                                              
+                                                                 
+ conv2d_3 (Conv2D)           (None, 16, 16, 128)       36992     
+                                                                 
+ activation_3 (Activation)   (None, 16, 16, 128)       0         
+                                                                 
+ batch_normalization_3 (Bat  (None, 16, 16, 128)       512       
+ chNormalization)                                                
+                                                                 
+ conv2d_4 (Conv2D)           (None, 16, 16, 128)       147584    
+                                                                 
+ activation_4 (Activation)   (None, 16, 16, 128)       0         
+                                                                 
+ batch_normalization_4 (Bat  (None, 16, 16, 128)       512       
+ chNormalization)                                                
+                                                                 
+ conv2d_5 (Conv2D)           (None, 16, 16, 128)       147584    
+                                                                 
+ activation_5 (Activation)   (None, 16, 16, 128)       0         
+                                                                 
+ batch_normalization_5 (Bat  (None, 16, 16, 128)       512       
+ chNormalization)                                                
+                                                                 
+ max_pooling2d_1 (MaxPoolin  (None, 8, 8, 128)         0         
+ g2D)                                                            
+                                                                 
+ global_average_pooling2d (  (None, 128)               0         
+ GlobalAveragePooling2D)                                         
+                                                                 
+ dense (Dense)               (None, 10)                1290      
+                                                                 
+=================================================================
+Total params: 354762 (1.35 MB)
+Trainable params: 353802 (1.35 MB)
+Non-trainable params: 960 (3.75 KB)
+_________________________________________________________________
+
+ACCURACY: 0.3455974679659786
+
+[92m | MODULE VALUES ---------------------------------------------  |
+ [0m
+[92m 
+ | -----------------------------------------------------------  |
+ [0m
+Score: -0.3455974679659786
+
+
+
+ [INFO] Punti validi 890/10000
+[1;36m | START SYMBOLIC DIAGNOSIS ----------------------------------  |
+ [0m
+Skipping 'need_skip' — all actions are zero.
+[1;36m | END SYMBOLIC DIAGNOSIS   ----------------------------------  |
+ [0m
+[91m | START SYMBOLIC TUNING    ----------------------------------  |
+ [0m
+I've find underfitting and I'm trying to fix it with self.decr_lr(params).
+[91m | END SYMBOLIC TUNING      ----------------------------------  |
+ [0m
+[1;35m --- ITERATION 4 --- [0m
+Actual constrained space for this iteration:
+Dimension 0: num_neurons - categories: (8, 16, 32, 64)
+Dimension 1: unit_c1 - Integer(low=1, high=4, prior='uniform', transform='identity')
+Dimension 2: unit_c2 - Integer(low=6, high=8, prior='uniform', transform='identity')
+Dimension 3: dr_f - Real(low=0.03, high=0.5, prior='uniform', transform='identity')
+Dimension 4: learning_rate - Real(low=0.0001, high=0.0012082262120634822, prior='uniform', transform='identity')
+Dimension 5: batch_size - categories: (8, 16, 32, 64)
+Dimension 6: optimizer - categories: ('Adam', 'Adamax', 'SGD', 'Adagrad', 'Adadelta')
+Dimension 7: activation - categories: ('relu', 'elu', 'selu', 'swish')
+Dimension 8: data_augmentation - categories: (True,)
+Dimension 9: reg_l2 - categories: (False,)
+Dimension 10: skip_connection - categories: (True,)
+Actual base space for this iteration:
+Dimension 0: num_neurons - categories: (8, 16, 32, 64)
+Dimension 1: unit_c1 - Integer(low=1, high=4, prior='uniform', transform='normalize')
+Dimension 2: unit_c2 - Integer(low=1, high=8, prior='uniform', transform='normalize')
+Dimension 3: dr_f - Real(low=0.03, high=0.5, prior='uniform', transform='normalize')
+Dimension 4: learning_rate - Real(low=0.0001, high=0.0012082262120634822, prior='uniform', transform='normalize')
+Dimension 5: batch_size - categories: (8, 16, 32, 64)
+Dimension 6: optimizer - categories: ('Adam', 'Adamax', 'SGD', 'Adagrad', 'Adadelta')
+Dimension 7: activation - categories: ('relu', 'elu', 'selu', 'swish')
+Dimension 8: data_augmentation - categories: (False, True)
+Dimension 9: reg_l2 - categories: (False,)
+Dimension 10: skip_connection - categories: (False, True)
+
+
+
+ [INFO] Punti validi 867/10000
+Chosen point: {'num_neurons': 32, 'unit_c1': 1, 'unit_c2': 6, 'dr_f': 0.3443088540751853, 'learning_rate': 0.00034607316419231054, 'batch_size': 8, 'optimizer': 'SGD', 'activation': 'elu', 'data_augmentation': True, 'reg_l2': False, 'skip_connection': True, 'new_conv_1': 0, 'new_conv_2': 0, 'new_conv_3': -1, 'new_fc_1': 0, 'new_fc_2': 0, 'new_fc_3': -1, 'new_fc_4': -1, 'new_fc_5': -1, 'new_fc_6': 0, 'new_fc_7': -1, 'new_fc_8': -1, 'new_fc_9': -1, 'new_fc_10': 0}
+Model: "model"
+__________________________________________________________________________________________________
+ Layer (type)                Output Shape                 Param #   Connected to                  
+==================================================================================================
+ input_1 (InputLayer)        [(None, 32, 32, 3)]          0         []                            
+                                                                                                  
+ conv2d (Conv2D)             (None, 32, 32, 32)           896       ['input_1[0][0]']             
+                                                                                                  
+ activation (Activation)     (None, 32, 32, 32)           0         ['conv2d[0][0]']              
+                                                                                                  
+ batch_normalization (Batch  (None, 32, 32, 32)           128       ['activation[0][0]']          
+ Normalization)                                                                                   
+                                                                                                  
+ conv2d_1 (Conv2D)           (None, 32, 32, 32)           9248      ['batch_normalization[0][0]'] 
+                                                                                                  
+ activation_1 (Activation)   (None, 32, 32, 32)           0         ['conv2d_1[0][0]']            
+                                                                                                  
+ batch_normalization_1 (Bat  (None, 32, 32, 32)           128       ['activation_1[0][0]']        
+ chNormalization)                                                                                 
+                                                                                                  
+ conv2d_3 (Conv2D)           (None, 32, 32, 32)           128       ['input_1[0][0]']             
+                                                                                                  
+ conv2d_2 (Conv2D)           (None, 32, 32, 32)           9248      ['batch_normalization_1[0][0]'
+                                                                    ]                             
+                                                                                                  
+ add (Add)                   (None, 32, 32, 32)           0         ['conv2d_3[0][0]',            
+                                                                     'conv2d_2[0][0]']            
+                                                                                                  
+ activation_2 (Activation)   (None, 32, 32, 32)           0         ['add[0][0]']                 
+                                                                                                  
+ max_pooling2d (MaxPooling2  (None, 16, 16, 32)           0         ['activation_2[0][0]']        
+ D)                                                                                               
+                                                                                                  
+ conv2d_4 (Conv2D)           (None, 16, 16, 192)          55488     ['max_pooling2d[0][0]']       
+                                                                                                  
+ activation_3 (Activation)   (None, 16, 16, 192)          0         ['conv2d_4[0][0]']            
+                                                                                                  
+ batch_normalization_2 (Bat  (None, 16, 16, 192)          768       ['activation_3[0][0]']        
+ chNormalization)                                                                                 
+                                                                                                  
+ conv2d_5 (Conv2D)           (None, 16, 16, 192)          331968    ['batch_normalization_2[0][0]'
+                                                                    ]                             
+                                                                                                  
+ activation_4 (Activation)   (None, 16, 16, 192)          0         ['conv2d_5[0][0]']            
+                                                                                                  
+ batch_normalization_3 (Bat  (None, 16, 16, 192)          768       ['activation_4[0][0]']        
+ chNormalization)                                                                                 
+                                                                                                  
+ conv2d_7 (Conv2D)           (None, 16, 16, 192)          6336      ['max_pooling2d[0][0]']       
+                                                                                                  
+ conv2d_6 (Conv2D)           (None, 16, 16, 192)          331968    ['batch_normalization_3[0][0]'
+                                                                    ]                             
+                                                                                                  
+ add_1 (Add)                 (None, 16, 16, 192)          0         ['conv2d_7[0][0]',            
+                                                                     'conv2d_6[0][0]']            
+                                                                                                  
+ activation_5 (Activation)   (None, 16, 16, 192)          0         ['add_1[0][0]']               
+                                                                                                  
+ max_pooling2d_1 (MaxPoolin  (None, 8, 8, 192)            0         ['activation_5[0][0]']        
+ g2D)                                                                                             
+                                                                                                  
+ global_average_pooling2d (  (None, 192)                  0         ['max_pooling2d_1[0][0]']     
+ GlobalAveragePooling2D)                                                                          
+                                                                                                  
+ dense (Dense)               (None, 10)                   1930      ['global_average_pooling2d[0][
+                                                                    0]']                          
+                                                                                                  
+==================================================================================================
+Total params: 749002 (2.86 MB)
+Trainable params: 748106 (2.85 MB)
+Non-trainable params: 896 (3.50 KB)
+__________________________________________________________________________________________________
+
+ACCURACY: 0.3297613182502219
+
+[92m | MODULE VALUES ---------------------------------------------  |
+ [0m
+[92m 
+ | -----------------------------------------------------------  |
+ [0m
+Score: -0.3297613182502219
+
+
+
+ [INFO] Punti validi 888/10000
+[1;36m | START SYMBOLIC DIAGNOSIS ----------------------------------  |
+ [0m
+Skipping 'need_skip' — all actions are zero.
+[1;36m | END SYMBOLIC DIAGNOSIS   ----------------------------------  |
+ [0m
+[91m | START SYMBOLIC TUNING    ----------------------------------  |
+ [0m
+I've find underfitting and I'm trying to fix it with self.dec_dropout(params).
+[91m | END SYMBOLIC TUNING      ----------------------------------  |
+ [0m
+[1;35m --- ITERATION 5 --- [0m
+Actual constrained space for this iteration:
+Dimension 0: num_neurons - categories: (8, 16, 32, 64)
+Dimension 1: unit_c1 - Integer(low=1, high=4, prior='uniform', transform='identity')
+Dimension 2: unit_c2 - Integer(low=6, high=8, prior='uniform', transform='identity')
+Dimension 3: dr_f - Real(low=0.03, high=0.8, prior='uniform', transform='identity')
+Dimension 4: learning_rate - Real(low=0.0001, high=0.0012082262120634822, prior='uniform', transform='identity')
+Dimension 5: batch_size - categories: (8, 16, 32, 64)
+Dimension 6: optimizer - categories: ('Adam', 'Adamax', 'SGD', 'Adagrad', 'Adadelta')
+Dimension 7: activation - categories: ('relu', 'elu', 'selu', 'swish')
+Dimension 8: data_augmentation - categories: (True,)
+Dimension 9: reg_l2 - categories: (False,)
+Dimension 10: skip_connection - categories: (True,)
+Actual base space for this iteration:
+Dimension 0: num_neurons - categories: (8, 16, 32, 64)
+Dimension 1: unit_c1 - Integer(low=1, high=4, prior='uniform', transform='normalize')
+Dimension 2: unit_c2 - Integer(low=1, high=8, prior='uniform', transform='normalize')
+Dimension 3: dr_f - Real(low=0.03, high=0.8, prior='uniform', transform='normalize')
+Dimension 4: learning_rate - Real(low=0.0001, high=0.0012082262120634822, prior='uniform', transform='normalize')
+Dimension 5: batch_size - categories: (8, 16, 32, 64)
+Dimension 6: optimizer - categories: ('Adam', 'Adamax', 'SGD', 'Adagrad', 'Adadelta')
+Dimension 7: activation - categories: ('relu', 'elu', 'selu', 'swish')
+Dimension 8: data_augmentation - categories: (False, True)
+Dimension 9: reg_l2 - categories: (False,)
+Dimension 10: skip_connection - categories: (False, True)
+
+
+
+ [INFO] Punti validi 867/10000
+Chosen point: {'num_neurons': 16, 'unit_c1': 2, 'unit_c2': 7, 'dr_f': 0.6917217350281349, 'learning_rate': 0.0003454435472250683, 'batch_size': 8, 'optimizer': 'SGD', 'activation': 'elu', 'data_augmentation': True, 'reg_l2': False, 'skip_connection': True, 'new_conv_1': 0, 'new_conv_2': 0, 'new_conv_3': 0, 'new_fc_1': -1, 'new_fc_2': 0, 'new_fc_3': -1, 'new_fc_4': -1, 'new_fc_5': -1, 'new_fc_6': 0, 'new_fc_7': -1, 'new_fc_8': -1, 'new_fc_9': 0, 'new_fc_10': -1}
+Model: "model"
+__________________________________________________________________________________________________
+ Layer (type)                Output Shape                 Param #   Connected to                  
+==================================================================================================
+ input_1 (InputLayer)        [(None, 32, 32, 3)]          0         []                            
+                                                                                                  
+ conv2d (Conv2D)             (None, 32, 32, 32)           896       ['input_1[0][0]']             
+                                                                                                  
+ activation (Activation)     (None, 32, 32, 32)           0         ['conv2d[0][0]']              
+                                                                                                  
+ batch_normalization (Batch  (None, 32, 32, 32)           128       ['activation[0][0]']          
+ Normalization)                                                                                   
+                                                                                                  
+ conv2d_1 (Conv2D)           (None, 32, 32, 32)           9248      ['batch_normalization[0][0]'] 
+                                                                                                  
+ activation_1 (Activation)   (None, 32, 32, 32)           0         ['conv2d_1[0][0]']            
+                                                                                                  
+ batch_normalization_1 (Bat  (None, 32, 32, 32)           128       ['activation_1[0][0]']        
+ chNormalization)                                                                                 
+                                                                                                  
+ conv2d_3 (Conv2D)           (None, 32, 32, 32)           128       ['input_1[0][0]']             
+                                                                                                  
+ conv2d_2 (Conv2D)           (None, 32, 32, 32)           9248      ['batch_normalization_1[0][0]'
+                                                                    ]                             
+                                                                                                  
+ add (Add)                   (None, 32, 32, 32)           0         ['conv2d_3[0][0]',            
+                                                                     'conv2d_2[0][0]']            
+                                                                                                  
+ activation_2 (Activation)   (None, 32, 32, 32)           0         ['add[0][0]']                 
+                                                                                                  
+ max_pooling2d (MaxPooling2  (None, 16, 16, 32)           0         ['activation_2[0][0]']        
+ D)                                                                                               
+                                                                                                  
+ conv2d_4 (Conv2D)           (None, 16, 16, 112)          32368     ['max_pooling2d[0][0]']       
+                                                                                                  
+ activation_3 (Activation)   (None, 16, 16, 112)          0         ['conv2d_4[0][0]']            
+                                                                                                  
+ batch_normalization_2 (Bat  (None, 16, 16, 112)          448       ['activation_3[0][0]']        
+ chNormalization)                                                                                 
+                                                                                                  
+ conv2d_5 (Conv2D)           (None, 16, 16, 112)          113008    ['batch_normalization_2[0][0]'
+                                                                    ]                             
+                                                                                                  
+ activation_4 (Activation)   (None, 16, 16, 112)          0         ['conv2d_5[0][0]']            
+                                                                                                  
+ batch_normalization_3 (Bat  (None, 16, 16, 112)          448       ['activation_4[0][0]']        
+ chNormalization)                                                                                 
+                                                                                                  
+ conv2d_7 (Conv2D)           (None, 16, 16, 112)          3696      ['max_pooling2d[0][0]']       
+                                                                                                  
+ conv2d_6 (Conv2D)           (None, 16, 16, 112)          113008    ['batch_normalization_3[0][0]'
+                                                                    ]                             
+                                                                                                  
+ add_1 (Add)                 (None, 16, 16, 112)          0         ['conv2d_7[0][0]',            
+                                                                     'conv2d_6[0][0]']            
+                                                                                                  
+ activation_5 (Activation)   (None, 16, 16, 112)          0         ['add_1[0][0]']               
+                                                                                                  
+ max_pooling2d_1 (MaxPoolin  (None, 8, 8, 112)            0         ['activation_5[0][0]']        
+ g2D)                                                                                             
+                                                                                                  
+ global_average_pooling2d (  (None, 112)                  0         ['max_pooling2d_1[0][0]']     
+ GlobalAveragePooling2D)                                                                          
+                                                                                                  
+ dense (Dense)               (None, 10)                   1130      ['global_average_pooling2d[0][
+                                                                    0]']                          
+                                                                                                  
+==================================================================================================
+Total params: 283882 (1.08 MB)
+Trainable params: 283306 (1.08 MB)
+Non-trainable params: 576 (2.25 KB)
+__________________________________________________________________________________________________
+
+ACCURACY: 0.2951405712309716
+
+[92m | MODULE VALUES ---------------------------------------------  |
+ [0m
+[92m 
+ | -----------------------------------------------------------  |
+ [0m
+Score: -0.2951405712309716
+
+
+
+ [INFO] Punti validi 888/10000
+[1;36m | START SYMBOLIC DIAGNOSIS ----------------------------------  |
+ [0m
+Skipping 'need_skip' — all actions are zero.
+[1;36m | END SYMBOLIC DIAGNOSIS   ----------------------------------  |
+ [0m
+[91m | START SYMBOLIC TUNING    ----------------------------------  |
+ [0m
+I've find underfitting and I'm trying to fix it with self.new_fc_layers().
+[91m | END SYMBOLIC TUNING      ----------------------------------  |
+ [0m
+[1;35m --- ITERATION 6 --- [0m
+Actual constrained space for this iteration:
+Dimension 0: num_neurons - categories: (8, 16, 32, 64)
+Dimension 1: unit_c1 - Integer(low=1, high=4, prior='uniform', transform='identity')
+Dimension 2: unit_c2 - Integer(low=1, high=8, prior='uniform', transform='identity')
+Dimension 3: dr_f - Real(low=0.03, high=0.5, prior='uniform', transform='identity')
+Dimension 4: learning_rate - Real(low=0.0001, high=0.001, prior='uniform', transform='identity')
+Dimension 5: batch_size - categories: (8, 16, 32, 64)
+Dimension 6: optimizer - categories: ('Adam', 'Adamax', 'SGD', 'Adagrad', 'Adadelta')
+Dimension 7: activation - categories: ('relu', 'elu', 'selu', 'swish')
+Dimension 8: data_augmentation - categories: (False,)
+Dimension 9: reg_l2 - categories: (False,)
+Dimension 10: skip_connection - categories: (False,)
+Dimension 14: new_fc_1 - Integer(low=-1, high=32, prior='uniform', transform='identity')
+Actual base space for this iteration:
+Dimension 0: num_neurons - categories: (8, 16, 32, 64)
+Dimension 1: unit_c1 - Integer(low=1, high=4, prior='uniform', transform='normalize')
+Dimension 2: unit_c2 - Integer(low=1, high=8, prior='uniform', transform='normalize')
+Dimension 3: dr_f - Real(low=0.03, high=0.8, prior='uniform', transform='normalize')
+Dimension 4: learning_rate - Real(low=0.0001, high=0.0012082262120634822, prior='uniform', transform='normalize')
+Dimension 5: batch_size - categories: (8, 16, 32, 64)
+Dimension 6: optimizer - categories: ('Adam', 'Adamax', 'SGD', 'Adagrad', 'Adadelta')
+Dimension 7: activation - categories: ('relu', 'elu', 'selu', 'swish')
+Dimension 8: data_augmentation - categories: (False, True)
+Dimension 9: reg_l2 - categories: (False,)
+Dimension 10: skip_connection - categories: (False, True)
+Dimension 14: new_fc_1 - Integer(low=-1, high=32, prior='uniform', transform='normalize')
+
+
+
+ [INFO] Punti validi 1250/10000
+Chosen point: {'num_neurons': 64, 'unit_c1': 2, 'unit_c2': 6, 'dr_f': 0.43158195391787135, 'learning_rate': 0.00023229867997919223, 'batch_size': 16, 'optimizer': 'Adam', 'activation': 'elu', 'data_augmentation': False, 'reg_l2': False, 'skip_connection': False, 'new_conv_1': -1, 'new_conv_2': 0, 'new_conv_3': 0, 'new_fc_1': 11, 'new_fc_2': 0, 'new_fc_3': -1, 'new_fc_4': -1, 'new_fc_5': -1, 'new_fc_6': 0, 'new_fc_7': 0, 'new_fc_8': -1, 'new_fc_9': 0, 'new_fc_10': -1}
+Model: "model"
+_________________________________________________________________
+ Layer (type)                Output Shape              Param #   
+=================================================================
+ input_1 (InputLayer)        [(None, 32, 32, 3)]       0         
+                                                                 
+ conv2d (Conv2D)             (None, 32, 32, 128)       3584      
+                                                                 
+ activation (Activation)     (None, 32, 32, 128)       0         
+                                                                 
+ batch_normalization (Batch  (None, 32, 32, 128)       512       
+ Normalization)                                                  
+                                                                 
+ conv2d_1 (Conv2D)           (None, 32, 32, 128)       147584    
+                                                                 
+ activation_1 (Activation)   (None, 32, 32, 128)       0         
+                                                                 
+ batch_normalization_1 (Bat  (None, 32, 32, 128)       512       
+ chNormalization)                                                
+                                                                 
+ conv2d_2 (Conv2D)           (None, 32, 32, 128)       147584    
+                                                                 
+ activation_2 (Activation)   (None, 32, 32, 128)       0         
+                                                                 
+ batch_normalization_2 (Bat  (None, 32, 32, 128)       512       
+ chNormalization)                                                
+                                                                 
+ max_pooling2d (MaxPooling2  (None, 16, 16, 128)       0         
+ D)                                                              
+                                                                 
+ conv2d_3 (Conv2D)           (None, 16, 16, 384)       442752    
+                                                                 
+ activation_3 (Activation)   (None, 16, 16, 384)       0         
+                                                                 
+ batch_normalization_3 (Bat  (None, 16, 16, 384)       1536      
+ chNormalization)                                                
+                                                                 
+ conv2d_4 (Conv2D)           (None, 16, 16, 384)       1327488   
+                                                                 
+ activation_4 (Activation)   (None, 16, 16, 384)       0         
+                                                                 
+ batch_normalization_4 (Bat  (None, 16, 16, 384)       1536      
+ chNormalization)                                                
+                                                                 
+ conv2d_5 (Conv2D)           (None, 16, 16, 384)       1327488   
+                                                                 
+ activation_5 (Activation)   (None, 16, 16, 384)       0         
+                                                                 
+ batch_normalization_5 (Bat  (None, 16, 16, 384)       1536      
+ chNormalization)                                                
+                                                                 
+ max_pooling2d_1 (MaxPoolin  (None, 8, 8, 384)         0         
+ g2D)                                                            
+                                                                 
+ global_average_pooling2d (  (None, 384)               0         
+ GlobalAveragePooling2D)                                         
+                                                                 
+ dense (Dense)               (None, 704)               271040    
+                                                                 
+ activation_6 (Activation)   (None, 704)               0         
+                                                                 
+ dropout (Dropout)           (None, 704)               0         
+                                                                 
+ dense_1 (Dense)             (None, 10)                7050      
+                                                                 
+=================================================================
+Total params: 3680714 (14.04 MB)
+Trainable params: 3677642 (14.03 MB)
+Non-trainable params: 3072 (12.00 KB)
+_________________________________________________________________
+
+ACCURACY: 0.7003214173358338
+
+[92m | MODULE VALUES ---------------------------------------------  |
+ [0m
+[92m 
+ | -----------------------------------------------------------  |
+ [0m
+Score: -0.7003214173358338
+
+
+
+ [INFO] Punti validi 1219/10000
+[1;36m | START SYMBOLIC DIAGNOSIS ----------------------------------  |
+ [0m
+[1;36m | END SYMBOLIC DIAGNOSIS   ----------------------------------  |
+ [0m
+[91m | START SYMBOLIC TUNING    ----------------------------------  |
+ [0m
+I've find underfitting and I'm trying to fix it with self.new_conv_block().
+I've find need_skip and I'm trying to fix it with self.add_residual().
+[91m | END SYMBOLIC TUNING      ----------------------------------  |
+ [0m
+[1;35m --- ITERATION 7 --- [0m
+Actual constrained space for this iteration:
+Dimension 0: num_neurons - categories: (8, 16, 32, 64)
+Dimension 1: unit_c1 - Integer(low=1, high=4, prior='uniform', transform='identity')
+Dimension 2: unit_c2 - Integer(low=1, high=8, prior='uniform', transform='identity')
+Dimension 3: dr_f - Real(low=0.03, high=0.5, prior='uniform', transform='identity')
+Dimension 4: learning_rate - Real(low=0.0001, high=0.001, prior='uniform', transform='identity')
+Dimension 5: batch_size - categories: (8, 16, 32, 64)
+Dimension 6: optimizer - categories: ('Adam', 'Adamax', 'SGD', 'Adagrad', 'Adadelta')
+Dimension 7: activation - categories: ('relu', 'elu', 'selu', 'swish')
+Dimension 8: data_augmentation - categories: (False,)
+Dimension 9: reg_l2 - categories: (False,)
+Dimension 10: skip_connection - categories: (True,)
+Dimension 11: new_conv_1 - Integer(low=-1, high=16, prior='uniform', transform='identity')
+Dimension 14: new_fc_1 - Integer(low=-1, high=32, prior='uniform', transform='identity')
+Actual base space for this iteration:
+Dimension 0: num_neurons - categories: (8, 16, 32, 64)
+Dimension 1: unit_c1 - Integer(low=1, high=4, prior='uniform', transform='normalize')
+Dimension 2: unit_c2 - Integer(low=1, high=8, prior='uniform', transform='normalize')
+Dimension 3: dr_f - Real(low=0.03, high=0.8, prior='uniform', transform='normalize')
+Dimension 4: learning_rate - Real(low=0.0001, high=0.0012082262120634822, prior='uniform', transform='normalize')
+Dimension 5: batch_size - categories: (8, 16, 32, 64)
+Dimension 6: optimizer - categories: ('Adam', 'Adamax', 'SGD', 'Adagrad', 'Adadelta')
+Dimension 7: activation - categories: ('relu', 'elu', 'selu', 'swish')
+Dimension 8: data_augmentation - categories: (False, True)
+Dimension 9: reg_l2 - categories: (False,)
+Dimension 10: skip_connection - categories: (False, True)
+Dimension 11: new_conv_1 - Integer(low=-1, high=16, prior='uniform', transform='normalize')
+Dimension 14: new_fc_1 - Integer(low=-1, high=32, prior='uniform', transform='normalize')
+
+
+
+ [INFO] Punti validi 1244/10000
+Chosen point: {'num_neurons': 16, 'unit_c1': 3, 'unit_c2': 2, 'dr_f': 0.48215375940322336, 'learning_rate': 0.00048208641762298205, 'batch_size': 8, 'optimizer': 'Adam', 'activation': 'elu', 'data_augmentation': False, 'reg_l2': False, 'skip_connection': True, 'new_conv_1': 15, 'new_conv_2': -1, 'new_conv_3': -1, 'new_fc_1': 13, 'new_fc_2': 0, 'new_fc_3': -1, 'new_fc_4': -1, 'new_fc_5': -1, 'new_fc_6': 0, 'new_fc_7': 0, 'new_fc_8': -1, 'new_fc_9': 0, 'new_fc_10': -1}
+Model: "model"
+__________________________________________________________________________________________________
+ Layer (type)                Output Shape                 Param #   Connected to                  
+==================================================================================================
+ input_1 (InputLayer)        [(None, 32, 32, 3)]          0         []                            
+                                                                                                  
+ conv2d (Conv2D)             (None, 32, 32, 48)           1344      ['input_1[0][0]']             
+                                                                                                  
+ activation (Activation)     (None, 32, 32, 48)           0         ['conv2d[0][0]']              
+                                                                                                  
+ batch_normalization (Batch  (None, 32, 32, 48)           192       ['activation[0][0]']          
+ Normalization)                                                                                   
+                                                                                                  
+ conv2d_1 (Conv2D)           (None, 32, 32, 48)           20784     ['batch_normalization[0][0]'] 
+                                                                                                  
+ activation_1 (Activation)   (None, 32, 32, 48)           0         ['conv2d_1[0][0]']            
+                                                                                                  
+ batch_normalization_1 (Bat  (None, 32, 32, 48)           192       ['activation_1[0][0]']        
+ chNormalization)                                                                                 
+                                                                                                  
+ conv2d_3 (Conv2D)           (None, 32, 32, 48)           192       ['input_1[0][0]']             
+                                                                                                  
+ conv2d_2 (Conv2D)           (None, 32, 32, 48)           20784     ['batch_normalization_1[0][0]'
+                                                                    ]                             
+                                                                                                  
+ add (Add)                   (None, 32, 32, 48)           0         ['conv2d_3[0][0]',            
+                                                                     'conv2d_2[0][0]']            
+                                                                                                  
+ activation_2 (Activation)   (None, 32, 32, 48)           0         ['add[0][0]']                 
+                                                                                                  
+ max_pooling2d (MaxPooling2  (None, 16, 16, 48)           0         ['activation_2[0][0]']        
+ D)                                                                                               
+                                                                                                  
+ conv2d_4 (Conv2D)           (None, 16, 16, 32)           13856     ['max_pooling2d[0][0]']       
+                                                                                                  
+ activation_3 (Activation)   (None, 16, 16, 32)           0         ['conv2d_4[0][0]']            
+                                                                                                  
+ batch_normalization_2 (Bat  (None, 16, 16, 32)           128       ['activation_3[0][0]']        
+ chNormalization)                                                                                 
+                                                                                                  
+ conv2d_5 (Conv2D)           (None, 16, 16, 32)           9248      ['batch_normalization_2[0][0]'
+                                                                    ]                             
+                                                                                                  
+ activation_4 (Activation)   (None, 16, 16, 32)           0         ['conv2d_5[0][0]']            
+                                                                                                  
+ batch_normalization_3 (Bat  (None, 16, 16, 32)           128       ['activation_4[0][0]']        
+ chNormalization)                                                                                 
+                                                                                                  
+ conv2d_7 (Conv2D)           (None, 16, 16, 32)           1568      ['max_pooling2d[0][0]']       
+                                                                                                  
+ conv2d_6 (Conv2D)           (None, 16, 16, 32)           9248      ['batch_normalization_3[0][0]'
+                                                                    ]                             
+                                                                                                  
+ add_1 (Add)                 (None, 16, 16, 32)           0         ['conv2d_7[0][0]',            
+                                                                     'conv2d_6[0][0]']            
+                                                                                                  
+ activation_5 (Activation)   (None, 16, 16, 32)           0         ['add_1[0][0]']               
+                                                                                                  
+ max_pooling2d_1 (MaxPoolin  (None, 8, 8, 32)             0         ['activation_5[0][0]']        
+ g2D)                                                                                             
+                                                                                                  
+ conv2d_8 (Conv2D)           (None, 8, 8, 240)            69360     ['max_pooling2d_1[0][0]']     
+                                                                                                  
+ activation_6 (Activation)   (None, 8, 8, 240)            0         ['conv2d_8[0][0]']            
+                                                                                                  
+ batch_normalization_4 (Bat  (None, 8, 8, 240)            960       ['activation_6[0][0]']        
+ chNormalization)                                                                                 
+                                                                                                  
+ conv2d_9 (Conv2D)           (None, 8, 8, 240)            518640    ['batch_normalization_4[0][0]'
+                                                                    ]                             
+                                                                                                  
+ activation_7 (Activation)   (None, 8, 8, 240)            0         ['conv2d_9[0][0]']            
+                                                                                                  
+ batch_normalization_5 (Bat  (None, 8, 8, 240)            960       ['activation_7[0][0]']        
+ chNormalization)                                                                                 
+                                                                                                  
+ conv2d_11 (Conv2D)          (None, 8, 8, 240)            7920      ['max_pooling2d_1[0][0]']     
+                                                                                                  
+ conv2d_10 (Conv2D)          (None, 8, 8, 240)            518640    ['batch_normalization_5[0][0]'
+                                                                    ]                             
+                                                                                                  
+ add_2 (Add)                 (None, 8, 8, 240)            0         ['conv2d_11[0][0]',           
+                                                                     'conv2d_10[0][0]']           
+                                                                                                  
+ activation_8 (Activation)   (None, 8, 8, 240)            0         ['add_2[0][0]']               
+                                                                                                  
+ max_pooling2d_2 (MaxPoolin  (None, 4, 4, 240)            0         ['activation_8[0][0]']        
+ g2D)                                                                                             
+                                                                                                  
+ global_average_pooling2d (  (None, 240)                  0         ['max_pooling2d_2[0][0]']     
+ GlobalAveragePooling2D)                                                                          
+                                                                                                  
+ dense (Dense)               (None, 208)                  50128     ['global_average_pooling2d[0][
+                                                                    0]']                          
+                                                                                                  
+ activation_9 (Activation)   (None, 208)                  0         ['dense[0][0]']               
+                                                                                                  
+ dropout (Dropout)           (None, 208)                  0         ['activation_9[0][0]']        
+                                                                                                  
+ dense_1 (Dense)             (None, 10)                   2090      ['dropout[0][0]']             
+                                                                                                  
+==================================================================================================
+Total params: 1246362 (4.75 MB)
+Trainable params: 1245082 (4.75 MB)
+Non-trainable params: 1280 (5.00 KB)
+__________________________________________________________________________________________________
+
+ACCURACY: 0.39559228467913155
+
+[92m | MODULE VALUES ---------------------------------------------  |
+ [0m
+[92m 
+ | -----------------------------------------------------------  |
+ [0m
+Score: -0.39559228467913155
+
+
+
+ [INFO] Punti validi 1203/10000
+[1;36m | START SYMBOLIC DIAGNOSIS ----------------------------------  |
+ [0m
+Skipping 'need_skip' — all actions are zero.
+[1;36m | END SYMBOLIC DIAGNOSIS   ----------------------------------  |
+ [0m
+[91m | START SYMBOLIC TUNING    ----------------------------------  |
+ [0m
+I've find underfitting and I'm trying to fix it with self.inc_neurons(params).
+[91m | END SYMBOLIC TUNING      ----------------------------------  |
+ [0m
+[1;35m --- ITERATION 8 --- [0m
+Actual constrained space for this iteration:
+Dimension 0: num_neurons - categories: (8, 16, 32, 64)
+Dimension 1: unit_c1 - Integer(low=2, high=4, prior='uniform', transform='identity')
+Dimension 2: unit_c2 - Integer(low=1, high=8, prior='uniform', transform='identity')
+Dimension 3: dr_f - Real(low=0.03, high=0.5, prior='uniform', transform='identity')
+Dimension 4: learning_rate - Real(low=0.0001, high=0.001, prior='uniform', transform='identity')
+Dimension 5: batch_size - categories: (8, 16, 32, 64)
+Dimension 6: optimizer - categories: ('Adam', 'Adamax', 'SGD', 'Adagrad', 'Adadelta')
+Dimension 7: activation - categories: ('relu', 'elu', 'selu', 'swish')
+Dimension 8: data_augmentation - categories: (False,)
+Dimension 9: reg_l2 - categories: (False,)
+Dimension 10: skip_connection - categories: (True,)
+Dimension 11: new_conv_1 - Integer(low=-1, high=16, prior='uniform', transform='identity')
+Dimension 14: new_fc_1 - Integer(low=-1, high=32, prior='uniform', transform='identity')
+Actual base space for this iteration:
+Dimension 0: num_neurons - categories: (8, 16, 32, 64)
+Dimension 1: unit_c1 - Integer(low=1, high=4, prior='uniform', transform='normalize')
+Dimension 2: unit_c2 - Integer(low=1, high=8, prior='uniform', transform='normalize')
+Dimension 3: dr_f - Real(low=0.03, high=0.8, prior='uniform', transform='normalize')
+Dimension 4: learning_rate - Real(low=0.0001, high=0.0012082262120634822, prior='uniform', transform='normalize')
+Dimension 5: batch_size - categories: (8, 16, 32, 64)
+Dimension 6: optimizer - categories: ('Adam', 'Adamax', 'SGD', 'Adagrad', 'Adadelta')
+Dimension 7: activation - categories: ('relu', 'elu', 'selu', 'swish')
+Dimension 8: data_augmentation - categories: (False, True)
+Dimension 9: reg_l2 - categories: (False,)
+Dimension 10: skip_connection - categories: (False, True)
+Dimension 11: new_conv_1 - Integer(low=-1, high=16, prior='uniform', transform='normalize')
+Dimension 14: new_fc_1 - Integer(low=-1, high=32, prior='uniform', transform='normalize')
+
+
+
+ [INFO] Punti validi 1032/10000
+Chosen point: {'num_neurons': 8, 'unit_c1': 2, 'unit_c2': 3, 'dr_f': 0.4627014993213495, 'learning_rate': 0.00010504512125555965, 'batch_size': 8, 'optimizer': 'Adamax', 'activation': 'selu', 'data_augmentation': False, 'reg_l2': False, 'skip_connection': True, 'new_conv_1': 0, 'new_conv_2': 0, 'new_conv_3': 0, 'new_fc_1': 20, 'new_fc_2': 0, 'new_fc_3': 0, 'new_fc_4': 0, 'new_fc_5': -1, 'new_fc_6': -1, 'new_fc_7': 0, 'new_fc_8': -1, 'new_fc_9': 0, 'new_fc_10': -1}
+Model: "model"
+__________________________________________________________________________________________________
+ Layer (type)                Output Shape                 Param #   Connected to                  
+==================================================================================================
+ input_1 (InputLayer)        [(None, 32, 32, 3)]          0         []                            
+                                                                                                  
+ conv2d (Conv2D)             (None, 32, 32, 16)           448       ['input_1[0][0]']             
+                                                                                                  
+ activation (Activation)     (None, 32, 32, 16)           0         ['conv2d[0][0]']              
+                                                                                                  
+ batch_normalization (Batch  (None, 32, 32, 16)           64        ['activation[0][0]']          
+ Normalization)                                                                                   
+                                                                                                  
+ conv2d_1 (Conv2D)           (None, 32, 32, 16)           2320      ['batch_normalization[0][0]'] 
+                                                                                                  
+ activation_1 (Activation)   (None, 32, 32, 16)           0         ['conv2d_1[0][0]']            
+                                                                                                  
+ batch_normalization_1 (Bat  (None, 32, 32, 16)           64        ['activation_1[0][0]']        
+ chNormalization)                                                                                 
+                                                                                                  
+ conv2d_3 (Conv2D)           (None, 32, 32, 16)           64        ['input_1[0][0]']             
+                                                                                                  
+ conv2d_2 (Conv2D)           (None, 32, 32, 16)           2320      ['batch_normalization_1[0][0]'
+                                                                    ]                             
+                                                                                                  
+ add (Add)                   (None, 32, 32, 16)           0         ['conv2d_3[0][0]',            
+                                                                     'conv2d_2[0][0]']            
+                                                                                                  
+ activation_2 (Activation)   (None, 32, 32, 16)           0         ['add[0][0]']                 
+                                                                                                  
+ max_pooling2d (MaxPooling2  (None, 16, 16, 16)           0         ['activation_2[0][0]']        
+ D)                                                                                               
+                                                                                                  
+ conv2d_4 (Conv2D)           (None, 16, 16, 24)           3480      ['max_pooling2d[0][0]']       
+                                                                                                  
+ activation_3 (Activation)   (None, 16, 16, 24)           0         ['conv2d_4[0][0]']            
+                                                                                                  
+ batch_normalization_2 (Bat  (None, 16, 16, 24)           96        ['activation_3[0][0]']        
+ chNormalization)                                                                                 
+                                                                                                  
+ conv2d_5 (Conv2D)           (None, 16, 16, 24)           5208      ['batch_normalization_2[0][0]'
+                                                                    ]                             
+                                                                                                  
+ activation_4 (Activation)   (None, 16, 16, 24)           0         ['conv2d_5[0][0]']            
+                                                                                                  
+ batch_normalization_3 (Bat  (None, 16, 16, 24)           96        ['activation_4[0][0]']        
+ chNormalization)                                                                                 
+                                                                                                  
+ conv2d_7 (Conv2D)           (None, 16, 16, 24)           408       ['max_pooling2d[0][0]']       
+                                                                                                  
+ conv2d_6 (Conv2D)           (None, 16, 16, 24)           5208      ['batch_normalization_3[0][0]'
+                                                                    ]                             
+                                                                                                  
+ add_1 (Add)                 (None, 16, 16, 24)           0         ['conv2d_7[0][0]',            
+                                                                     'conv2d_6[0][0]']            
+                                                                                                  
+ activation_5 (Activation)   (None, 16, 16, 24)           0         ['add_1[0][0]']               
+                                                                                                  
+ max_pooling2d_1 (MaxPoolin  (None, 8, 8, 24)             0         ['activation_5[0][0]']        
+ g2D)                                                                                             
+                                                                                                  
+ global_average_pooling2d (  (None, 24)                   0         ['max_pooling2d_1[0][0]']     
+ GlobalAveragePooling2D)                                                                          
+                                                                                                  
+ dense (Dense)               (None, 160)                  4000      ['global_average_pooling2d[0][
+                                                                    0]']                          
+                                                                                                  
+ activation_6 (Activation)   (None, 160)                  0         ['dense[0][0]']               
+                                                                                                  
+ dropout (Dropout)           (None, 160)                  0         ['activation_6[0][0]']        
+                                                                                                  
+ dense_1 (Dense)             (None, 10)                   1610      ['dropout[0][0]']             
+                                                                                                  
+==================================================================================================
+Total params: 25386 (99.16 KB)
+Trainable params: 25226 (98.54 KB)
+Non-trainable params: 160 (640.00 Byte)
+__________________________________________________________________________________________________
+
+ACCURACY: 0.3254924925350301
+
+[92m | MODULE VALUES ---------------------------------------------  |
+ [0m
+[92m 
+ | -----------------------------------------------------------  |
+ [0m
+Score: -0.3254924925350301
+
+
+
+ [INFO] Punti validi 1017/10000
+[1;36m | START SYMBOLIC DIAGNOSIS ----------------------------------  |
+ [0m
+Skipping 'need_skip' — all actions are zero.
+[1;36m | END SYMBOLIC DIAGNOSIS   ----------------------------------  |
+ [0m
+[91m | START SYMBOLIC TUNING    ----------------------------------  |
+ [0m
+I've find underfitting and I'm trying to fix it with self.new_conv_block().
+[91m | END SYMBOLIC TUNING      ----------------------------------  |
+ [0m
+[92m 
+Optimization loop finished. [0m
+[92m 
+ALGORITHM FINISHED 
+ [0m
+[1;36m 
+TOTAL TIME --------> 6.53 seconds
+ [0m
