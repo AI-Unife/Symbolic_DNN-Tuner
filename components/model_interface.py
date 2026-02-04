@@ -201,3 +201,7 @@ class TunerModel(ABC):
     @abstractmethod
     def to_type(self, cls: Any):
         raise NotImplementedError
+
+    @abstractmethod
+    def from_spec(self, layer_spec: LayerSpec):
+        raise NotImplementedError
