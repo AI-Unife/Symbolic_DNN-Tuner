@@ -1,16 +1,16 @@
-l([1.8235343075174046, 1.5200850930739576]).
-sl([1.8235343075174046, 1.7021546217400259]).
-a([0.34164, 0.45062]).
-sa([0.34164, 0.385232]).
-vl([1.5812537132524978, 1.4178186725167667]).
-va([0.4441, 0.4935]).
-int_loss(1.4995361928846322).
-int_slope(1.4995361928846322).
+l([1.6286284923553467, 1.2542665004730225]).
+sl([1.6286284923553467, 1.478883695602417]).
+a([0.40619999170303345, 0.5530200004577637]).
+sa([0.40619999170303345, 0.46492799520492556]).
+vl([1.3044111728668213, 1.1362287998199463]).
+va([0.5309000015258789, 0.6014999747276306]).
+int_loss(1.2203199863433838).
+int_slope(1.2203199863433838).
 lacc(0.15).
 hloss(1.2).
-hw_latency(0.010829208).
+hw_latency(0.008655352).
 max_latency(0.01).
-new_acc(0.4935).
+new_acc(0.6014999747276306).
 
 0.99::eve.
 action(reg_l2,overfitting):- eve, problem(overfitting).
@@ -21,11 +21,11 @@ action(inc_lr,low_lr):- eve, problem(low_lr).
 0.6::action(data_augmentation,overfitting):- problem(overfitting).
 0.3::action(decr_lr,underfitting):- problem(underfitting).
 1.0::action(inc_neurons,underfitting):- problem(underfitting).
-0.45::action(new_fc_layer):- problem(underfitting), \+problem(out_range).
-0.45::action(new_conv_layer):- problem(underfitting), \+problem(out_range).
+0.45::action(new_fc_layer):- \+problem(out_range), problem(underfitting).
+0.45::action(new_conv_layer):- \+problem(out_range), problem(underfitting).
 0.85::action(inc_batch_size,floating_loss):- problem(floating_loss).
 0.15::action(decr_lr,floating_loss):- problem(floating_loss).
-1.0::action(dec_layers,out_range):- problem(out_range).
+0.5::action(dec_layers,out_range):- problem(out_range).
 0.5::action(dec_fc,out_range):- problem(out_range).
 0.5::action(dec_neurons,out_range):- problem(out_range).
 

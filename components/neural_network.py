@@ -4,21 +4,8 @@ from time import time
 from typing import Any
 
 import numpy as np
-from pytest import param
 import json
-from components.colors import colors
 
-import tensorflow as tf
-from tensorflow.keras import Model
-from tensorflow.keras import backend as K
-from tensorflow.keras import regularizers as reg
-from tensorflow.keras.callbacks import TensorBoard, EarlyStopping, ReduceLROnPlateau
-from tensorflow.keras.layers import (Activation, Conv2D, Dense, Flatten, MaxPooling2D, Dropout, Input,
-                                     BatchNormalization)
-from tensorflow.keras.optimizers import *
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
-
-from components.LOLR import Lolr
 from components.model_interface import LayerTypes, Params, LayerSpec, InsertPosition, TunerModel
 from components.search_space import search_space
 from components.dynamic_net import DynamicNet
@@ -88,6 +75,8 @@ class NeuralNetwork (ABC):
         new_conv_count = 0
         new_section = []
 
+        activation_type = model.to_type(self.activation_map[params['activation']])
+
         # Cycle to add at most two convolutions in the new conv section
         for i in range(2):
             # Increase the counter to add a new convolutional layer
@@ -109,10 +98,10 @@ class NeuralNetwork (ABC):
                     }
                 ),
                 LayerSpec(
-                    type=model.to_type(self.activation_map[params['activation']]),
+                    type=LayerTypes.Activation,
                     is_activation=True,
                     params={
-                        Params.ACTIVATION: self.activation_map[params['activation']]
+                        Params.ACTIVATION: activation_type
                     }
                 )
             ])
@@ -173,7 +162,7 @@ class NeuralNetwork (ABC):
             return model
 
         # Build the new fully connected section
-        activation = self.activation_map[params['activation']]
+        activation_type = model.to_type(self.activation_map[params['activation']])
         new_section = [
             LayerSpec(
                 type=LayerTypes.Dense,
@@ -183,10 +172,10 @@ class NeuralNetwork (ABC):
                 }
             ),
             LayerSpec(
-                type=model.to_type(activation),
+                type=LayerTypes.Activation,
                 is_activation=True,
                 params={
-                    Params.ACTIVATION: activation
+                    Params.ACTIVATION: activation_type
                 }
             )
         ]

@@ -273,7 +273,7 @@ class TorchModel(TunerModel, nn.Module):
                 module=module,
                 is_activation=True,
                 params={
-                    "activation_type": layer_type
+                    Params.ACTIVATION: layer_type
                 }
             )
         elif layer_type in [LayerTypes.BatchNormalization1D, LayerTypes.BatchNormalization2D]:
@@ -330,6 +330,7 @@ class TorchModel(TunerModel, nn.Module):
                 end_dim=layer_spec.get("end_dim")
             )
         elif layer_spec.type == LayerTypes.Activation:
-            return self.from_type(layer_spec.get("activation_type"))()
+            activation = layer_spec.get(Params.ACTIVATION)
+            return self.from_type(activation)()
         else:
             return self.from_type(layer_spec.type)()

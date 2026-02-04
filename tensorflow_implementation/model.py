@@ -29,7 +29,6 @@ class TFModel(TunerModel):
         LayerTypes.Activation: layers.Activation
     }
     to_type_map = {v: k for k, v in from_type_map.items()}
-    to_type_map[layers.Activation] = "activation"
     to_type_map["silu"] = LayerTypes.SiLU
 
     def __init__(self, input_shape, params, n_classes, activation_function):
@@ -241,15 +240,16 @@ class TFModel(TunerModel):
                 type=layer_type,
                 module=layer
             )
-        elif layer_type == "activation":
+        elif layer_type == LayerTypes.Activation:
             activation_function = layer.get_config()["activation"]
+            activation_value = self.to_type_map.get(activation_function, activation_function)
             return LayerSpec(
                 name=layer.name,
                 type=LayerTypes.Activation,
                 module=layer,
                 is_activation=True,
                 params={
-                    "activation_function": activation_function
+                    Params.ACTIVATION: activation_value
                 }
             )
         elif layer_type == LayerTypes.InputLayer:
@@ -299,9 +299,12 @@ class TFModel(TunerModel):
                 name=layer_spec.name
             )
         elif layer_spec.type == LayerTypes.Activation: # [LayerTypes.ELU, LayerTypes.Softmax, LayerTypes.ReLU, LayerTypes.Sigmoid, LayerTypes.SiLU, LayerTypes.SeLU]:
+            activation = layer_spec.get(Params.ACTIVATION)
+            if isinstance(activation, LayerTypes):
+                activation = self.from_type(activation)
             return layers.Activation(
                 name=layer_spec.name,
-                activation=layer_spec.get("activation_function"),
+                activation=activation,
             )
         elif layer_spec.type == LayerTypes.InputLayer:
             return layers.InputLayer(
