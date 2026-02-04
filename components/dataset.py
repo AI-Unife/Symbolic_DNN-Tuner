@@ -89,3 +89,12 @@ class TunerDataset:
             image_key="image",
             label_key="label",
         )
+    def load_gesture(self):
+        """Load DVSGesture dataset using the specialized gesture_dataset module."""
+        from components.gesture_dataset import gesture_data
+        
+        self.n_classes = 11
+        self.X_train, self.Y_train, self.X_test, self.Y_test = gesture_data(num_classes=11, ROI=False)
+        
+        print(self.X_train.shape[0], 'train samples')
+        print(self.X_test.shape[0], 'test samples')

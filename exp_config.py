@@ -35,11 +35,17 @@ class ConfigSchema:
     flops_th: int = 150000000                    # Max number of FLOPS
     nparams_th: int = 2500000                    # Max number of PARAMS
     opt: str = "filtered"                        # Optimizer type (standard | filtered | basic | RS | RS_ruled)
+    # Gesture-specific parameters
+    frames: int = 16                             # Number of frames for gesture dataset
+    mode: str = "fwdPass"                        # Experiment mode (fwdPass, depth, hybrid)
+    channels: int = 2                            # Number of channels for the dataset
+    polarity: str = "both"                       # Polarity for event-based datasets (both, sum, sub, drop)
 
 # ---------------- Validazione (stesse regole del parser) ----------------
 _VALID_MODULES = {"hardware_module", "flops_module"}
 _VALID_OPT = {"standard", "filtered", "basic", "RS", "RS_ruled"}
 _VALID_BACKENDS = {"tf", "torch"}
+_VALID_DATASETS = {"light", "cifar10", "cifar100", "mnist", "gesture"}
 
 def create_config_file(exp_dir: str | Path, overrides: Optional[Dict[str, Any]] = None) -> Path:
     """
@@ -70,6 +76,10 @@ def create_config_file(exp_dir: str | Path, overrides: Optional[Dict[str, Any]] 
         "flops_th": schema.flops_th,
         "nparams_th": schema.nparams_th,
         "opt": schema.opt,
+        "frames": schema.frames,
+        "mode": schema.mode,
+        "channels": schema.channels,
+        "polarity": schema.polarity,
     }
     if overrides:
         base.update(overrides)
@@ -105,6 +115,26 @@ def _validate(d: Dict[str, Any]) -> None:
     if backend not in _VALID_BACKENDS:
         print(f"WARNING: Invalid backend '{backend}'. Choose from: {sorted(_VALID_BACKENDS)}. Set to 'tf'")
         d['backend'] = 'tf'
+    
+    # dataset
+    dataset = d.get("dataset", "light")
+    if dataset not in _VALID_DATASETS:
+        print(f"WARNING: Invalid dataset '{dataset}'. Choose from: {sorted(_VALID_DATASETS)}. Set to 'light'")
+        d['dataset'] = 'light'
+    
+    # mode (for gesture dataset)
+    mode = d.get("mode", "fwdPass")
+    valid_modes = {"fwdPass", "depth", "hybrid"}
+    if mode not in valid_modes:
+        print(f"WARNING: Invalid mode '{mode}'. Choose from: {sorted(valid_modes)}. Set to 'fwdPass'")
+        d['mode'] = 'fwdPass'
+    
+    # polarity (for event-based datasets)
+    polarity = d.get("polarity", "both")
+    valid_polarities = {"both", "sum", "sub", "drop"}
+    if polarity not in valid_polarities:
+        print(f"WARNING: Invalid polarity '{polarity}'. Choose from: {sorted(valid_polarities)}. Set to 'both'")
+        d['polarity'] = 'both'
 
 # ---------------- Loader + discovery ----------------
 _ENV_KEY = "EXP_CONFIG"   # puoi impostarlo per puntare al config della run
@@ -148,6 +178,10 @@ def _apply_defaults(d: Dict[str, Any]) -> Dict[str, Any]:
         "flops_th": d.get("flops_th", schema.flops_th),
         "nparams_th": d.get("nparams_th", schema.nparams_th),
         "opt": d.get("opt", schema.opt),
+        "frames": d.get("frames", schema.frames),
+        "mode": d.get("mode", schema.mode),
+        "channels": d.get("channels", schema.channels),
+        "polarity": d.get("polarity", schema.polarity),
     }
     return merged
 

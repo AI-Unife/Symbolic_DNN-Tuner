@@ -9,6 +9,7 @@ from components.neural_network import NeuralNetwork as BaseNeuralNetwork
 from components.backend_interface import BackendInterface
 from components.dataset import TunerDataset
 from tensorflow_implementation.model import TFModel
+from tensorflow_implementation.custom_train import train_model, eval_model
 
 import tensorflow as tf
 from tensorflow.keras import Model
@@ -191,8 +192,12 @@ class NeuralNetwork(BaseNeuralNetwork):
         """
         # 1) clear session
         tf.keras.backend.clear_session()
+        if (self.cfg.mode in ("fwdPass", "hybrid")) and "gesture" in self.cfg.dataset :
+            input_shape = self.train_data.shape[2:]  # (H, W, C) for gesture pipeline
+        else:
+            input_shape = self.train_data.shape[1:]  # generic (H, W, C)
         self.model = TFModel(
-            input_shape=self.dataset.X_train.shape[1:],
+            input_shape=input_shape,
             params=params,
             n_classes=self.dataset.n_classes,
             layer_x_block=layer_x_block
@@ -277,23 +282,41 @@ class NeuralNetwork(BaseNeuralNetwork):
         self.model.model.compile(loss="categorical_crossentropy", optimizer=opt, metrics=["accuracy"])
 
         # --- Train ---
+        if (self.cfg.mode in ("fwdPass", "hybrid")) and "gesture" in self.cfg.dataset :
         
-        if "debug" in self.exp_cfg.name:
-            history = {k: [] for k in ["loss", "accuracy", "val_loss", "val_accuracy"]}
-            for _ in range(self.exp_cfg.epochs):
-                history["val_loss"].append(random.uniform(0.1, 0.5))
-                history["val_accuracy"].append(random.uniform(0.1, 1.0))
-                history["loss"].append(random.uniform(0.1, 0.5))
-                history["accuracy"].append(random.uniform(0.1, 1.0))
+            # For ROI datasets, pass pos data as second input
+            if self.is_roi and self.train_pos is not None:
+                train_input = [self.train_data, self.train_pos]
+                test_input = [self.test_data, self.test_pos]
+            else:
+                train_input = self.train_data
+                test_input = self.test_data
+            
+            history = train_model(
+                self.model, opt,
+                train_input, self.train_labels,
+                test_input, self.test_labels,
+                self.epochs, params,
+                [tensorboard, es]
+            )
         else:
+            # For ROI datasets, pass pos data as second input
+            if self.is_roi and self.train_pos is not None:
+                train_input = [self.train_data, self.train_pos]
+                test_input = [self.test_data, self.test_pos]
+            else:
+                train_input = self.train_data
+                test_input = self.test_data
             
+            # Validate labels before model.fit() - critical for ROI depth mode
+            self._validate_labels(self.train_labels, self.test_labels)
             
-            history = self.model.model.fit(
-                self.dataset.X_train, self.dataset.Y_train,
+            history = self.model.fit(
+                train_input, self.train_labels,
                 epochs=self.epochs,
                 batch_size=int(params["batch_size"]),
-                verbose=1,
-                validation_data=(self.dataset.X_test, self.dataset.Y_test),
+                verbose=2,
+                validation_data=(test_input, self.test_labels),
                 callbacks=[tensorboard, es],
             ).history
         # --- Evaluate ---
@@ -315,12 +338,20 @@ class NeuralNetwork(BaseNeuralNetwork):
         return score, history, self.model
     
     def eval_model(self):
-        if "debug" in self.exp_cfg.name:
-            score = [random.uniform(0.1, 0.5), random.uniform(0.1, 1.0)]
-        else:
-            score = self.model.model.evaluate(self.dataset.X_test, self.dataset.Y_test, verbose=1)
+        if (self.cfg.mode in ("fwdPass", "hybrid")) and "gesture" in self.cfg.dataset:
+                # For ROI datasets, pass pos data as second input
+            if self.is_roi and self.test_pos is not None:
+                test_input = [self.test_data, self.test_pos]
+            else:
+                test_input = self.test_data
+            score = eval_model(self.model, test_input, self.test_labels)
+        else:        
+            if self.is_roi and self.test_pos is not None:
+                test_input = [self.test_data, self.test_pos]
+            else:
+                test_input = self.test_data
+            score = self.model.evaluate(test_input, self.test_labels, verbose=2)
         return score
-    
     
     def save_model(self):
         """Helper to handle safe model saving."""
