@@ -26,7 +26,6 @@ class ConstraintsWrapper:
                 if not (dim.low <= val <= dim.high):
                     return False
             else:
-                ### IMPROVEMENT: Do not sys.exit(1) from a helper class. ###
                 # Raise an error that the main program can catch if needed.
                 raise TypeError(f"Type space dimension {dim} - {type(dim)} not valid")
         return True
