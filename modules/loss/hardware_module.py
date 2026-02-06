@@ -69,6 +69,7 @@ class hardware_module(common_interface):
         # import current model reference
         self.model = args[0]
 
+        ### TODO: Aggiungere flag per costo monetario assente
         # for each configuration calculate the latency and the total cost
         for config_key in self.nvdla:
             config_path = self.specs_dir + self.nvdla[config_key]['path']
@@ -118,6 +119,8 @@ class hardware_module(common_interface):
         nvdla_profiler = profiler.nvdla(config_p)
         log_file = "profiler_logs.txt"
 
+        ### TODO: flag pyrtorch o TF --> self.cfg.get('framework', 'pytorch')
+        ### TODO: creare tuner EMBER per Torch nel file nvdla/profiler.py
         for layer_spec in self.model.layers.values():
             if layer_spec.type == LayerTypes.Conv2D:
                 out_size = [batch, layer_spec.get(Params.OUT_CHANNELS), layer_spec.get(Params.OUT_HEIGHT), layer_spec.get(Params.OUT_WIDTH)]
