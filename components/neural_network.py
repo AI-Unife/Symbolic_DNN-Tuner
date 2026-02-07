@@ -41,6 +41,8 @@ class NeuralNetwork (ABC):
         self.dense = False
         self.conv = False
         self.dnet = DynamicNet()
+        self.checkpoint_format = None
+        self.last_model_id = None
 
     def _json_default(obj):
         if isinstance(obj, (np.integer, np.floating)):
@@ -48,6 +50,16 @@ class NeuralNetwork (ABC):
         if isinstance(obj, np.ndarray):
             return obj.tolist()
         return str(obj)
+
+    def save_manifest(self, data: dict):
+        manifest = {
+            "format": self.checkpoint_format,
+            **data
+        }
+
+        manifest_path = f"Model/manifest-{self.last_model_id}.json"
+        with open(manifest_path, "w") as f:
+            json.dump(manifest, f, default=self._json_default)
 
     @abstractmethod
     def from_checkpoint(checkpoint):
@@ -263,21 +275,28 @@ class NeuralNetwork (ABC):
         """
         
         try:
-            checkpoints_dir = "Model"
-            checkpoints = [f for f in os.listdir(checkpoints_dir) if f.endswith(".json")]
-            checkpoints.sort()
+            
+            manifests_dir = "Model"
+            if not os.path.isdir(manifests_dir):
+                return None
 
-            latest_checkpoint = os.path.join(checkpoints_dir, checkpoints[-1])
+            manifests = [f for f in os.listdir(manifests_dir) if f.startswith("manifest")]
+            manifests.sort()
 
-            with open(latest_checkpoint, 'r') as f:
-                checkpoint = json.load(f)
+            for filename in reversed(manifests):
+                path = os.path.join(manifests_dir, filename)
+                try:
+                    with open(path, 'r') as f:
+                        manifest = json.load(f)
+                except Exception:
+                    continue
 
-            print("MODELLO PRECEDENTE")
-
-            return self.from_checkpoint(checkpoint)
+                if self.checkpoint_format == manifest["format"]:
+                    return self.from_checkpoint(manifest)
 
         except:
             print("=============== NUOVO MODELLO =================")
+        finally:
             return self.from_scratch(self.dataset.X_train.shape[1:], self.dataset.n_classes, params)
 
     @abstractmethod

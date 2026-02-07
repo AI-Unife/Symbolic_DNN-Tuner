@@ -74,6 +74,7 @@ class LayerWiseLR(Optimizer):
 class NeuralNetwork (NeuralNetwork):
     def __init__(self, dataset: TunerDataset):
         super().__init__(dataset)
+        self.checkpoint_format = "tensorflow"
 
         # Framework-specific preprocessing
         self.dataset.Y_train = tf.keras.utils.to_categorical(self.dataset.Y_train, self.dataset.n_classes)
@@ -89,9 +90,23 @@ class NeuralNetwork (NeuralNetwork):
             "swish": "swish"
         }
 
-    def from_checkpoint(self, checkpoint):
-        checkpoint_json = json.dumps(checkpoint)
-        keras_model = models.model_from_json(checkpoint_json)
+    def from_checkpoint(self, manifest):
+        model_path = manifest.get("model_path")
+        if model_path:
+            with open(model_path, "r") as f:
+                model_json = f.read()
+
+        if not model_json:
+            raise ValueError("TensorFlow checkpoint missing model_path")
+
+        keras_model = models.model_from_json(model_json)
+
+        weights_path = manifest.get("weights")
+        if weights_path:
+            try:
+                keras_model.load_weights(weights_path)
+            except Exception as e:
+                print(colors.FAIL, "Error loading checkpoint weights:", e, colors.ENDC)
     
         tf_model = TFModel.__new__(TFModel)   # bypass __init__
         tf_model.model = keras_model
@@ -282,8 +297,16 @@ class NeuralNetwork (NeuralNetwork):
         weights_name = "Weights/weights-{}.weights.h5".format(model_name_id)
         self.model.model.save_weights(weights_name)
         self.model.model.save("dashboard/model/model.keras")
+
+        self.save_manifest({
+            "params": params,
+            "input_shape": list(self.model.model.input_shape[1:]),
+            "n_classes": self.dataset.n_classes,
+            "model_path": model_name,
+            "weights": weights_name,
+        })
         
-        f = open("Model/model-{}.json".format(model_name_id))
+        f = open("Model/manifest-{}.json".format(model_name_id))
         self.model = self.from_checkpoint(json.load(f))
         self.model.model.load_weights(weights_name)
 

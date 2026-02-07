@@ -37,6 +37,7 @@ class NeuralNetwork (NeuralNetwork):
         super().__init__(dataset)
 
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.checkpoint_format = "pytorch"
 
         # Framework-specific preprocessing
         if self.dataset.X_train.ndim == 3:
@@ -72,14 +73,14 @@ class NeuralNetwork (NeuralNetwork):
             array = array[..., None]
         return torch.from_numpy(array).permute(0, 3, 1, 2).contiguous().float()
 
-    def from_checkpoint(self, checkpoint):
-        params = checkpoint["params"]
-        input_shape = tuple(checkpoint["input_shape"])
-        n_classes = checkpoint["n_classes"]
+    def from_checkpoint(self, manifest):
+        params = manifest["params"]
+        input_shape = tuple(manifest["input_shape"])
+        n_classes = manifest["n_classes"]
 
         model = self.from_scratch(input_shape, n_classes, params)
 
-        state_dict_path = checkpoint.get("state_dict")
+        state_dict_path = manifest.get("state_dict")
         if state_dict_path:
             model.load_state_dict(torch.load(state_dict_path, map_location=self.device))
 
@@ -182,24 +183,19 @@ class NeuralNetwork (NeuralNetwork):
         summary(self.model, [1, input_shape[2], input_shape[0], input_shape[1]])
         self.model.to(self.device)
 
-        # Save weights
+        # Save Model
         model_name_id = time()
         model_path = f"Model/model-{model_name_id}.pth"
         torch.save(self.model.state_dict(), model_path)
 
         self.last_model_id = model_name_id
 
-        # Save manifest
-        manifest = {
-            "format": "pytorch",
+        self.save_manifest({
             "state_dict": model_path,
             "params": params,
             "input_shape": list(input_shape),
             "n_classes": self.dataset.n_classes,
-        }
-        manifest_path = f"Model/pytorch-{model_name_id}.json"
-        with open(manifest_path, "w") as f:
-            json.dump(manifest, f, default=self._json_default)
+        })
 
         # Define optimizer and loss function
         criterion = nn.CrossEntropyLoss()
