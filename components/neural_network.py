@@ -27,6 +27,10 @@ class NeuralNetwork (ABC):
         
         self.dataset = dataset
         self.backend = backend
+        
+        # Check if ROI dataset (has pos_train attribute)
+        self.is_roi = hasattr(self.dataset, 'pos_train') and self.dataset.pos_train is not None
+        print(f"Initialized NeuralNetwork with dataset. ROI mode: {self.is_roi}")
         self.dataset.normalize_data()
 
         self.exp_cfg = load_cfg()
@@ -49,6 +53,7 @@ class NeuralNetwork (ABC):
         self.reg = reg
         self.residual = residual
         self.model = None
+    
         
 
     def _json_default(obj):

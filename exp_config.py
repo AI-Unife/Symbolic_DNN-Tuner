@@ -45,7 +45,7 @@ class ConfigSchema:
 _VALID_MODULES = {"hardware_module", "flops_module"}
 _VALID_OPT = {"standard", "filtered", "basic", "RS", "RS_ruled"}
 _VALID_BACKENDS = {"tf", "torch"}
-_VALID_DATASETS = {"light", "cifar10", "cifar100", "mnist", "gesture"}
+_VALID_DATASETS = {"light", "cifar10", "cifar100", "mnist", "gesture", "roigesture"}
 
 def create_config_file(exp_dir: str | Path, overrides: Optional[Dict[str, Any]] = None) -> Path:
     """

@@ -322,24 +322,24 @@ def dataset_to_numpy(dataset, cfg) -> Tuple[np.ndarray, np.ndarray]:
             pos = x.get("pos", None)
             arr = np.array(events)
             x_reshaped, _ = reshape_x_pos(arr, np.array(pos) if pos is not None else None, cfg)
-            pos_mean = None
-            if pos is not None:
-                # Example analysis: compute center of mass of ROI position map in first frame
-                # A.shape = (16, 32, 32, 1)
-                A = np.squeeze(pos, axis=1)  # -> (16, 32, 32)
+            # pos_mean = None
+            # if pos is not None:
+            #     # Example analysis: compute center of mass of ROI position map in first frame
+            #     # A.shape = (16, 32, 32, 1)
+            #     A = np.squeeze(pos, axis=1)  # -> (16, 32, 32)
 
-                H, W = A.shape[1], A.shape[2]
+            #     H, W = A.shape[1], A.shape[2]
 
-                yy, xx = np.indices((H, W))  # yy, xx -> (32, 32)
+            #     yy, xx = np.indices((H, W))  # yy, xx -> (32, 32)
 
-                tot = A.sum(axis=(1, 2))  # (16,)
+            #     tot = A.sum(axis=(1, 2))  # (16,)
 
-                mean_y = (A * yy).sum(axis=(1, 2)) / tot
-                mean_x = (A * xx).sum(axis=(1, 2)) / tot
+            #     mean_y = (A * yy).sum(axis=(1, 2)) / tot
+            #     mean_x = (A * xx).sum(axis=(1, 2)) / tot
 
-                pos_mean = np.stack([mean_y, mean_x], axis=1)  # (16, 2)
+            #     pos_mean = np.stack([mean_y, mean_x], axis=1)  # (16, 2)
 
-            x_list.append({"data": x_reshaped, "pos": pos_mean})
+            x_list.append({"data": x_reshaped, "pos": pos})
         else:
             # Non-ROI: plain arrays
             arr = np.array(x)
@@ -445,7 +445,7 @@ def get_ROI_numpy(cfg):
     dataset_path = "rois_and_coordinates/datasets"
     polarity = cfg.polarity
     n_pol = 2 if polarity == "both" else 1
-    cache_dir = f"/hpc/home/bzzlca/AIDA4Edge/tf/cache/DVS_ROI_{cfg.mode}_{polarity}_{cfg.frames}_{cfg.channels}_{n_pol}/"
+    cache_dir = f"./cache/DVS_ROI_{cfg.mode}_{cfg.frames}_{cfg.channels}/"
     # cache_dir = f"cache/DVS_ROI_{cfg.mode}_{polarity}_{cfg.frames}_{cfg.channels}_{n_pol}/"
     _ensure_cache_dir(cache_dir)
     print("cache_dir:", cache_dir)

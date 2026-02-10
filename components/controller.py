@@ -90,7 +90,7 @@ class controller:
         }
         self.lacc: float = lacc_dict.get(self.exp_cfg.dataset, 0.20)
         self.hloss: float = np.log(self.dataset.n_classes)
-        self.acc_w = 0.77  # weight of accuracy in combined score
+        self.acc_w = 0.9  # weight of accuracy in combined score
         self.vanish_th = 1e-8
         self.exploding_th = 100.0
 
@@ -99,6 +99,7 @@ class controller:
         self.modules = module(self.exp_cfg.mod_list)
         if "flops_module" in self.exp_cfg.mod_list:
             self.flops_th = self.modules.get_module("flops_module").flops_th
+            self.params_th = self.modules.get_module("flops_module").nparams_th
         if "hardware_module" in self.exp_cfg.mod_list:
             max_latency = self.modules.get_module("hardware_module").max_latency
             max_cost = self.modules.get_module("hardware_module").max_cost
@@ -254,7 +255,7 @@ class controller:
         
         # 3. Check Constraints 
         if "flops_module" in self.exp_cfg.mod_list:
-            self.flops_ok = (self.nn.flops is None) or (self.nn.flops <= self.flops_th)
+            self.flops_ok = (self.nn.flops is None) or (self.nn.flops <= self.flops_th and self.nn.nparams <= self.params_th)
         else:
             self.flops_ok = True
         if "hardware_module" in self.exp_cfg.mod_list:
@@ -263,7 +264,7 @@ class controller:
             self.latency_ok = True
 
         if not self.flops_ok:
-            print(f"[WARNING] Constraint Violated: FLOPs {self.nn.flops} > {self.flops_th}")
+            print(f"[WARNING] Constraint Violated: FLOPs {self.nn.flops} > {self.flops_th} or Params {self.nn.nparams} > {self.params_th}")
         if not self.latency_ok:
             print(f"[WARNING] Constraint Violated: Latency Cost {self.nn.tot_latency_cost} > {self.latency_th}")
 
@@ -292,6 +293,11 @@ class controller:
             else:
                 self.score = -float(self.scoreNN[1]) 
 
+            # 5. Logging
+            self.log()
+            self.modules.print()
+            self.modules.log()
+            self.iter += 1
         else:
             # --- CONSTRAINT VIOLATION ---
             self.scoreNN, self.history, self.model = None, None, self.nn.model
@@ -299,13 +305,8 @@ class controller:
             self.modules.state(self.model, self.nn.flops, self.nn.nparams)
             self.score = PENALTY_SCORE
 
-        # 5. Logging
-        self.log()
-        self.modules.print()
-        self.modules.log()
 
         # 6. Best Model Tracking
-        self.iter += 1
         if self.score < self.best_score:
             print(f"[INFO] New Best Score: {self.score:.4f} (Previous: {self.best_score:.4f})")
             self.best_score = self.score
@@ -378,7 +379,7 @@ class controller:
                 facts_list_module = list(self.modules.values().values())
                 self.only_modules = True
             # First diagnosis iteration: assemble rule base from modules and build logic program
-            if self.iter == 1:
+            if self.iter <= 1:
                 self.rules, self.actions, self.problems = self.modules.get_rules()
 
                 for module, no_err in zip(self.modules.modules_obj, self.modules.modules_ready):
@@ -446,5 +447,15 @@ class controller:
         else:
             print(f"\nACCURACY: {0.0}\n")
             f.write("None \n")
+        f.close()
+        
+        f = open(f"{self.exp_cfg.name}/algorithm_logs/score_report.txt", "a")
+        if self.score is not None:
+            print(f"\nSCORE: {self.score}\n")
+            f.write(str(self.score) + "\n")
+        else:
+            print(f"\nSCORE: {0.0}\n")
+            f.write("None \n")
+        
         f.close()
 

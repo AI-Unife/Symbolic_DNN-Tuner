@@ -227,15 +227,15 @@ def parse_args() -> argparse.Namespace:
                         help='quantize the network')
     parser.add_argument("--verbose", type=int, default=2, 
                         help="Verbosity level (0: silent, 1: print space, 2: print space and model summary)")
-    parser.add_argument('--w_FLOPS', type=float, default=0.33,
+    parser.add_argument('--w_FLOPS', type=float, default=0.1,
                         help="Weight Flops loss")
     parser.add_argument('--w_HW', type=float, default=0.33,
                         help="Weight HW loss")
-    parser.add_argument('--lacc', type=float, default=0.10,
+    parser.add_argument('--lacc', type=float, default=0.20,
                         help="if 1-acc>lacc --> Underfitting")
     parser.add_argument('--flops_th', type=int, default=150000000,
                          help="Max number of FLOPS")
-    parser.add_argument('--nparams_th', type=int, default=2500000,
+    parser.add_argument('--nparams_th', type=int, default=1500000,
                         help="Max number of PARAMS")
     parser.add_argument(
         "--opt", type=str, default="filtered",
@@ -321,8 +321,11 @@ if __name__ == "__main__":
         dataset.load_light_cifar()
     elif dataset_name == "gesture":
         dataset.load_gesture()
+    elif dataset_name == "roigesture":
+        dataset.load_roi_gesture()
     else:
-        raise ValueError(f"Unknown dataset: {cfg.dataset}. Supported: cifar10, cifar100, mnist, light, gesture")
+        print(f"Unknown dataset: {cfg.dataset}. Supported: cifar10, cifar100, mnist, light, gesture, roigesture.")
+        exit(1)
 
     # --- 3. Controller and Space Setup ---
     neural_network_cls = neural_network.NeuralNetwork

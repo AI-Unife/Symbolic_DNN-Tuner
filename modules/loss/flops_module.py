@@ -16,8 +16,8 @@ class flops_module(common_interface):
     def __init__(self):
         # self.epsilon = 0.33
         self.cfg = load_cfg()
-        self.flops_th = 150000000 # 150 MFLOPs
-        self.nparams_th = 2500000 # 2.5M params
+        self.flops_th = self.cfg.flops_th # 150000000 # 150 MFLOPs
+        self.nparams_th = self.cfg.nparams_th # 2500000 # 2.5M params
         self.tuner_opt_function = []
         self.flops_gap = []
         self.tuner_steps = 0
@@ -58,6 +58,6 @@ class flops_module(common_interface):
     def log_function(self):
         # if os.path.exists("{}/graph_report.txt".format(cfg.NAME_EXP)):
         #     os.remove("{}/graph_report.txt".format(cfg.NAME_EXP))
-        f = open("{}/flops_report.txt".format(self.cfg.name), "a")
-        f.write(str(self.flops_th) + " " + str(self.flops) + "\n")
+        f = open("{}/algorithm_logs/flops_report.txt".format(self.cfg.name), "a")
+        f.write(str(self.nparams) + " " + str(self.flops) + "\n")
         f.close()

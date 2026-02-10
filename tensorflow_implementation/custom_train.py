@@ -87,9 +87,11 @@ def train_model(
     if is_roi:
         # ROI case: train_data = [data, pos]
         data_array, pos_array = train_data
+        # Create dataset where each sample is ((data_frame, pos_frame), label)
+        # So when iterating, we get batch_input = (batch_data, batch_pos) and batch_y
         ds = tf.data.Dataset.from_tensor_slices(((data_array, pos_array), train_labels))
     else:
-        # Regular case
+        # Regular case: each sample is (data_frame, label)
         ds = tf.data.Dataset.from_tensor_slices((train_data, train_labels))
     
     # Uncomment to enable shuffling & prefetch for performance:
