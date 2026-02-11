@@ -35,6 +35,7 @@ class ConfigSchema:
     flops_th: int = 150000000                    # Max number of FLOPS
     nparams_th: int = 2500000                    # Max number of PARAMS
     opt: str = "filtered"                        # Optimizer type (standard | filtered | basic | RS | RS_ruled)
+    use_hw_cost: bool = True                     # Flag to use or not hw cost in simulation
 
 # ---------------- Validazione (stesse regole del parser) ----------------
 _VALID_MODULES = {"hardware_module", "flops_module"}
@@ -70,6 +71,7 @@ def create_config_file(exp_dir: str | Path, overrides: Optional[Dict[str, Any]] 
         "flops_th": schema.flops_th,
         "nparams_th": schema.nparams_th,
         "opt": schema.opt,
+        "use_hw_cost": schema.use_hw_cost,
     }
     if overrides:
         base.update(overrides)
@@ -138,7 +140,7 @@ def _discover_config_path() -> Path:
         print(f"[exp_config] config.yaml non trovato, lo creo in: {Path.cwd()}")
         return create_config_file(Path.cwd())
     
-    
+
 def _read_yaml(path: Path) -> Dict[str, Any]:
     data = yaml.safe_load(path.read_text()) or {}
     if not isinstance(data, dict):
@@ -165,6 +167,7 @@ def _apply_defaults(d: Dict[str, Any]) -> Dict[str, Any]:
         "flops_th": d.get("flops_th", schema.flops_th),
         "nparams_th": d.get("nparams_th", schema.nparams_th),
         "opt": d.get("opt", schema.opt),
+        "use_hw_cost": d.get("use_hw_cost", schema.use_hw_cost),
     }
     return merged
 

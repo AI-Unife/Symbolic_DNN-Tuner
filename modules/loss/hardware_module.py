@@ -65,6 +65,11 @@ class hardware_module(common_interface):
         # maximum cost
         self.nvdla  = dict(sorted(self.nvdla.items(), key=lambda item: item[1]['cost'], reverse=True))
 
+        # flag to use or not hw cost
+        self.use_hw_cost = self.cfg.get('use_hw_cost', True)
+
+    
+    
     def update_state(self, *args):
         # import current model reference
         self.model = args[0]
@@ -74,9 +79,16 @@ class hardware_module(common_interface):
         for config_key in self.nvdla:
             config_path = self.specs_dir + self.nvdla[config_key]['path']
             self.nvdla[config_key]['latency'] = self.get_model_latency(self.model, config_path) / (10**9)
+            
+            # use hw latency only if the flag is true 
             latency_temp = self.nvdla[config_key]['latency'] / self.max_latency
-            cost_temp = self.nvdla[config_key]['cost'] / self.max_cost
-            self.nvdla[config_key]['total_cost'] = round((cost_temp * self.weight_cost) + (latency_temp * (1-self.weight_cost)), 4)
+            if self.use_hw_cost:
+                cost_temp = self.nvdla[config_key]['cost'] / self.max_cost
+                total = (cost_temp * self.weight_cost) + (latency_temp * (1 - self.weight_cost))
+            else:
+                total = latency_temp  # solo latenza
+
+            self.nvdla[config_key]['total_cost'] = round(total, 4)
         
         # sort the configurations by cost
         # this will be useful to determine the optimal configuration
