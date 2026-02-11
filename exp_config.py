@@ -114,14 +114,31 @@ _cached_mtime: Optional[float] = None
 _cached_cfg: Optional[DotDict] = None
 
 def _discover_config_path() -> Path:
+    """
+    Trova il config.yaml attivo. Se non esiste, lo crea automaticamente
+    nella directory corrente o in quella indicata da EXP_CONFIG.
+    """
     # 1) ENV EXP_CONFIG
     env = os.getenv(_ENV_KEY)
     if env:
         p = Path(env).expanduser().resolve()
         if p.is_file():
             return p
-    raise FileNotFoundError("config.yaml non trovato. Imposta ENV EXP_CONFIG o lancia da dentro la cartella esperimento.")
+        elif p.parent.exists():
+            print(f"[exp_config] config.yaml non trovato, lo creo in: {p}")
+            return create_config_file(p.parent)
+        else:
+            raise FileNotFoundError(f"Directory non valida per EXP_CONFIG: {p.parent}")
 
+    # 2) Fallback: directory corrente
+    p = Path.cwd() / "config.yaml"
+    if p.is_file():
+        return p
+    else:
+        print(f"[exp_config] config.yaml non trovato, lo creo in: {Path.cwd()}")
+        return create_config_file(Path.cwd())
+    
+    
 def _read_yaml(path: Path) -> Dict[str, Any]:
     data = yaml.safe_load(path.read_text()) or {}
     if not isinstance(data, dict):
