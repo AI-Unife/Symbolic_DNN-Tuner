@@ -29,7 +29,7 @@ class ConfigSchema:
     seed: int = 42                               # Random seed
     quantization: bool = False                   # Quantize the network
     verbose: int = 2                             # Verbosity level (0: silent, 1: space, 2: space+model)
-    w_FLOPS: float = 0.33                        # Weight Flops loss
+    w_flops: float = 0.33                        # Weight Flops loss
     w_HW: float = 0.33                           # Weight HW loss
     lacc: float = 0.10                           # Accuracy loss threshold (underfitting)
     flops_th: int = 150000000                    # Max number of FLOPS
@@ -45,7 +45,7 @@ class ConfigSchema:
 _VALID_MODULES = {"hardware_module", "flops_module"}
 _VALID_OPT = {"standard", "filtered", "basic", "RS", "RS_ruled"}
 _VALID_BACKENDS = {"tf", "torch"}
-_VALID_DATASETS = {"light", "cifar10", "cifar100", "mnist", "gesture", "roigesture"}
+_VALID_DATASETS = {"light", "cifar10", "cifar100", "mnist", "gesture", "roigesture_coords", "roigesture_matrix"}
 
 def create_config_file(exp_dir: str | Path, overrides: Optional[Dict[str, Any]] = None) -> Path:
     """
@@ -70,7 +70,7 @@ def create_config_file(exp_dir: str | Path, overrides: Optional[Dict[str, Any]] 
         "seed": schema.seed,
         "quantization": schema.quantization,
         "verbose": schema.verbose,
-        "w_FLOPS": schema.w_FLOPS,
+        "w_flops": schema.w_flops,
         "w_HW": schema.w_HW,
         "lacc": schema.lacc,
         "flops_th": schema.flops_th,
@@ -172,7 +172,7 @@ def _apply_defaults(d: Dict[str, Any]) -> Dict[str, Any]:
         "seed": d.get("seed", schema.seed),
         "quantization": d.get("quantization", schema.quantization),
         "verbose": d.get("verbose", schema.verbose),
-        "w_FLOPS": d.get("w_FLOPS", schema.w_FLOPS),
+        "w_flops": d.get("w_flops", schema.w_flops),
         "w_HW": d.get("w_HW", schema.w_HW),
         "lacc": d.get("lacc", schema.lacc),
         "flops_th": d.get("flops_th", schema.flops_th),

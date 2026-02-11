@@ -342,6 +342,7 @@ class NeuralNetwork(BaseNeuralNetwork):
         except Exception as e:
             print(f"[ERROR] Failed to save best model: {e}")
             
+    ### TODO: da sistemare
     def load_network(self, file_path):
         """
         Loads a DynamicNet from a .pth checkpoint.

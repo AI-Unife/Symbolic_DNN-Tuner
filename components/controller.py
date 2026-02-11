@@ -456,6 +456,12 @@ class controller:
         else:
             print(f"\nSCORE: {0.0}\n")
             f.write("None \n")
-        
         f.close()
+            
+        if "flops_module" not in self.exp_cfg.mod_list:
+            f = open(f"{self.exp_cfg.name}/algorithm_logs/params_report.txt", "a")
+            params = self.backend.get_params(self.model)
+            f.write(str(self.nparams) + "\n")
+            f.close()
+        
 

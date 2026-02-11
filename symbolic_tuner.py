@@ -227,7 +227,7 @@ def parse_args() -> argparse.Namespace:
                         help='quantize the network')
     parser.add_argument("--verbose", type=int, default=2, 
                         help="Verbosity level (0: silent, 1: print space, 2: print space and model summary)")
-    parser.add_argument('--w_FLOPS', type=float, default=0.1,
+    parser.add_argument('--w_flops', type=float, default=0.1,
                         help="Weight Flops loss")
     parser.add_argument('--w_HW', type=float, default=0.33,
                         help="Weight HW loss")
@@ -321,7 +321,7 @@ if __name__ == "__main__":
         dataset.load_light_cifar()
     elif dataset_name == "gesture":
         dataset.load_gesture()
-    elif dataset_name == "roigesture":
+    elif dataset_name == "roigesture_matrix":
         dataset.load_roi_gesture()
     else:
         print(f"Unknown dataset: {cfg.dataset}. Supported: cifar10, cifar100, mnist, light, gesture, roigesture.")

@@ -25,7 +25,7 @@ from dataclasses import dataclass
 try:
     import tkinter as tk
     from tkinter import filedialog
-    TKINTER_AVAILABLE = True
+    TKINTER_AVAILABLE = False
 except ImportError:
     TKINTER_AVAILABLE = False
 
@@ -41,6 +41,7 @@ class ExperimentResult:
     hw_cost: Optional[float]
     hw_total_cost: Optional[float]
     hw_config: Optional[str]
+    score: Optional[float]
     # hyperparams: Optional[Dict[str, Any]]
     score: Optional[float] = None  # Calcolato come -accuracy se non sono presenti moduli
 
@@ -78,6 +79,12 @@ class ResultsAnalyzer:
             print(f"  ⚠ Nessun file acc_report.txt trovato")
             return False
         
+        scores = self._load_scores()
+        if scores:
+            print(f"  ✓ File score_report.txt trovato, useremo gli score calcolati durante il training")
+        else:
+            print(f"  ⚠ Nessun file score_report.txt trovato, useremo -accuracy come score approssimativo")
+        
         # Carica iperparametri
         # hyperparams_list = self._load_hyperparams()
         
@@ -109,17 +116,16 @@ class ResultsAnalyzer:
                 hw_cost=hw_data[i][1] if hw_data and i < len(hw_data) else None,
                 hw_total_cost=hw_data[i][2] if hw_data and i < len(hw_data) else None,
                 hw_config=hw_data[i][3] if hw_data and i < len(hw_data) else None,
+                score=scores[i] if scores and i < len(scores) else None,
                 # hyperparams=hyperparams_list[i] if i < len(hyperparams_list) else None,
             )
             
             # Calcola lo score: -accuracy se non ci sono moduli
-            if result.accuracy is not None:
-                if self.has_flops_module or self.has_hardware_module:
-                    # Lo score è già stato calcolato durante il training,
-                    # ma non è salvato nei log. Usiamo -accuracy come approssimazione
+            if result.score is None:
+                if result.accuracy is not None:
                     result.score = -result.accuracy
                 else:
-                    result.score = -result.accuracy
+                    result.score = None
             
             self.results.append(result)
         
@@ -145,6 +151,27 @@ class ResultsAnalyzer:
             return []
         
         return accuracies
+    
+    def _load_scores(self) -> List[Optional[float]]:
+        """Carica gli score dal file score_report.txt"""
+        score_file = self.algorithm_logs_dir / "score_report.txt"
+        if not score_file.exists():
+            return []
+        
+        scores = []
+        try:
+            with open(score_file, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if line == "None" or line == "":
+                        scores.append(None)
+                    else:
+                        scores.append(float(line))
+        except Exception as e:
+            print(f"  ❌ Errore leggendo {score_file}: {e}")
+            return []
+        
+        return scores
     
     def _load_hyperparams(self) -> List[Optional[Dict[str, Any]]]:
         """Carica gli iperparametri dal file hyper-neural.txt"""
@@ -388,7 +415,7 @@ def analyze_all_experiments(parent_dir: Path, output_dir: Optional[Path] = None)
                 writer.writeheader()
                 
                 # Ordina per score
-                sorted_data = sorted(summary_data, key=lambda x: x['best_score'] if x['best_score'] is not None else float('inf'))
+                sorted_data = sorted(summary_data, key=lambda x: x['experiment'] if x['experiment'] is not None else float('inf'))
                 writer.writerows(sorted_data)
             
             print(f"✅ CSV riepilogativo salvato: {summary_csv.name}")

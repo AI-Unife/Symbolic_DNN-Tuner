@@ -10,7 +10,9 @@ class flops_module(common_interface):
     problems = ['latency', 'model_size']
 
     #weight of the module for the final loss calculation
-    weight = 0.33
+    cfg = load_cfg()
+    weight = cfg.get("w_flops", 0.33) 
+    print("FLOPS module weight: " + str(weight))
 
 
     def __init__(self):
@@ -37,13 +39,23 @@ class flops_module(common_interface):
 
     def optimiziation_function(self, *args):
         # norm flops between 0 - 1
-        flops_th = 1
-        nflops = self.flops / self.flops_th
-        fit_up_flops = flops_th - nflops
-        res = -fit_up_flops
-        self.flops_gap.append(fit_up_flops)
+        # flops_th = 1
+        # nflops = self.flops / self.flops_th
+        # fit_up_flops = flops_th - nflops
+        # res = -fit_up_flops
+        # self.flops_gap.append(fit_up_flops)
+        # self.tuner_steps += 1
+        # self.tuner_opt_function.append(res)
+        
+        ### res based on gap between nparams and nparams_th
+        params_th = 1
+        nparams = self.nparams / self.nparams_th
+        fit_up_params = params_th - nparams
+        res = -fit_up_params
+        self.flops_gap.append(fit_up_params)
         self.tuner_steps += 1
         self.tuner_opt_function.append(res)
+        
         return res
 
     def plotting_function(self):

@@ -42,3 +42,9 @@ class ModuleBackend(BackendInterface):
         nonTrainableParams = np.sum([np.prod(v.shape) for v in model.model.non_trainable_weights])
         nparams = trainableParams + nonTrainableParams
         return flops, nparams
+    
+    def get_params(self, model):
+        trainableParams = np.sum([np.prod(v.shape) for v in model.model.trainable_weights])
+        nonTrainableParams = np.sum([np.prod(v.shape) for v in model.model.non_trainable_weights])
+        nparams = trainableParams + nonTrainableParams
+        return nparams

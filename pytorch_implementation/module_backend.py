@@ -61,3 +61,7 @@ class ModuleBackend(BackendInterface):
     def get_latency(self, model, input_shapes):
         """Latency measurement can be implemented here if needed."""
         return None
+    
+    def get_params(self, model):
+        total_params = sum(p.numel() for p in model.parameters())
+        return total_params
