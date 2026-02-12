@@ -131,7 +131,11 @@ class hardware_module(common_interface):
         nvdla_profiler = profiler.nvdla(config_p)
         log_file = "profiler_logs.txt"
 
-        ### TODO: flag pyrtorch o TF --> self.cfg.get('framework', 'pytorch')
+        #flag pyrtorch o TF
+        framework = self.cfg.get("backend", "torch")
+        if framework not in ["torch", "tf"]:
+            raise ValueError(f"Framework non supportato: {framework}")
+        
         ### TODO: creare tuner EMBER per Torch nel file nvdla/profiler.py
         for layer_spec in self.model.layers.values():
             if layer_spec.type == LayerTypes.Conv2D:
