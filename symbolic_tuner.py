@@ -321,10 +321,10 @@ if __name__ == "__main__":
         dataset.load_light_cifar()
     elif dataset_name == "gesture":
         dataset.load_gesture()
-    elif dataset_name == "roigesture_matrix":
+    elif "roigesture" in dataset_name:
         dataset.load_roi_gesture()
     else:
-        print(f"Unknown dataset: {cfg.dataset}. Supported: cifar10, cifar100, mnist, light, gesture, roigesture.")
+        print(f"Unknown dataset: {cfg.dataset}. Supported: cifar10, cifar100, mnist, light, gesture, roigesture_matrix and roigesture_coords.")
         exit(1)
 
     # --- 3. Controller and Space Setup ---

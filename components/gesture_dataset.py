@@ -39,34 +39,6 @@ class ToOneHotTimeCoding:
         return tf.stack(to_stack, axis=0)
 
 
-# ----------------------------- Polarity ops ----------------------------------
-
-class SumPolarity:
-    """
-    Sum the two polarity channels (+ and -) of an event-based framed tensor.
-
-    Expects input shaped [T, 2, H, W]; returns [T, H, W].
-    """
-    def __call__(self, image: np.ndarray) -> np.ndarray:
-        # Robustness: accept any shape where channel index is 1 and equals 2.
-        # We assume 'image' was produced by transforms.ToFrame(sensor_size=(H, W, 2), ...)
-        # which yields shape [T, 2, H, W].
-        assert image.ndim == 4 and image.shape[1] == 2, f"Expected [T,2,H,W], got {image.shape}"
-        return image[:, 0, ...] + image[:, 1, ...]
-
-
-class DropPolarity:
-    """
-    Keep a single polarity channel (0 for positive, 1 for negative).
-
-    Expects [T, 2, H, W]; returns [T, H, W].
-    """
-    def __call__(self, image: np.ndarray, p: int = 0) -> np.ndarray:
-        assert image.ndim == 4 and image.shape[1] == 2, f"Expected [T,2,H,W], got {image.shape}"
-        assert p in (0, 1), "p must be 0 or 1"
-        return image[:, p, ...]
-
-
 class BothPolarity:
     """
     Keep both polarity channels by concatenating them along the time axis.
@@ -78,34 +50,6 @@ class BothPolarity:
         T, C, H, W = image.shape  # C == 2
         # Reshape (T, 2, H, W) -> (T*2, H, W) without relying on cfg.FRAMES/64
         return image.transpose(0, 2, 3, 1).reshape(T * C, H, W).transpose(0, 1, 2)
-
-
-class SubPolarity:
-    """
-    Subtract negative from positive polarity.
-
-    Expects [T, 2, H, W]; returns [T, H, W].
-    """
-    def __call__(self, image: np.ndarray) -> np.ndarray:
-        assert image.ndim == 4 and image.shape[1] == 2, f"Expected [T,2,H,W], got {image.shape}"
-        return image[:, 0, ...] - image[:, 1, ...]
-
-
-def select_polarity_transform(polarity: str):
-    """
-    Pick the appropriate polarity transform by name.
-
-    Valid options: 'sum', 'sub', 'drop', 'both'
-    """
-    mapping = {
-        "sum": SumPolarity(),
-        "sub": SubPolarity(),
-        "drop": DropPolarity(),
-        "both": BothPolarity(),
-    }
-    if polarity not in mapping:
-        raise ValueError(f"Invalid polarity {polarity} option! Choose from ['sum', 'sub', 'drop', 'both'].")
-    return mapping[polarity]
 
 
 # ------------------------------- Datasets ------------------------------------
@@ -322,24 +266,26 @@ def dataset_to_numpy(dataset, cfg) -> Tuple[np.ndarray, np.ndarray]:
             pos = x.get("pos", None)
             arr = np.array(events)
             x_reshaped, _ = reshape_x_pos(arr, np.array(pos) if pos is not None else None, cfg)
-            # pos_mean = None
-            # if pos is not None:
-            #     # Example analysis: compute center of mass of ROI position map in first frame
-            #     # A.shape = (16, 32, 32, 1)
-            #     A = np.squeeze(pos, axis=1)  # -> (16, 32, 32)
+            if cfg.dataset == "roigesture_coords":
+                pos_mean = None
+                if pos is not None:
+                    # Example analysis: compute center of mass of ROI position map in first frame
+                    # A.shape = (16, 32, 32, 1)
+                    A = np.squeeze(pos, axis=1)  # -> (16, 32, 32)
 
-            #     H, W = A.shape[1], A.shape[2]
+                    H, W = A.shape[1], A.shape[2]
 
-            #     yy, xx = np.indices((H, W))  # yy, xx -> (32, 32)
+                    yy, xx = np.indices((H, W))  # yy, xx -> (32, 32)
 
-            #     tot = A.sum(axis=(1, 2))  # (16,)
+                    tot = A.sum(axis=(1, 2))  # (16,)
 
-            #     mean_y = (A * yy).sum(axis=(1, 2)) / tot
-            #     mean_x = (A * xx).sum(axis=(1, 2)) / tot
+                    mean_y = (A * yy).sum(axis=(1, 2)) / tot
+                    mean_x = (A * xx).sum(axis=(1, 2)) / tot
 
-            #     pos_mean = np.stack([mean_y, mean_x], axis=1)  # (16, 2)
-
-            x_list.append({"data": x_reshaped, "pos": pos})
+                    pos_mean = np.stack([mean_y, mean_x], axis=1)  # (16, 2)
+            else:
+                pos_mean = pos
+            x_list.append({"data": x_reshaped, "pos":pos_mean})
         else:
             # Non-ROI: plain arrays
             arr = np.array(x)
@@ -391,9 +337,7 @@ def get_datasets_numpy(cfg):
         ((x_train, y_train), (x_test, y_test))
     """
     dataset_path = './data/'
-    polarity = cfg.polarity
-    n_pol = 2 if polarity == "both" else 1
-    cache_dir = f"./cache/DVSGesture_{cfg.mode}_{polarity}_{cfg.frames}_{cfg.channels}_{n_pol}/"
+    cache_dir = f"./cache/DVSGesture_{cfg.mode}_{cfg.frames}_{cfg.channels}/"
     # resolve with fallback
     dataset_path, cache_dir = _resolve_paths(dataset_path, cache_dir)
     _ensure_cache_dir(cache_dir)
@@ -414,7 +358,7 @@ def get_datasets_numpy(cfg):
         target_transform = ToOneHotTimeCoding(n_classes=11, n_frames=cfg.frames // cfg.channels)
     else:
         # For single-frame modes, optionally apply a polarity transform to images
-        tfms.append(select_polarity_transform(polarity))
+        tfms.append(BothPolarity())
         target_transform = None
 
     transform = transforms.Compose(tfms)
@@ -443,8 +387,6 @@ def get_ROI_numpy(cfg):
         ((x_train, y_train), (x_test, y_test))
     """
     dataset_path = "rois_and_coordinates/datasets"
-    polarity = cfg.polarity
-    n_pol = 2 if polarity == "both" else 1
     cache_dir = f"./cache/DVS_ROI_{cfg.mode}_{cfg.frames}_{cfg.channels}/"
     # cache_dir = f"cache/DVS_ROI_{cfg.mode}_{polarity}_{cfg.frames}_{cfg.channels}_{n_pol}/"
     _ensure_cache_dir(cache_dir)
@@ -463,7 +405,7 @@ def get_ROI_numpy(cfg):
     elif cfg.mode == "hybrid":
         target_transform = ToOneHotTimeCoding(n_classes=11, n_frames=cfg.frames // cfg.channels)
     else:
-        tfms.append(select_polarity_transform(polarity))
+        tfms.append(BothPolarity())
         target_transform = None
 
     transform = transforms.Compose(tfms)
@@ -476,26 +418,27 @@ def get_ROI_numpy(cfg):
         position_transform=ROIMapTransform(n_time_bins=cfg.frames),
     )
     print("Loaded ROI training dataset with", len(train), "samples.")
-    # test = DVSGestureROI(
-    #     dataset_path,
-    #     train=False,
-    #     transform=transform,
-    #     target_transform=target_transform,
-    #     position_transform=ROIMapTransform(n_time_bins=cfg.frames),
-    # )
+    test = DVSGestureROI(
+        dataset_path,
+        train=False,
+        transform=transform,
+        target_transform=target_transform,
+        position_transform=ROIMapTransform(n_time_bins=cfg.frames),
+    )
 
     cached_train = tonic.DiskCachedDataset(train, cache_path=os.path.join(cache_dir, "train"))
-    # cached_test = tonic.DiskCachedDataset(test, cache_path=os.path.join(cache_dir, "test"))
+    cached_test = tonic.DiskCachedDataset(test, cache_path=os.path.join(cache_dir, "test"))
 
-    x, y = dataset_to_numpy(cached_train, cfg) 
+    x_train, y_train = dataset_to_numpy(cached_train, cfg) 
+    x_test, y_test = dataset_to_numpy(cached_test, cfg)
     # Handle multi-dimensional y (e.g., [B, T, C] one-hot): use first time step to determine class
-    if y.ndim > 1:
-        y_for_split = np.argmax(y[:, 0, :], axis=1) if y.ndim == 3 else np.argmax(y, axis=1)
-    else:
-        y_for_split = y
-    x_train, x_test, y_train, y_test = train_test_split(
-        x, y, test_size=0.2, random_state=42, stratify=y_for_split
-    )
+    # if y_train.ndim > 1:
+    #     y_for_split = np.argmax(y_train[:, 0, :], axis=1) if y_train.ndim == 3 else np.argmax(y_train, axis=1)
+    # else:
+    #     y_for_split = y_train
+    # x_train, x_test, y_train, y_test = train_test_split(
+    #     x, y, test_size=0.2, random_state=42, stratify=y_for_split
+    # )
     # x_train, y_train = dataset_to_numpy(cached_train, cfg)
     # x_test, y_test = dataset_to_numpy(cached_test, cfg)
 

@@ -17,9 +17,10 @@ import sys
 import csv
 import json
 import ast
+import yaml
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Any
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 # Try to import tkinter, fallback if not available
 try:
@@ -29,6 +30,8 @@ try:
 except ImportError:
     TKINTER_AVAILABLE = False
 
+
+_EXCLUDED_CONFIG_KEYS = ["name", "verbose", "polarity", "created_at"]
 
 @dataclass
 class ExperimentResult:
@@ -61,6 +64,7 @@ class ResultsAnalyzer:
         self.results: List[ExperimentResult] = []
         self.has_flops_module = False
         self.has_hardware_module = False
+        self.config: Dict[str, Any] = {}  # Configurazione dell'esperimento
         
     def load_results(self) -> bool:
         """
@@ -69,6 +73,9 @@ class ResultsAnalyzer:
         Returns:
             True se i log sono stati caricati con successo, False altrimenti
         """
+        # Carica il file config.yaml
+        self._load_config_yaml()
+        
         if not self.algorithm_logs_dir.exists():
             print(f"  ⚠ Cartella algorithm_logs non trovata in {self.experiment_dir}")
             return False
@@ -249,6 +256,21 @@ class ResultsAnalyzer:
         
         return hw_data if hw_data else None
     
+    def _load_config_yaml(self) -> None:
+        """Carica la configurazione dal file config.yaml"""
+        config_file = self.experiment_dir / "config.yaml"
+        if not config_file.exists():
+            print(f"  ⚠ File config.yaml non trovato in {self.experiment_dir}")
+            self.config = {}
+            return
+        
+        try:
+            with open(config_file, 'r') as f:
+                self.config = yaml.safe_load(f) or {}
+        except Exception as e:
+            print(f"  ⚠ Errore leggendo config.yaml: {e}")
+            self.config = {}
+    
     def get_best_result(self) -> Optional[ExperimentResult]:
         """Ritorna il risultato migliore (score minore)"""
         valid_results = [r for r in self.results if r.score is not None]
@@ -287,6 +309,11 @@ class ResultsAnalyzer:
                 
                 fieldnames.extend(sorted(all_hp_keys))
                 
+                # Aggiungi campi dal config.yaml
+                if self.config:
+                    config_keys = sorted([k for k in self.config.keys() if k not in fieldnames])
+                    fieldnames.extend(config_keys)
+                
                 writer = csv.DictWriter(f, fieldnames=fieldnames)
                 writer.writeheader()
                 
@@ -307,6 +334,11 @@ class ResultsAnalyzer:
                     # if result.hyperparams:
                     #     for key in all_hp_keys:
                     #         row[key] = result.hyperparams.get(key, '')
+                    
+                    # Aggiungi dati dal config.yaml
+                    for key, value in self.config.items():
+                        if key not in row:
+                            row[key] = value
                     
                     writer.writerow(row)
             
@@ -388,7 +420,7 @@ def analyze_all_experiments(parent_dir: Path, output_dir: Optional[Path] = None)
         # Raccoglie info per il CSV totale
         best_result = analyzer.get_best_result()
         if best_result:
-            summary_data.append({
+            summary_row = {
                 'experiment': exp_dir.name,
                 'best_iteration': best_result.iteration,
                 'best_accuracy': best_result.accuracy,
@@ -399,7 +431,14 @@ def analyze_all_experiments(parent_dir: Path, output_dir: Optional[Path] = None)
                 'best_hw_cost': best_result.hw_cost,
                 'best_hw_total_cost': best_result.hw_total_cost,
                 'best_hw_config': best_result.hw_config,
-            })
+            }
+            
+            # Aggiungi dati dal config.yaml con prefisso 'config_'
+            for key, value in analyzer.config.items():
+                if key not in _EXCLUDED_CONFIG_KEYS:
+                    summary_row[f'{key}'] = value
+            
+            summary_data.append(summary_row)
             print(f"  ✓ Miglior risultato: iterazione {best_result.iteration}, "
                   f"accuracy={best_result.accuracy:.4f}, score={best_result.score:.4f}\n")
         else:
