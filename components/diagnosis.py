@@ -105,25 +105,3 @@ class diagnosis:
         diagnosis_logs.write(str(self.issues))
         print(" I've found: " + str(self.issues) + "\n")
         return self.issues
-
-
-if __name__ == '__main__':
-    y = []
-    with open('test_loss.csv', 'r') as f:
-        reader = csv.reader(f)
-        for row in reader:
-            y.append(float(row[2]))
-
-    d = diagnosis()
-    res = d.smooth(y)
-
-    up = []
-    down = []
-
-    for e in range(int(len(res) - 1)):
-        if res[e] < res[e + 1]:
-            up.append(1)
-        else:
-            down.append(1)
-    if isclose(len(up), len(down), abs_tol=150) and len(up) > 0 and len(down) > 0:
-        print("floating finded")

@@ -87,14 +87,3 @@ def analyze_model(initial_model):
     res_dict = nm.to_dict(flops)
 
     return flops, res_dict
-
-
-if __name__ == "__main__":
-
-    im = VGG16()
-
-    f, r_dict = analyze_model(im)
-
-    print(" ---- REPORT CUSTOM ------\n")
-    print('TOTAL_FLOPS: {}\n'.format(f.total_float_ops))
-    print(r_dict)

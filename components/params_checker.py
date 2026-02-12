@@ -25,21 +25,3 @@ class paramsChecker:
             else:
                 dVector = self.checker(i, dVector)
         return dVector
-
-
-if __name__ == '__main__':
-    search_space = [
-        Integer(16, 64, name='unit_c1'),
-        Real(0.002, 0.3, name='dr1_2'),
-        Integer(64, 128, name='unit_c2'),
-        Integer(256, 512, name='unit_d'),
-        Real(0.03, 0.5, name='dr_f'),
-        Real(10 ** -5, 10 ** -1, name='learning_rate'),
-        Integer(16, 128, name='batch_size'),
-    ]
-
-    params = {'unit_c1': 64, 'dr1_2': 0.3, 'unit_c2': 127, 'unit_d': 512, 'dr_f': 0.5, 'learning_rate': 1e-05, 'batch_size': 16}
-    pc = paramsChecker()
-    #dv = pc.choice(search_space, ['learning_rate','batch_size'], params)
-    dv = pc.choice(search_space)
-    print(dv)

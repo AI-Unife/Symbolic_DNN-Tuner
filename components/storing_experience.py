@@ -112,16 +112,3 @@ class StoringExperience:
         res = self.formatting(c.fetchall())
         conn.close()
         return res
-
-
-if __name__ == '__main__':
-    se = StoringExperience()
-    se.create_db()
-    se.insert_ranking(0.7225, 0.7423)
-    se.insert_ranking(0.7325, 0.7113)
-    se.insert_ranking(0.7895, 0.4353)
-    acc, loss = se.get()
-
-    print(acc)
-    print()
-    print(loss)

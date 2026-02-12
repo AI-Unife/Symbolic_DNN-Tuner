@@ -61,13 +61,3 @@ class search_space:
         self.search_space = self.search_space + new_Hp
         return self.search_space
 
-
-if __name__ == '__main__':
-    ss = search_space()
-    sp = ss.search_sp()
-
-    dtest = {'reg': 1e-4}
-    res_final = ss.add_params(dtest)
-    print(sp)
-    print("-----------------------")
-    print(res_final)
