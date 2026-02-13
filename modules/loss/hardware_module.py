@@ -1,14 +1,24 @@
-from modules.common_interface import common_interface
-from components.colors import colors
-from components.model_interface import LayerTypes, Params
 import os
-
-from pathlib import Path
-
+import sys
 import torch
+import tempfile
+from pathlib import Path
+from components.colors import colors
+from modules.common_interface import common_interface
+from components.model_interface import LayerTypes, Params
 
 import nvdla.profiler as profiler
 from exp_config import load_cfg
+
+# path assoluto alla cartella NVDLA-EMBER
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+EMBER_PATH = PROJECT_ROOT.parent / "NVDLA-EMBER"
+
+if EMBER_PATH.exists():
+    sys.path.append(str(EMBER_PATH))
+else:
+    raise FileNotFoundError(f"NVDLA-EMBER not found at: {EMBER_PATH}")
+from profiler_ember import profile_network as ember_profile_network
 
 class hardware_module(common_interface):
 
@@ -137,25 +147,66 @@ class hardware_module(common_interface):
             raise ValueError(f"Framework non supportato: {framework}")
         
         ### TODO: creare tuner EMBER per Torch nel file nvdla/profiler.py
-        for layer_spec in self.model.layers.values():
-            if layer_spec.type == LayerTypes.Conv2D:
-                out_size = [batch, layer_spec.get(Params.OUT_CHANNELS), layer_spec.get(Params.OUT_HEIGHT), layer_spec.get(Params.OUT_WIDTH)]
+        ### possibile aggiunta di hw_backend: str = "nvdla" e poi eseguire
+        ### profiler in base al flag
+        hw_backend = self.cfg.hw_backend
 
-                if layer_spec.get(Params.PADDING) == 'valid': 
-                    padding = 0
-                else:
-                    padding = int(layer_spec.get(Params.KERNEL_SIZE)[0] - 1) / 2
+        if hw_backend == "nvdla":
+            print("[INFO] Using DEFAULT hardware backend")
+            for layer_spec in self.model.layers.values():
+                if layer_spec.type == LayerTypes.Conv2D:
+                    out_size = [batch, layer_spec.get(Params.OUT_CHANNELS), layer_spec.get(Params.OUT_HEIGHT), layer_spec.get(Params.OUT_WIDTH)]
 
-                input_size = [batch, layer_spec.get(Params.IN_CHANNELS), layer_spec.get(Params.IN_HEIGHT), layer_spec.get(Params.IN_WIDTH)]
+                    if layer_spec.get(Params.PADDING) == 'valid': 
+                        padding = 0
+                    else:
+                        padding = int(layer_spec.get(Params.KERNEL_SIZE)[0] - 1) / 2
 
-                conv_obj = profiler.Conv2d(nvdla_profiler, log_file, layer_spec.name, out_size, input_size[1],
-                                           out_size[1], layer_spec.get(Params.KERNEL_SIZE)[0], layer_spec.get(Params.STRIDE)[0],
-                                           padding, 1, layer_spec.get(Params.BIAS))
-                total_latency += conv_obj.forward(input_size)
+                    input_size = [batch, layer_spec.get(Params.IN_CHANNELS), layer_spec.get(Params.IN_HEIGHT), layer_spec.get(Params.IN_WIDTH)]
 
-            elif layer_spec.type == LayerTypes.Dense:
-                out_size = [batch, layer_spec.get(Params.OUT_FEATURES)]
-                dense_obj = profiler.Linear(nvdla_profiler, log_file, layer_spec.name, out_size, layer_spec.get(Params.IN_FEATURES), layer_spec.get(Params.OUT_FEATURES), layer_spec.get(Params.BIAS))
-                total_latency += dense_obj.forward([batch, layer_spec.get(Params.IN_FEATURES)])
+                    conv_obj = profiler.Conv2d(nvdla_profiler, log_file, layer_spec.name, out_size, input_size[1],
+                                            out_size[1], layer_spec.get(Params.KERNEL_SIZE)[0], layer_spec.get(Params.STRIDE)[0],
+                                            padding, 1, layer_spec.get(Params.BIAS))
+                    total_latency += conv_obj.forward(input_size)
 
-        return total_latency
+                elif layer_spec.type == LayerTypes.Dense:
+                    out_size = [batch, layer_spec.get(Params.OUT_FEATURES)]
+                    dense_obj = profiler.Linear(nvdla_profiler, log_file, layer_spec.name, out_size, layer_spec.get(Params.IN_FEATURES), layer_spec.get(Params.OUT_FEATURES), layer_spec.get(Params.BIAS))
+                    total_latency += dense_obj.forward([batch, layer_spec.get(Params.IN_FEATURES)])
+            
+            return total_latency
+        
+        elif hw_backend == "ember":
+            print("[INFO] Using EMBER hardware backend")
+
+            # input dummy coerente con il primo layer
+            first_layer = next(iter(self.model.layers.values()))
+
+            batch = 1
+            in_channels = first_layer.get(Params.IN_CHANNELS)
+            height = first_layer.get(Params.IN_HEIGHT)
+            width = first_layer.get(Params.IN_WIDTH)
+
+            dummy_input = torch.randint(
+                0, 256,
+                (batch, in_channels, height, width),
+                dtype=torch.uint8
+            )
+
+            # directory temporanea per i log
+            with tempfile.TemporaryDirectory() as outdir:
+                # esecuzione del profiler_ember
+                total_latency = ember_profile_network(
+                    model,
+                    dummy_input,
+                    config_path,
+                    outdir
+                )
+                
+            return total_latency
+
+        if hw_backend == "ember" and self.cfg.backend != "torch":
+            raise RuntimeError("EMBER requires backend=torch")
+
+        else:
+            raise ValueError(f"Unsupported hw_backend: {hw_backend}")
