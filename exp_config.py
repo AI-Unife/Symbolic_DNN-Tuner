@@ -36,11 +36,13 @@ class ConfigSchema:
     nparams_th: int = 2500000                    # Max number of PARAMS
     opt: str = "filtered"                        # Optimizer type (standard | filtered | basic | RS | RS_ruled)
     use_hw_cost: bool = True                     # Flag to use or not hw cost in simulation
+    hw_backend: str = "nvdla"                    # hw backend for profiling
 
 # ---------------- Validazione (stesse regole del parser) ----------------
 _VALID_MODULES = {"hardware_module", "flops_module"}
 _VALID_OPT = {"standard", "filtered", "basic", "RS", "RS_ruled"}
 _VALID_BACKENDS = {"tf", "torch"}
+_VALID_HW_BACKENDS = {"nvdla", "ember"}
 
 def create_config_file(exp_dir: str | Path, overrides: Optional[Dict[str, Any]] = None) -> Path:
     """
@@ -72,6 +74,7 @@ def create_config_file(exp_dir: str | Path, overrides: Optional[Dict[str, Any]] 
         "nparams_th": schema.nparams_th,
         "opt": schema.opt,
         "use_hw_cost": schema.use_hw_cost,
+        "hw_backend": schema.hw_backend
     }
     if overrides:
         base.update(overrides)
@@ -107,6 +110,12 @@ def _validate(d: Dict[str, Any]) -> None:
     if backend not in _VALID_BACKENDS:
         print(f"WARNING: Invalid backend '{backend}'. Choose from: {sorted(_VALID_BACKENDS)}. Set to 'tf'")
         d['backend'] = 'tf'
+
+    # hw_backend
+    hw = d.get("hw_backend", "nvdla")
+    if hw not in _VALID_HW_BACKENDS:
+        print(f"WARNING: Invalid hw_backend '{hw}'. Choose from: {sorted(_VALID_HW_BACKENDS)}. Set to 'nvdla'")
+        d["hw_backend"] = "nvdla"
 
 # ---------------- Loader + discovery ----------------
 _ENV_KEY = "EXP_CONFIG"   # puoi impostarlo per puntare al config della run
@@ -168,6 +177,7 @@ def _apply_defaults(d: Dict[str, Any]) -> Dict[str, Any]:
         "nparams_th": d.get("nparams_th", schema.nparams_th),
         "opt": d.get("opt", schema.opt),
         "use_hw_cost": d.get("use_hw_cost", schema.use_hw_cost),
+        "hw_backend": d.get("hw_backend", schema.hw_backend)
     }
     return merged
 
