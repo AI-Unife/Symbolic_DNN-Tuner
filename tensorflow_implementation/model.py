@@ -73,21 +73,22 @@ class TFModel(TunerModel):
             x = Conv2D(params["unit_c1"] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
             x = Activation(params["activation"])(x)
             x = BatchNormalization()(x) if batch else x
+        x = Dropout(params["dr_f"])(x)
         x = MaxPooling2D(pool_size=(2, 2))(x)
 
-        shortcut = x
-        for _ in range(layer_x_block-1):
-            x = Conv2D(params["unit_c2"] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
-            x = Activation(params["activation"])(x)
-            x = BatchNormalization()(x) if batch else x
-        if self.residual:
-            x = Conv2D(params["unit_c2"] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
-            x = self._add_residual(shortcut, x, params['unit_c2'] * params['num_neurons'], params['activation'], reg_layer)
-        else:
-            x = Conv2D(params["unit_c2"] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
-            x = Activation(params["activation"])(x)
-            x = BatchNormalization()(x) if batch else x
-        x = MaxPooling2D(pool_size=(2, 2))(x)
+        # shortcut = x
+        # for _ in range(layer_x_block-1):
+        #     x = Conv2D(params["unit_c2"] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
+        #     x = Activation(params["activation"])(x)
+        #     x = BatchNormalization()(x) if batch else x
+        # if self.residual:
+        #     x = Conv2D(params["unit_c2"] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
+        #     x = self._add_residual(shortcut, x, params['unit_c2'] * params['num_neurons'], params['activation'], reg_layer)
+        # else:
+        #     x = Conv2D(params["unit_c2"] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
+        #     x = Activation(params["activation"])(x)
+        #     x = BatchNormalization()(x) if batch else x
+        # x = MaxPooling2D(pool_size=(2, 2))(x)
 
 
         
@@ -107,6 +108,8 @@ class TFModel(TunerModel):
                 x = Conv2D(params[layer_key] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
                 x = Activation(params["activation"])(x)
                 x = BatchNormalization()(x) if batch else x
+            
+            x = Dropout(params["dr_f"])(x)
             x = MaxPooling2D(pool_size=(2, 2))(x)
 
         x = GlobalAveragePooling2D()(x) if batch else Flatten()(x)

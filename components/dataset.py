@@ -105,14 +105,18 @@ class TunerDataset:
         
         self.n_classes = 11
         X_train_raw, self.Y_train, X_test_raw, self.Y_test = gesture_data(num_classes=11, ROI=True)
-        self.X_train = np.array([item["data"] for item in X_train_raw]).astype("float32")
-        self.pos_train = np.array([item["pos"] for item in X_train_raw])
-        self.X_test = np.array([item["data"] for item in X_test_raw]).astype("float32")
-        self.pos_test = np.array([item["pos"] for item in X_test_raw])
+        if isinstance(X_test_raw[0], dict):
+            self.X_train = np.array([item["data"] for item in X_train_raw]).astype("float32")
+            self.pos_train = np.array([item["pos"] for item in X_train_raw])
+            self.X_test = np.array([item["data"] for item in X_test_raw]).astype("float32")
+            self.pos_test = np.array([item["pos"] for item in X_test_raw])
+            print(self.pos_train.shape, 'pos train samples')
+            print(self.pos_test.shape, 'pos test pos samples')
+        else: 
+            self.X_train = np.array(X_train_raw).astype("float32")
+            self.X_test = np.array(X_test_raw).astype("float32")
         
         print(self.X_train.shape, 'X train samples')
-        print(self.pos_train.shape, 'pos train samples')
         print(self.Y_train.shape, 'Y train label samples')
         print(self.X_test.shape, 'X test samples')
-        print(self.pos_test.shape, 'pos test pos samples')
         print(self.Y_test.shape, 'Y test label samples')

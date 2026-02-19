@@ -228,9 +228,9 @@ def reshape_x_pos(arr: np.ndarray, pos: Optional[np.ndarray], cfg) -> Tuple[np.n
 
     else:  # "depth" or any other single-frame mode
         # [T, 2, H, W] -> assume polarity transform reduced to [T, H, W] or similar
-        # If still [T, 2, H, W], collapse time by sum; otherwise, keep as is.
+        # If still [T, 2, H, W], collapse polarity by sum; otherwise, keep as is.
         if arr.ndim == 4 and arr.shape[1] == 2:
-            arr = arr.sum(axis=0)  # simple collapse to [H, W] (choose your policy)
+            arr = arr.sum(axis=1)  # simple collapse to [H, W] (choose your policy)
         # Ensure shape is [H, W] or [H, W, C]
         if arr.ndim == 2:
             arr = arr[..., None]  # [H, W, 1]
@@ -283,9 +283,22 @@ def dataset_to_numpy(dataset, cfg) -> Tuple[np.ndarray, np.ndarray]:
                     mean_x = (A * xx).sum(axis=(1, 2)) / tot
 
                     pos_mean = np.stack([mean_y, mean_x], axis=1)  # (16, 2)
+                    x_list.append({"data": x_reshaped, "pos":pos_mean})
+            elif cfg.dataset == "roigesture_matrix":
+                x_list.append({"data": x_reshaped, "pos":pos})
+            elif cfg.dataset == "roigesture_3D":
+                ## use pos as an additional channel by concatenating along the channel dimension
+                if pos is not None:
+                    pos_reshaped, _ = reshape_x_pos(np.array(pos), None, cfg)
+                    # Concatenate along channel dimension (last dim)
+                    x_combined = np.concatenate([x_reshaped, pos_reshaped], axis=-1)
+                    x_list.append(x_combined)
+                else:
+                    print("ERROR: pos is None for an ROI sample; using only data.")
+                    exit(-1)
             else:
-                pos_mean = pos
-            x_list.append({"data": x_reshaped, "pos":pos_mean})
+                print(f"ERROR: Unrecognized ROI dataset type '{cfg.dataset}'; expected 'roigesture_coords', 'roigesture_matrix', or 'roigesture_3D'.")
+                exit(-1)
         else:
             # Non-ROI: plain arrays
             arr = np.array(x)
@@ -388,6 +401,8 @@ def get_ROI_numpy(cfg):
     """
     dataset_path = "rois_and_coordinates/datasets"
     cache_dir = f"./cache/DVS_ROI_{cfg.mode}_{cfg.frames}_{cfg.channels}/"
+    if cfg.mode != "fwdPass" and cfg.dataset == "roigesture_3D":
+        cache_dir = f"./cache/DVS_ROI_3D_{cfg.mode}_{cfg.frames}_{cfg.channels}/"
     # cache_dir = f"cache/DVS_ROI_{cfg.mode}_{polarity}_{cfg.frames}_{cfg.channels}_{n_pol}/"
     _ensure_cache_dir(cache_dir)
     print("cache_dir:", cache_dir)

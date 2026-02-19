@@ -211,8 +211,10 @@ class ResultsAnalyzer:
         """Carica i dati FLOPS dal file flops_report.txt"""
         flops_file = self.algorithm_logs_dir / "flops_report.txt"
         if not flops_file.exists():
-            return None
-        
+            flops_file = self.algorithm_logs_dir / "params_report.txt"
+            if not flops_file.exists():
+                return None
+
         flops_data = []
         try:
             with open(flops_file, 'r') as f:
@@ -220,9 +222,12 @@ class ResultsAnalyzer:
                     line = line.strip()
                     if not line:
                         continue
-                    parts = line.split()
+                    parts = line.split(',')
                     if len(parts) >= 2:
                         flops_data.append((float(parts[0]), float(parts[1])))
+                    else:
+                        # Se è un file solo con params, aggiungi None per FLOPS
+                        flops_data.append((float(parts[0]), None))
         except Exception as e:
             print(f"  ❌ Errore leggendo {flops_file}: {e}")
             return None
