@@ -18,7 +18,8 @@ if EMBER_PATH.exists():
     sys.path.append(str(EMBER_PATH))
 else:
     raise FileNotFoundError(f"NVDLA-EMBER not found at: {EMBER_PATH}")
-from profiler_ember import profile_network as ember_profile_network
+
+from EMBER_PATH.profiler_ember import profile_network as ember_profile_network
 
 class hardware_module(common_interface):
 
