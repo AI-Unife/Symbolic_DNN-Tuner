@@ -2,24 +2,27 @@ import os
 import sys
 import torch
 import tempfile
+import torch.nn as nn
 from pathlib import Path
 from components.colors import colors
 from modules.common_interface import common_interface
-from components.model_interface import LayerTypes, Params
+from components.model_interface import LayerTypes, Params, LayerSpec
 
 import nvdla.profiler as profiler
 from exp_config import load_cfg
 
-# path assoluto alla cartella NVDLA-EMBER
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
+# path alla cartella NVDLA-EMBER
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 EMBER_PATH = PROJECT_ROOT.parent / "NVDLA-EMBER"
+SPECS_PATH = PROJECT_ROOT / "nvdla" / "specs"
+EMBER_SPECS_PATH = EMBER_PATH / "NVDLA-EMBER" / "specs"
 
 if EMBER_PATH.exists():
     sys.path.append(str(EMBER_PATH))
 else:
     raise FileNotFoundError(f"NVDLA-EMBER not found at: {EMBER_PATH}")
 
-from EMBER_PATH.profiler_ember import profile_network as ember_profile_network
+from profiler_ember import SimpleCNN, profile_network as ember_profile_network
 
 class hardware_module(common_interface):
 
@@ -48,17 +51,30 @@ class hardware_module(common_interface):
             self.cfg = load_cfg()
         except:
             self.cfg = {"name": "./"}
-        nvdla_list = [{'name': "nv_small", 'path': "nv_small64_fp32.yaml", 'area': 2.824},
-                      {'name': "nv_small256", 'path': "nv_small256_fp32.yaml", 'area': 3.091},
-                      {'name': "nv_large", 'path': "nv_large2048_fp32.yaml", 'area': 3.809}]
-                      
+
+        hw_backend = self.cfg.hw_backend
+        if hw_backend == "nvdla":
+            nvdla_list = [{'name': "nv_small", 'path': "nv_small64_fp32.yaml", 'area': 2.824},
+                          {'name': "nv_small256", 'path': "nv_small256_fp32.yaml", 'area': 3.091},
+                          {'name': "nv_large", 'path': "nv_large2048_fp32.yaml", 'area': 3.809}]
+            
+            self.specs_dir = SPECS_PATH
+        
+        elif hw_backend == "ember":
+            nvdla_list = [
+                {'name': "nv_small64",  'path': "nv_small64_int8.yaml",    'area': 2.824},
+                {'name': "nv_small256", 'path': "nv_small256_int8.yaml",   'area': 3.091},
+                {'name': "nv_large2048",'path': "nv_large2048_int8.yaml",  'area': 3.809},
+            ]   
+
+            self.specs_dir = EMBER_SPECS_PATH
+
         # init list of available configurations to an empty dict
         self.nvdla = {}
-        self.specs_dir = "/hpc/home/bzzlca/Symbolic_DNN-Tuner/nvdla/specs/"
-        
         # iterate over each configuration
         for config in nvdla_list:
-            if os.path.exists(self.specs_dir + config['path']):
+            spec_file = self.specs_dir / config['path']
+            if spec_file.exists():
                 # calculate the current manifacturing cost
                 current_cost = round(self.cost_par*config['area'], 2)
                 # inclusion of only configurations that are less expensive than the cost limit
@@ -80,15 +96,14 @@ class hardware_module(common_interface):
         self.use_hw_cost = self.cfg.get('use_hw_cost', True)
 
     
-    
     def update_state(self, *args):
         # import current model reference
         self.model = args[0]
 
-        ### TODO: Aggiungere flag per costo monetario assente
         # for each configuration calculate the latency and the total cost
         for config_key in self.nvdla:
-            config_path = self.specs_dir + self.nvdla[config_key]['path']
+            
+            config_path = self.specs_dir / self.nvdla[config_key]['path']
             self.nvdla[config_key]['latency'] = self.get_model_latency(self.model, config_path) / (10**9)
             
             # use hw latency only if the flag is true 
@@ -111,14 +126,17 @@ class hardware_module(common_interface):
         self.total_cost = self.nvdla[first_el]['total_cost']
         self.current_config = first_el
 
+
     def obtain_values(self):
         # has to match the list of facts
         return {'hw_latency' : self.latency, 'max_latency' : self.max_latency}
+
 
     def printing_values(self):
         print(f"LATENCY: {self.latency} s",)
         print(f"CURRENT HW: {self.current_config} [{self.cost}$]")
         print(f"TOTAL COST: {self.total_cost}")
+
 
     def optimiziation_function(self, *args):
         return self.total_cost
@@ -142,14 +160,11 @@ class hardware_module(common_interface):
         nvdla_profiler = profiler.nvdla(config_p)
         log_file = "profiler_logs.txt"
 
-        #flag pyrtorch o TF
+        #flag Pytorch o TF
         framework = self.cfg.get("backend", "torch")
         if framework not in ["torch", "tf"]:
             raise ValueError(f"Framework non supportato: {framework}")
         
-        ### TODO: creare tuner EMBER per Torch nel file nvdla/profiler.py
-        ### possibile aggiunta di hw_backend: str = "nvdla" e poi eseguire
-        ### profiler in base al flag
         hw_backend = self.cfg.hw_backend
 
         if hw_backend == "nvdla":
@@ -180,27 +195,19 @@ class hardware_module(common_interface):
         elif hw_backend == "ember":
             print("[INFO] Using EMBER hardware backend")
 
-            # input dummy coerente con il primo layer
-            first_layer = next(iter(self.model.layers.values()))
+            #set the path to the configuration file of the hardware backend
+            ember_config = EMBER_SPECS_PATH / "nv_large2048_int8.yaml"
 
-            batch = 1
-            in_channels = first_layer.get(Params.IN_CHANNELS)
-            height = first_layer.get(Params.IN_HEIGHT)
-            width = first_layer.get(Params.IN_WIDTH)
-
-            dummy_input = torch.randint(
-                0, 256,
-                (batch, in_channels, height, width),
-                dtype=torch.uint8
-            )
-
+            #model = SimpleCNN() 
+            dummy_input = torch.randint(0, 256, (1, 3, 32, 32)) 
+           
             # directory temporanea per i log
             with tempfile.TemporaryDirectory() as outdir:
                 # esecuzione del profiler_ember
                 total_latency = ember_profile_network(
                     model,
                     dummy_input,
-                    config_path,
+                    str(ember_config),
                     outdir
                 )
                 
@@ -208,6 +215,16 @@ class hardware_module(common_interface):
 
         if hw_backend == "ember" and self.cfg.backend != "torch":
             raise RuntimeError("EMBER requires backend=torch")
+        
+        if hw_backend == "nvdla" and self.cfg.beckend != "tensorflow":
+            raise RuntimeError("NVDLA requires backend=tf")
 
         else:
             raise ValueError(f"Unsupported hw_backend: {hw_backend}")
+
+if __name__ == "__main__":
+    hw_module = hardware_module()
+    model = SimpleCNN() 
+    hw_module.update_state(model)
+    hw_module.printing_values()
+
