@@ -36,7 +36,7 @@ class ConfigSchema:
     nparams_th: int = 2500000                    # Max number of PARAMS
     opt: str = "filtered"                        # Optimizer type (standard | filtered | basic | RS | RS_ruled)
     use_hw_cost: bool = True                     # Flag to use or not hw cost in simulation
-    hw_backend: str = "nvdla"                    # hw backend for profiling
+    hw_backend: str = "nvdla"                    # hw backend for profiling, "nvdla" or "ember"
 
 # ---------------- Validazione (stesse regole del parser) ----------------
 _VALID_MODULES = {"hardware_module", "flops_module"}

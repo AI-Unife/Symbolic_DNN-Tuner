@@ -4,25 +4,28 @@ import torch
 import tempfile
 import torch.nn as nn
 from pathlib import Path
+
+
+# path alla cartella NVDLA-EMBER
+TUNER_ROOT = Path(__file__).resolve().parents[2]
+sys.path.append(str(TUNER_ROOT))
+
+EMBER_PATH = TUNER_ROOT.parent / "NVDLA-EMBER"
+sys.path.append(str(EMBER_PATH))
+
+
 from components.colors import colors
 from modules.common_interface import common_interface
 from components.model_interface import LayerTypes, Params, LayerSpec
 
 import nvdla.profiler as profiler
 from exp_config import load_cfg
+from profiler_ember import SimpleCNN, profile_network as ember_profile_network
 
-# path alla cartella NVDLA-EMBER
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-EMBER_PATH = PROJECT_ROOT.parent / "NVDLA-EMBER"
-SPECS_PATH = PROJECT_ROOT / "nvdla" / "specs"
+# path alla cartella dei file di configurazione dei backend hardware
+SPECS_PATH = TUNER_ROOT / "nvdla" / "specs"
 EMBER_SPECS_PATH = EMBER_PATH / "NVDLA-EMBER" / "specs"
 
-if EMBER_PATH.exists():
-    sys.path.append(str(EMBER_PATH))
-else:
-    raise FileNotFoundError(f"NVDLA-EMBER not found at: {EMBER_PATH}")
-
-from profiler_ember import SimpleCNN, profile_network as ember_profile_network
 
 class hardware_module(common_interface):
 
