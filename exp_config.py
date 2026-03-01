@@ -37,8 +37,8 @@ class ConfigSchema:
     opt: str = "filtered"                        # Optimizer type (standard | filtered | basic | RS | RS_ruled)
     use_hw_cost: bool = True                     # Flag to use or not hw cost in simulation
     hw_backend: str = "nvdla"                    # hw backend for profiling, "nvdla" or "ember"
-    suggest_net_opt: bool = False                # flag to accept suggestions for network optimization
-    suggest_hw_opt: bool = False                 # flag to accept suggestions for hardware optimization
+    suggest_net_opt: bool = True                # flag to accept suggestions for network optimization
+    suggest_hw_opt: bool = True                 # flag to accept suggestions for hardware optimization
 
 # ---------------- Validazione (stesse regole del parser) ----------------
 _VALID_MODULES = {"hardware_module", "flops_module"}
