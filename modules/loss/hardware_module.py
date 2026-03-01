@@ -13,6 +13,9 @@ sys.path.append(str(TUNER_ROOT))
 EMBER_PATH = TUNER_ROOT.parent / "NVDLA-EMBER"
 sys.path.append(str(EMBER_PATH))
 
+# path alla cartella dei file di configurazione dei backend hardware
+SPECS_PATH = TUNER_ROOT / "nvdla" / "specs"
+EMBER_SPECS_PATH = EMBER_PATH / "NVDLA-EMBER" / "specs"
 
 from components.colors import colors
 from modules.common_interface import common_interface
@@ -20,7 +23,7 @@ from components.model_interface import LayerTypes, Params, LayerSpec
 
 import nvdla.profiler as profiler
 from exp_config import load_cfg
-from profiler_ember import SimpleCNN, profile_network as ember_profile_network
+from profiler_ember import SimpleCNN, profile_network as ember_profile_network 
 
 # path alla cartella dei file di configurazione dei backend hardware
 SPECS_PATH = TUNER_ROOT / "nvdla" / "specs"
@@ -97,6 +100,10 @@ class hardware_module(common_interface):
 
         # flag to use or not hw cost
         self.use_hw_cost = self.cfg.get('use_hw_cost', True)
+
+        #flag to accept or not suggestion for net and hw optimization
+        self.suggest_net_opt = self.cfg.get('suggest_net_opt', True)
+        self.suggest_hw_opt = self.cfg.get('suggest_hw_opt', True)
 
     
     def update_state(self, *args):
@@ -225,9 +232,35 @@ class hardware_module(common_interface):
         else:
             raise ValueError(f"Unsupported hw_backend: {hw_backend}")
 
+    def suggest_optimization(self):
+        if hw_module.suggest_hw_opt:
+            print("\n[INFO] Suggesting hardware optimization...")
+            print(f"Current configuration: {hw_module.current_config} with latency {hw_module.latency} s and cost {hw_module.cost}$")
+            # crea una copia del file yaml di configurazione per suggerire un'ottimizzazione hardware
+            # e crea un nuovo file yaml con la configurazione ottimizzata
+            optimized_config_path = hw_module.specs_dir / f"optimized_{hw_module.current_config}"
+            with open(hw_module.specs_dir / hw_module.nvdla[hw_module.current_config]['path'], 'r') as f:
+                config_data = f.read()
+            
+            # edit config data here
+            
+            with open(optimized_config_path, 'w') as f:
+                f.write(config_data)
+            print(f"Suggested optimized hardware configuration saved to: {optimized_config_path}")
+
+        if hw_module.suggest_net_opt:
+            print("\n[INFO] Suggesting network optimization...")
+            print(f"Current latency: {hw_module.latency} s")
+            if hw_module.latency > hw_module.max_latency:
+                print("Latency is above the maximum threshold. Consider optimizing the network architecture as follows:")
+                # suggestions for network optimization here
+            else:
+                print("Latency is within the acceptable range.")
+
 if __name__ == "__main__":
     hw_module = hardware_module()
     model = SimpleCNN() 
     hw_module.update_state(model)
     hw_module.printing_values()
+    hw_module.suggest_optimization()
 
