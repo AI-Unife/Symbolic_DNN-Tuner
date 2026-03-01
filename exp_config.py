@@ -37,6 +37,8 @@ class ConfigSchema:
     opt: str = "filtered"                        # Optimizer type (standard | filtered | basic | RS | RS_ruled)
     use_hw_cost: bool = True                     # Flag to use or not hw cost in simulation
     hw_backend: str = "nvdla"                    # hw backend for profiling, "nvdla" or "ember"
+    suggest_net_opt: bool = False                # flag to accept suggestions for network optimization
+    suggest_hw_opt: bool = False                 # flag to accept suggestions for hardware optimization
 
 # ---------------- Validazione (stesse regole del parser) ----------------
 _VALID_MODULES = {"hardware_module", "flops_module"}
@@ -74,7 +76,9 @@ def create_config_file(exp_dir: str | Path, overrides: Optional[Dict[str, Any]] 
         "nparams_th": schema.nparams_th,
         "opt": schema.opt,
         "use_hw_cost": schema.use_hw_cost,
-        "hw_backend": schema.hw_backend
+        "hw_backend": schema.hw_backend,
+        "suggest_net_opt": schema.suggest_net_opt,
+        "suggest_hw_opt": schema.suggest_hw_opt
     }
     if overrides:
         base.update(overrides)
@@ -116,6 +120,8 @@ def _validate(d: Dict[str, Any]) -> None:
     if hw not in _VALID_HW_BACKENDS:
         print(f"WARNING: Invalid hw_backend '{hw}'. Choose from: {sorted(_VALID_HW_BACKENDS)}. Set to 'nvdla'")
         d["hw_backend"] = "nvdla"
+
+    
 
 # ---------------- Loader + discovery ----------------
 _ENV_KEY = "EXP_CONFIG"   # puoi impostarlo per puntare al config della run
@@ -177,7 +183,9 @@ def _apply_defaults(d: Dict[str, Any]) -> Dict[str, Any]:
         "nparams_th": d.get("nparams_th", schema.nparams_th),
         "opt": d.get("opt", schema.opt),
         "use_hw_cost": d.get("use_hw_cost", schema.use_hw_cost),
-        "hw_backend": d.get("hw_backend", schema.hw_backend)
+        "hw_backend": d.get("hw_backend", schema.hw_backend),
+        "suggest_net_opt": d.get("suggest_net_opt", schema.suggest_net_opt),
+        "suggest_hw_opt": d.get("suggest_hw_opt", schema.suggest_hw_opt)
     }
     return merged
 
