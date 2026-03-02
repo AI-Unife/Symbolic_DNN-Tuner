@@ -222,7 +222,7 @@ class ResultsAnalyzer:
                     line = line.strip()
                     if not line:
                         continue
-                    parts = line.split(',')
+                    parts = line.split(' ')
                     if len(parts) >= 2:
                         flops_data.append((float(parts[0]), float(parts[1])))
                     else:
