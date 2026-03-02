@@ -1,5 +1,6 @@
 import os
 import sys
+import yaml
 import torch
 import tempfile
 import torch.nn as nn
@@ -66,37 +67,68 @@ class hardware_module(common_interface):
             
             self.specs_dir = SPECS_PATH
         
-        elif hw_backend == "ember":
-            nvdla_list = [
-                {'name': "nv_small64",  'path': "nv_small64_int8.yaml",    'area': 2.824},
-                {'name': "nv_small256", 'path': "nv_small256_int8.yaml",   'area': 3.091},
-                {'name': "nv_large2048",'path': "nv_large2048_int8.yaml",  'area': 3.809},
-            ]   
 
-            self.specs_dir = EMBER_SPECS_PATH
-
-        # init list of available configurations to an empty dict
-        self.nvdla = {}
-        # iterate over each configuration
-        for config in nvdla_list:
-            spec_file = self.specs_dir / config['path']
-            if spec_file.exists():
-                # calculate the current manifacturing cost
-                current_cost = round(self.cost_par*config['area'], 2)
-                # inclusion of only configurations that are less expensive than the cost limit
-                #if current_cost <= self.max_cost:
-                self.nvdla[config['name']] = {'path': config['path'],
-                                                'cost': current_cost,
-                                                'latency': 0,
-                                                'total_cost': 0}
-            else:
-                print(colors.FAIL, f"|  --------- {config['name']} CONFIGURATION FILE DOESN'T EXIST  -------  |\n", colors.ENDC)
+            # init list of available configurations to an empty dict
+            self.nvdla = {}
+            # iterate over each configuration
+            for config in nvdla_list:
+                spec_file = self.specs_dir / config['path']
+                if spec_file.exists():
+                    # calculate the current manifacturing cost
+                    current_cost = round(self.cost_par*config['area'], 2)
+                    # inclusion of only configurations that are less expensive than the cost limit
+                    #if current_cost <= self.max_cost:
+                    self.nvdla[config['name']] = {'path': config['path'],
+                                                    'cost': current_cost,
+                                                    'latency': 0,
+                                                    'total_cost': 0}
+                else:
+                    print(colors.FAIL, f"|  --------- {config['name']} CONFIGURATION FILE DOESN'T EXIST  -------  |\n", colors.ENDC)
         
+        elif hw_backend == "ember":
+
+            # directory with yaml files
+            self.specs_dir = Path(EMBER_SPECS_PATH)
+
+            # init list of available configurations
+            self.nvdla = {}
+
+            # search for yaml files in the directory
+            yaml_files = list(self.specs_dir.glob("*.yaml"))
+
+            if not yaml_files:
+                raise ModuleNotFoundError("No YAML configuration files found in EMBER directory")
+
+            for spec_file in yaml_files:
+
+                try:
+                    with open(spec_file, "r") as f:
+                        spec = yaml.safe_load(f)
+                except Exception as e:
+                    print(colors.FAIL, f"Error reading {spec_file.name}: {e}", colors.ENDC)
+                    continue
+                
+                config_name = spec.get("name", spec_file.stem)
+
+                current_cost = 0
+
+                self.nvdla[config_name] = {
+                    'path': spec_file.name,
+                    'cost': 0,
+                    'latency': spec.get("axi-dbb", {}).get("latency", 0),
+                    'total_cost': 0
+                    # possibile aggiungere altre metriche specifiche di EMBER qui
+                    # per poi filtrare senza bisogno di riaprire i file yaml
+                }
+
+        if not self.nvdla:
+            raise ModuleNotFoundError("No valid NVDLA configuration found")
+
         if self.nvdla == {}:
             raise ModuleNotFoundError("No NVDLA configuration found")
 
-        # maximum cost
-        self.nvdla  = dict(sorted(self.nvdla.items(), key=lambda item: item[1]['cost'], reverse=True))
+        # maximum cost based on the latency
+        self.nvdla  = dict(sorted(self.nvdla.items(), key=lambda item: item[1]['latency'], reverse=True))
 
         # flag to use or not hw cost
         self.use_hw_cost = self.cfg.get('use_hw_cost', True)
@@ -109,11 +141,19 @@ class hardware_module(common_interface):
     def update_state(self, *args):
         # import current model reference
         self.model = args[0]
-
+        
         # for each configuration calculate the latency and the total cost
         for config_key in self.nvdla:
             
             config_path = self.specs_dir / self.nvdla[config_key]['path']
+
+            # skip the configuration if it doesen't respect some constraints
+            if not self.hw_supports_net(self.model, config_path): #, self.nvdla[config_key]):
+                #remove the configuration from the list of available configurations
+                self.nvdla.pop(config_key)
+                print(colors.WARNING, f"|  --------- {config_key} CONFIGURATION NOT COMPATIBLE WITH THE CURRENT MODEL  -------  |\n", colors.ENDC)
+                continue
+
             self.nvdla[config_key]['latency'] = self.get_model_latency(self.model, config_path) / (10**9)
             
             # use hw latency only if the flag is true 
@@ -151,8 +191,10 @@ class hardware_module(common_interface):
     def optimiziation_function(self, *args):
         return self.total_cost
 
+
     def plotting_function(self):
         pass
+
 
     def log_function(self):
         f = open("{}/algorithm_logs/hardware_report.txt".format(self.cfg.name), "a")
@@ -256,6 +298,7 @@ class hardware_module(common_interface):
                 # suggestions for network optimization here
             else:
                 print("Latency is within the acceptable range.")
+
 
 if __name__ == "__main__":
     hw_module = hardware_module()
