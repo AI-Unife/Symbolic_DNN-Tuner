@@ -37,22 +37,24 @@ def generate_params_file(output_path: str = "params_gesture.txt"):
     Genera un file params.txt per job array, dove ogni riga è una combinazione di parametri
     a partire da 'gesture'. Ignora prefissi e ID.
     """
-    dataset = "roigesture"
-    eval = 100
-    epochs = 30
+    datasets = ["roigesture_matrix", "roigesture_coords", "gesture"]
+    params_th = [1000000, 10000000000]  # 1M e 100G params, per esempio
+    
 
     # definizione delle configurazioni
     configs = [
-        ("depth",   [(4, 4, 2), (8, 8, 2), (16, 16, 2), (32, 32, 2), (64, 64, 2)]),
-        ("fwdPass", [(4, 2, 2), (8, 2, 2), (16, 2, 2), (32, 2, 2), (64, 2, 2)]),
-        ("hybrid",  [(16, 4, 2), (16, 8, 2), (32, 4, 2), (32, 8, 2), (64, 4, 2), (64, 8, 2), (64, 16, 2)]),
+        ("depth",   [(4, 4), (8, 8), (16, 16), (32, 32), (64, 64)]),
+        ("fwdPass", [(4, 2), (8, 2), (16, 2), (32, 2), (64, 2)]),
+        ("hybrid",  [(16, 4), (16, 8), (32, 4), (32, 8), (64, 4), (64, 8), (64, 16)]),
     ]
 
     lines = []
-    for mode, params_list in configs:
-        for p in params_list:
-            line = f"{dataset},{eval},{epochs},{mode},{p[0]},{p[1]},{p[2]}"
-            lines.append(line)
+    for param in params_th:
+        for dataset in datasets:
+            for mode, params_list in configs:
+                for p in params_list:
+                    line = f"{dataset},{mode},{p[0]},{p[1]},{param},flops_module"
+                    lines.append(line)
 
     # scrive il file
     Path(output_path).write_text("\n".join(lines) + "\n", encoding="utf-8")

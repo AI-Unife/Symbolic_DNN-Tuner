@@ -41,8 +41,10 @@ class TunerDataset:
     n_classes: int
 
     def normalize_data(self):
-        self.X_train = self.X_train.astype(np.float32) / 255.0
-        self.X_test  = self.X_test.astype(np.float32) / 255.0
+        # self.X_train = self.X_train.astype(np.float32) / 255.0
+        # self.X_test  = self.X_test.astype(np.float32) / 255.0
+        self.X_train = self.X_train.astype(np.float32)
+        self.X_test  = self.X_test.astype(np.float32)
 
     def load_light_cifar(self):
         self.n_classes = 10

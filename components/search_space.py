@@ -36,9 +36,9 @@ class search_space:
         """
 
         self.search_space = Space([
-            Categorical(name='num_neurons', categories=[8, 16, 32]),
+            Categorical(name='num_neurons', categories=[8, 16, 32, 64]),
             Integer(1, 4,  name='unit_c1'),
-            # Integer(1, 8, name='unit_c2'),
+            Integer(1, 8, name='unit_c2'),
             Real(0.03, 0.5,  name='dr_f'),
             Real(1e-4, 1e-3, name='learning_rate'),
             Categorical(categories=[8, 16, 32, 64],  name='batch_size'),

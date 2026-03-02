@@ -126,6 +126,6 @@ if __name__ == '__main__':
     if nvdla_build_path not in sys.path:
         sys.path.append(nvdla_build_path)
     model, testloader = models_factory('mnist', 'lenet', 1, False)
-    config = '/hpc/home/bzzlca/NVDLA-EMBER/specs/nv_large1024_int32.yaml'
+    config = '/hpc/home/bzzlca/Symbolic_DNN-Tuner/hw_configs/nv_32x32_b1_dat-262144_wt-262144_fp16.yaml'
     time = profile_network(model, testloader, config, './debug/')
     
