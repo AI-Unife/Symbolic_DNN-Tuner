@@ -19,7 +19,7 @@ class DotDict(dict):
 # ---------------- Schema con default (identici al parser di symbolic_tuner.py) ----------------
 @dataclass
 class ConfigSchema:
-    backend: str = "tf"                          # tf | torch
+    backend: str = "torch"                          # tf | torch
     eval: int = 300                              # Max number of evaluations
     early_stop: int = 30                         # Early stopping patience
     epochs: int = 2                              # Epochs for training
@@ -36,7 +36,7 @@ class ConfigSchema:
     nparams_th: int = 2500000                    # Max number of PARAMS
     opt: str = "filtered"                        # Optimizer type (standard | filtered | basic | RS | RS_ruled)
     use_hw_cost: bool = True                     # Flag to use or not hw cost in simulation
-    hw_backend: str = "nvdla"                    # hw backend for profiling, "nvdla" or "ember"
+    hw_backend: str = "ember"                    # hw backend for profiling, "nvdla" or "ember"
     suggest_net_opt: bool = True                # flag to accept suggestions for network optimization
     suggest_hw_opt: bool = True                 # flag to accept suggestions for hardware optimization
 
