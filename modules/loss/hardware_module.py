@@ -16,7 +16,9 @@ sys.path.append(str(EMBER_PATH))
 
 # path alla cartella dei file di configurazione dei backend hardware
 SPECS_PATH = TUNER_ROOT / "nvdla" / "specs"
-EMBER_SPECS_PATH = EMBER_PATH / "NVDLA-EMBER" / "specs"
+EMBER_SPECS_PATH = EMBER_PATH / "NVDLA-EMBER" / "specs" / "hw_configs"
+TEMP_LOG_DIR = EMBER_PATH / "test_logs"
+
 
 from components.colors import colors
 from modules.common_interface import common_interface
@@ -25,10 +27,6 @@ from components.model_interface import LayerTypes, Params, LayerSpec
 import nvdla.profiler as profiler
 from exp_config import load_cfg
 from profiler_ember import SimpleCNN, profile_network as ember_profile_network 
-
-# path alla cartella dei file di configurazione dei backend hardware
-SPECS_PATH = TUNER_ROOT / "nvdla" / "specs"
-EMBER_SPECS_PATH = EMBER_PATH / "NVDLA-EMBER" / "specs"
 
 
 class hardware_module(common_interface):
@@ -116,9 +114,10 @@ class hardware_module(common_interface):
                     'path': spec_file.name,
                     'cost': 0,
                     'latency': spec.get("axi-dbb", {}).get("latency", 0),
-                    'total_cost': 0
+                    'total_cost': 0,
                     # possibile aggiungere altre metriche specifiche di EMBER qui
                     # per poi filtrare senza bisogno di riaprire i file yaml
+                    'dtype': spec.get("dat-type", "unknown")
                 }
 
         if not self.nvdla:
@@ -141,18 +140,21 @@ class hardware_module(common_interface):
     def update_state(self, *args):
         # import current model reference
         self.model = args[0]
-        
+        list_to_pop = []
         # for each configuration calculate the latency and the total cost
         for config_key in self.nvdla:
             
             config_path = self.specs_dir / self.nvdla[config_key]['path']
+            d_type = self.nvdla[config_key]['dtype']
 
             # skip the configuration if it doesen't respect some constraints
-            if not self.hw_supports_net(self.model, config_path): #, self.nvdla[config_key]):
+            if not self.hw_supports_net(self.model, config_path) or d_type != "int8": #, self.nvdla[config_key]):
                 #remove the configuration from the list of available configurations
-                self.nvdla.pop(config_key)
+                list_to_pop.append(config_key)
                 print(colors.WARNING, f"|  --------- {config_key} CONFIGURATION NOT COMPATIBLE WITH THE CURRENT MODEL  -------  |\n", colors.ENDC)
                 continue
+            else:
+                print(colors.OKGREEN, f"|  --------- {config_key} CONFIGURATION COMPATIBLE WITH THE CURRENT MODEL  -------  |\n", colors.ENDC)
 
             self.nvdla[config_key]['latency'] = self.get_model_latency(self.model, config_path) / (10**9)
             
@@ -166,6 +168,8 @@ class hardware_module(common_interface):
 
             self.nvdla[config_key]['total_cost'] = round(total, 4)
         
+        for config_key_to_pop in list_to_pop:
+            self.nvdla.pop(config_key_to_pop)
         # sort the configurations by cost
         # this will be useful to determine the optimal configuration
         sorted_config = dict(sorted(self.nvdla.items(), key=lambda item: item[1]['total_cost']))
@@ -207,11 +211,6 @@ class hardware_module(common_interface):
         total_latency = 0
         batch = 1
 
-        work_p = os.getcwd()
-        config_p = Path(work_p).joinpath('nvdla').joinpath('specs').joinpath(config_path)
-        nvdla_profiler = profiler.nvdla(config_p)
-        log_file = "profiler_logs.txt"
-
         #flag Pytorch o TF
         framework = self.cfg.get("backend", "torch")
         if framework not in ["torch", "tf"]:
@@ -220,6 +219,11 @@ class hardware_module(common_interface):
         hw_backend = self.cfg.hw_backend
 
         if hw_backend == "nvdla":
+            work_p = os.getcwd()
+            config_p = Path(work_p).joinpath('nvdla').joinpath('specs').joinpath(config_path)
+            nvdla_profiler = profiler.nvdla(config_p)
+            log_file = "profiler_logs.txt"
+
             print("[INFO] Using DEFAULT hardware backend")
             for layer_spec in self.model.layers.values():
                 if layer_spec.type == LayerTypes.Conv2D:
@@ -247,21 +251,16 @@ class hardware_module(common_interface):
         elif hw_backend == "ember":
             print("[INFO] Using EMBER hardware backend")
 
-            #set the path to the configuration file of the hardware backend
-            ember_config = EMBER_SPECS_PATH / "nv_large2048_int8.yaml"
-
             #model = SimpleCNN() 
             dummy_input = torch.randint(0, 256, (1, 3, 32, 32)) 
-           
-            # directory temporanea per i log
-            with tempfile.TemporaryDirectory() as outdir:
-                # esecuzione del profiler_ember
-                total_latency = ember_profile_network(
-                    model,
-                    dummy_input,
-                    str(ember_config),
-                    outdir
-                )
+        
+            # esecuzione del profiler_ember
+            total_latency = ember_profile_network(
+                model,
+                dummy_input,
+                str(config_path),
+                str(TEMP_LOG_DIR)
+            )
                 
             return total_latency
 
@@ -298,6 +297,14 @@ class hardware_module(common_interface):
                 # suggestions for network optimization here
             else:
                 print("Latency is within the acceptable range.")
+
+
+    def hw_supports_net(self, model, config_path): #, self.nvdla[config_key]):
+        # Check if the hardware configuration supports the given model
+        # it can open the yaml file and check for specific constraints or it can be based on some predefined rules based on the config info
+
+        # code to check compatibility between model and hardware configuration here
+        return True
 
 
 if __name__ == "__main__":
