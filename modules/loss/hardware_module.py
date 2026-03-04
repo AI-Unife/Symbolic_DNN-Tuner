@@ -392,8 +392,7 @@ class hardware_module(common_interface):
 
 if __name__ == "__main__":
     hw_module = hardware_module()
-    model = SimpleCNN() 
-    #hw_module.update_state(model)
+    model = SimpleCNN()
     hw_module.update_state(model, input_shape=(3, 32, 32))
     hw_module.printing_values()
     hw_module.suggest_optimization()
