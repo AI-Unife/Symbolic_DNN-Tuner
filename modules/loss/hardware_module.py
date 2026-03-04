@@ -110,14 +110,35 @@ class hardware_module(common_interface):
 
                 current_cost = 0
 
+                # parameter extraction
+                max_batch = spec.get("cmac", {}).get("batch-size", 1)
+
+                # Feature buffer entries
+                datbuf = spec.get("cbuf", {}).get("datbuf", {})
+                ft_buf_entries = (
+                    datbuf.get("num-banks", 0) *
+                    datbuf.get("bank-depth", 0)
+                )
+
+                # Output buffer entries
+                cacc = spec.get("cacc", {})
+                out_buf_entries = (
+                    cacc.get("num-banks", 0) *
+                    cacc.get("bank-depth", 0)
+                )
+
+                # saving the configuration info in the nvdla dict
                 self.nvdla[config_name] = {
                     'path': spec_file.name,
                     'cost': 0,
                     'latency': spec.get("axi-dbb", {}).get("latency", 0),
                     'total_cost': 0,
-                    # possibile aggiungere altre metriche specifiche di EMBER qui
-                    # per poi filtrare senza bisogno di riaprire i file yaml
-                    'dtype': spec.get("dat-type", "unknown")
+                    'dtype': spec.get("dat-type", "unknown"),
+
+                    # hw metrics for optimization suggestions
+                    'max_batch': max_batch,
+                    'ft_buf_entries': ft_buf_entries,
+                    'out_buf_entries': out_buf_entries
                 }
 
         if not self.nvdla:
@@ -137,9 +158,10 @@ class hardware_module(common_interface):
         self.suggest_hw_opt = self.cfg.get('suggest_hw_opt', True)
 
     
-    def update_state(self, *args):
+    def update_state(self, model, input_shape=None):
         # import current model reference
-        self.model = args[0]
+        self.model = model
+        self.input_shape = input_shape
         list_to_pop = []
         # for each configuration calculate the latency and the total cost
         for config_key in self.nvdla:
@@ -148,10 +170,10 @@ class hardware_module(common_interface):
             d_type = self.nvdla[config_key]['dtype']
 
             # skip the configuration if it doesen't respect some constraints
-            if not self.hw_supports_net(self.model, config_path) or d_type != "int8": #, self.nvdla[config_key]):
+            if not self.hw_supports_net(self.model, self.nvdla[config_key]) or d_type != "int8": #, self.nvdla[config_key]):
                 #remove the configuration from the list of available configurations
                 list_to_pop.append(config_key)
-                print(colors.WARNING, f"|  --------- {config_key} CONFIGURATION NOT COMPATIBLE WITH THE CURRENT MODEL  -------  |\n", colors.ENDC)
+                print(colors.FAIL, f"|  --------- {config_key} CONFIGURATION NOT COMPATIBLE WITH THE CURRENT MODEL  -------  |\n", colors.ENDC)
                 continue
             else:
                 print(colors.OKGREEN, f"|  --------- {config_key} CONFIGURATION COMPATIBLE WITH THE CURRENT MODEL  -------  |\n", colors.ENDC)
@@ -299,18 +321,80 @@ class hardware_module(common_interface):
                 print("Latency is within the acceptable range.")
 
 
-    def hw_supports_net(self, model, config_path): #, self.nvdla[config_key]):
-        # Check if the hardware configuration supports the given model
-        # it can open the yaml file and check for specific constraints or it can be based on some predefined rules based on the config info
+    def hw_supports_net(self, model, dict_config):
+        """
+        Checks if the hardware specified by dict_config can run the model.
+        Uses forward hooks to extract the tensor dimensions of Conv2D layers.
+        Batch size is set to 1.
+        """
 
-        # code to check compatibility between model and hardware configuration here
-        return True
+        max_batch = dict_config.get("max_batch", 1)
+        ft_buf_entries = dict_config.get("ft_buf_entries", 0)
+        out_buf_entries = dict_config.get("out_buf_entries", 0)
+        compatible = True
+
+        conv_layers = []
+
+        # Hook function: salva input/output shape dei layer Conv2D
+        def hook_fn(module, input, output):
+            if isinstance(module, nn.Conv2d):
+                conv_layers.append((input[0].shape, output.shape))
+
+        # Registro hook su tutti i moduli del modello
+        hooks = [m.register_forward_hook(hook_fn) for m in model.modules()]
+
+        print("Hooks registered:", len(hooks))
+
+        # Determino input automaticamente dal primo layer Conv2d
+        first_conv = next((m for m in model.modules() if isinstance(m, nn.Conv2d)), None)
+        if first_conv is None:
+            print(colors.FAIL, "No Conv2d layer found in model")
+            for h in hooks: h.remove()
+            return False
+
+        # assumiamo batch=1
+        B_eff = 1
+        C_in, H_in, W_in = self.input_shape
+        dummy_input = torch.randn(1, C_in, H_in, W_in)
+        
+        try:
+            dummy_input = torch.randn(B_eff, C_in, H_in, W_in)
+            model.eval()
+            with torch.no_grad():
+                model(dummy_input)
+        except Exception as e:
+            print(colors.FAIL, f"Failed to run dummy forward: {e}", colors.ENDC)
+            for h in hooks: h.remove()
+            return False
+        
+        print("Conv layers captured:", len(conv_layers))
+                
+        # Rimuovo gli hook
+        for h in hooks:
+            h.remove()
+
+        # Controllo buffer per ogni layer convoluzionale
+        for idx, (input_shape, output_shape) in enumerate(conv_layers):
+            B, C, H, W = input_shape
+            entries_feat = H * W * min(B, max_batch)
+            if entries_feat > ft_buf_entries:
+                print(colors.FAIL, f"[WARN] Layer {idx} -> Feature buffer overflow: {entries_feat} > {ft_buf_entries}", colors.ENDC)
+                compatible = False
+
+            B, K, H_out, W_out = output_shape
+            entries_out = H_out * W_out * min(B, max_batch)
+            if entries_out > out_buf_entries:
+                print(colors.FAIL, f"[WARN] Layer {idx} -> Output buffer overflow: {entries_out} > {out_buf_entries}", colors.ENDC)
+                compatible = False
+
+        return compatible
 
 
 if __name__ == "__main__":
     hw_module = hardware_module()
     model = SimpleCNN() 
-    hw_module.update_state(model)
+    #hw_module.update_state(model)
+    hw_module.update_state(model, input_shape=(3, 32, 32))
     hw_module.printing_values()
     hw_module.suggest_optimization()
 
