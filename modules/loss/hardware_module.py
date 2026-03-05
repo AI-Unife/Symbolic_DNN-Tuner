@@ -131,7 +131,7 @@ class hardware_module(common_interface):
                 self.nvdla[config_name] = {
                     'path': spec_file.name,
                     'cost': 0,
-                    'latency': spec.get("axi-dbb", {}).get("latency", 0),
+                    'latency': 0,
                     'total_cost': 0,
                     'dtype': spec.get("dat-type", "unknown"),
 
@@ -163,6 +163,7 @@ class hardware_module(common_interface):
         self.model = model
         self.input_shape = input_shape
         list_to_pop = []
+
         # for each configuration calculate the latency and the total cost
         for config_key in self.nvdla:
             
@@ -170,13 +171,13 @@ class hardware_module(common_interface):
             d_type = self.nvdla[config_key]['dtype']
 
             # skip the configuration if it doesen't respect some constraints
-            if not self.hw_supports_net(self.model, self.nvdla[config_key]) or d_type != "int8": #, self.nvdla[config_key]):
+            if (self.cfg.hw_backend == "ember") and (not self.hw_supports_net(self.model, self.nvdla[config_key]) or d_type != "int8"): 
                 #remove the configuration from the list of available configurations
                 list_to_pop.append(config_key)
-                print(colors.FAIL, f"|  --------- {config_key} CONFIGURATION NOT COMPATIBLE WITH THE CURRENT MODEL  -------  |\n", colors.ENDC)
+                print(colors.WARNING, f"\n[WARN] {config_key} CONFIGURATION NOT COMPATIBLE WITH THE CURRENT MODEL\n", colors.ENDC)
                 continue
             else:
-                print(colors.OKGREEN, f"|  --------- {config_key} CONFIGURATION COMPATIBLE WITH THE CURRENT MODEL  -------  |\n", colors.ENDC)
+                print(colors.OKGREEN, f"\n[OK] {config_key} CONFIGURATION COMPATIBLE WITH THE CURRENT MODEL\n", colors.ENDC)
 
             self.nvdla[config_key]['latency'] = self.get_model_latency(self.model, config_path) / (10**9)
             
@@ -189,9 +190,11 @@ class hardware_module(common_interface):
                 total = latency_temp  # solo latenza
 
             self.nvdla[config_key]['total_cost'] = round(total, 4)
-        
+
+        # remove the configurations that are not compatible with the current model
         for config_key_to_pop in list_to_pop:
             self.nvdla.pop(config_key_to_pop)
+
         # sort the configurations by cost
         # this will be useful to determine the optimal configuration
         sorted_config = dict(sorted(self.nvdla.items(), key=lambda item: item[1]['total_cost']))
@@ -295,6 +298,7 @@ class hardware_module(common_interface):
         else:
             raise ValueError(f"Unsupported hw_backend: {hw_backend}")
 
+
     def suggest_optimization(self):
         if hw_module.suggest_hw_opt:
             print("\n[INFO] Suggesting hardware optimization...")
@@ -343,12 +347,12 @@ class hardware_module(common_interface):
         # Registro hook su tutti i moduli del modello
         hooks = [m.register_forward_hook(hook_fn) for m in model.modules()]
 
-        print("Hooks registered:", len(hooks))
+        #print("Hooks registered:", len(hooks))
 
         # Determino input automaticamente dal primo layer Conv2d
         first_conv = next((m for m in model.modules() if isinstance(m, nn.Conv2d)), None)
         if first_conv is None:
-            print(colors.FAIL, "No Conv2d layer found in model")
+            print(colors.WARNING, f"\n[WARN] No Conv2d layer found in model", colors.ENDC)
             for h in hooks: h.remove()
             return False
 
@@ -363,11 +367,11 @@ class hardware_module(common_interface):
             with torch.no_grad():
                 model(dummy_input)
         except Exception as e:
-            print(colors.FAIL, f"Failed to run dummy forward: {e}", colors.ENDC)
+            print(colors.WARNING, f"\n[WARN] Failed to run dummy forward: {e}", colors.ENDC)
             for h in hooks: h.remove()
             return False
         
-        print("Conv layers captured:", len(conv_layers))
+        #print("Conv layers captured:", len(conv_layers))
                 
         # Rimuovo gli hook
         for h in hooks:
@@ -378,13 +382,13 @@ class hardware_module(common_interface):
             B, C, H, W = input_shape
             entries_feat = H * W * min(B, max_batch)
             if entries_feat > ft_buf_entries:
-                print(colors.FAIL, f"[WARN] Layer {idx} -> Feature buffer overflow: {entries_feat} > {ft_buf_entries}", colors.ENDC)
+                print(colors.WARNING, f"\n[WARN] Layer {idx} -> Feature buffer overflow: {entries_feat} > {ft_buf_entries}", colors.ENDC)
                 compatible = False
 
             B, K, H_out, W_out = output_shape
             entries_out = H_out * W_out * min(B, max_batch)
             if entries_out > out_buf_entries:
-                print(colors.FAIL, f"[WARN] Layer {idx} -> Output buffer overflow: {entries_out} > {out_buf_entries}", colors.ENDC)
+                print(colors.WARNING, f"\n[WARN] Layer {idx} -> Output buffer overflow: {entries_out} > {out_buf_entries}", colors.ENDC)
                 compatible = False
 
         return compatible
