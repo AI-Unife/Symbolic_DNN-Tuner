@@ -300,11 +300,13 @@ class hardware_module(common_interface):
 
 
     def suggest_optimization(self):
+        """
+        Suggest hardware and network optimizations based 
+        on the current latency and cost values."""
         if hw_module.suggest_hw_opt:
             print("\n[INFO] Suggesting hardware optimization...")
             print(f"Current configuration: {hw_module.current_config} with latency {hw_module.latency} s and cost {hw_module.cost}$")
-            # crea una copia del file yaml di configurazione per suggerire un'ottimizzazione hardware
-            # e crea un nuovo file yaml con la configurazione ottimizzata
+            # create a new config file with the suggested optimization 
             optimized_config_path = hw_module.specs_dir / f"optimized_{hw_module.current_config}"
             with open(hw_module.specs_dir / hw_module.nvdla[hw_module.current_config]['path'], 'r') as f:
                 config_data = f.read()
@@ -329,8 +331,7 @@ class hardware_module(common_interface):
         """
         Checks if the hardware specified by dict_config can run the model.
         Uses forward hooks to extract the tensor dimensions of Conv2D layers.
-        Batch size is set to 1.
-        """
+        Batch size is set to 1."""
 
         max_batch = dict_config.get("max_batch", 1)
         ft_buf_entries = dict_config.get("ft_buf_entries", 0)
@@ -344,19 +345,19 @@ class hardware_module(common_interface):
             if isinstance(module, nn.Conv2d):
                 conv_layers.append((input[0].shape, output.shape))
 
-        # Registro hook su tutti i moduli del modello
+        # register hook on all modules
         hooks = [m.register_forward_hook(hook_fn) for m in model.modules()]
 
         #print("Hooks registered:", len(hooks))
 
-        # Determino input automaticamente dal primo layer Conv2d
+        # auto determine input shape from the first Conv2D layer
         first_conv = next((m for m in model.modules() if isinstance(m, nn.Conv2d)), None)
         if first_conv is None:
             print(colors.WARNING, f"\n[WARN] No Conv2d layer found in model", colors.ENDC)
             for h in hooks: h.remove()
             return False
 
-        # assumiamo batch=1
+        # batch=1
         B_eff = 1
         C_in, H_in, W_in = self.input_shape
         dummy_input = torch.randn(1, C_in, H_in, W_in)
@@ -373,11 +374,11 @@ class hardware_module(common_interface):
         
         #print("Conv layers captured:", len(conv_layers))
                 
-        # Rimuovo gli hook
+        # remove hook
         for h in hooks:
             h.remove()
 
-        # Controllo buffer per ogni layer convoluzionale
+        # check buffer entries for each conv layer
         for idx, (input_shape, output_shape) in enumerate(conv_layers):
             B, C, H, W = input_shape
             entries_feat = H * W * min(B, max_batch)
@@ -400,4 +401,3 @@ if __name__ == "__main__":
     hw_module.update_state(model, input_shape=(3, 32, 32))
     hw_module.printing_values()
     hw_module.suggest_optimization()
-
