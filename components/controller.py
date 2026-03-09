@@ -90,7 +90,7 @@ class controller:
         }
         self.lacc: float = lacc_dict.get(self.exp_cfg.dataset, 0.20)
         self.hloss: float = np.log(self.dataset.n_classes)
-        self.acc_w = 0.9  # weight of accuracy in combined score
+        self.acc_w = 0.7  # weight of accuracy in combined score
         self.vanish_th = 1e-8
         self.exploding_th = 100.0
 
@@ -304,6 +304,11 @@ class controller:
             
             self.modules.state(self.model, self.nn.flops, self.nn.nparams)
             self.score = PENALTY_SCORE
+            # 5. Logging
+            self.log()
+            self.modules.print()
+            self.modules.log()
+            self.iter += 1
 
 
         # 6. Best Model Tracking

@@ -195,12 +195,12 @@ class NeuralNetwork(BaseNeuralNetwork):
         tf.keras.backend.clear_session()
         if (self.exp_cfg.mode in ("fwdPass", "hybrid")) and "gesture" in self.exp_cfg.dataset :
             input_shape = self.dataset.X_train.shape[2:]  # (H, W, C) for gesture pipeline
+            pos_input_shape = self.dataset.pos_train.shape[2:] if self.is_roi else None
         else:
             input_shape = self.dataset.X_train.shape[1:]  # generic (H, W, C)
+            pos_input_shape = self.dataset.pos_train.shape[1:] if self.is_roi else None
         
-        # Get pos_input_shape if ROI dataset
-        pos_input_shape = self.dataset.pos_train.shape[1:] if self.is_roi else None
-        
+        print(f"Building model with input_shape={input_shape}, pos_input_shape={pos_input_shape}, layer_x_block={layer_x_block}")
         # Model will handle separate branches
         self.model = TFModel(
             input_shape=input_shape,
@@ -217,13 +217,15 @@ class NeuralNetwork(BaseNeuralNetwork):
             # Use same shape logic as build_network: shape[2:] for gesture fwdPass/hybrid data
             if (self.exp_cfg.mode in ("fwdPass", "hybrid")) and "gesture" in self.exp_cfg.dataset:
                 data_shape = self.dataset.X_train.shape[2:]
+                if self.is_roi:
+                    pos_shape = self.dataset.pos_train.shape[2:]
             else:
                 data_shape = self.dataset.X_train.shape[1:]
+                if self.is_roi:
+                    pos_shape = self.dataset.pos_train.shape[1:]
             
             if self.is_roi:
                 # For ROI: pass both data and pos input shapes
-                # Position always uses shape[1:] (it's not spatiotemporal like data)
-                pos_shape = self.dataset.pos_train.shape[1:]
                 input_shapes = [data_shape, pos_shape]
             else:
                 # For regular: pass only data input shape
@@ -297,7 +299,7 @@ class NeuralNetwork(BaseNeuralNetwork):
         self.model.optimizer = opt
 
         # --- Callbacks ---
-        es = EarlyStopping(monitor="val_accuracy", min_delta=0.005, patience=20, verbose=1,
+        es = EarlyStopping(monitor="val_accuracy", min_delta=0.005, patience=30, verbose=1,
                             mode="max", restore_best_weights=True)
         # --- Compile ---
         self.model.model.compile(loss="categorical_crossentropy", optimizer=opt, metrics=["accuracy"])

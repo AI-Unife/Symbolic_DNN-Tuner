@@ -48,7 +48,7 @@ class TFModel(TunerModel):
         self.reg = params.get("l2_regularization", False)
         self.da = params.get("data_augmentation", False)
 
-        batch = False #True #self.exp_cfg.dataset == 'tinyimagenet'
+        batch = self.reg.l2() if self.reg else None
         self.model = None
         # 2) Build a new CNN
 

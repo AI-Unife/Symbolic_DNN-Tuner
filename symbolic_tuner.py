@@ -227,11 +227,11 @@ def parse_args() -> argparse.Namespace:
                         help='quantize the network')
     parser.add_argument("--verbose", type=int, default=2, 
                         help="Verbosity level (0: silent, 1: print space, 2: print space and model summary)")
-    parser.add_argument('--w_flops', type=float, default=0.1,
+    parser.add_argument('--w_flops', type=float, default=0.3,
                         help="Weight Flops loss")
     parser.add_argument('--w_HW', type=float, default=0.33,
                         help="Weight HW loss")
-    parser.add_argument('--lacc', type=float, default=0.40,
+    parser.add_argument('--lacc', type=float, default=0.30,
                         help="if 1-acc>lacc --> Underfitting")
     parser.add_argument('--flops_th', type=int, default=150000000,
                          help="Max number of FLOPS")

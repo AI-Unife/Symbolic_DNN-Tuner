@@ -221,7 +221,14 @@ def reshape_x_pos(arr: np.ndarray, pos: Optional[np.ndarray], cfg) -> Tuple[np.n
         pos_out = None
         if pos is not None and hasattr(pos, "ndim") and pos.ndim == 4:
             try:
-                pos_out = np.transpose(pos, (0, 2, 3, 1))
+                T, C, H, W = pos.shape  # C should be 2
+                assert T % cfg.channels == 0, f"T={T} not divisible by NUM_CHANNELS={cfg.channels}"
+                # Group frames: (T//NUM_CHANNELS, NUM_CHANNELS, C, H, W)
+                grouped = pos.reshape(T // cfg.channels, cfg.channels, C, H, W)
+                # Move to (T', H, W, NUM_CHANNELS, C)
+                transposed = grouped.transpose(0, 3, 4, 1, 2)
+                # Merge channel dims -> (T', H, W, NUM_CHANNELS*C) == (T', H, W, 2*NUM_CHANNELS)
+                pos_out = transposed.reshape(T // cfg.channels, H, W, cfg.channels * C)
             except Exception:
                 pos_out = None
         return x_final, pos_out
@@ -229,6 +236,7 @@ def reshape_x_pos(arr: np.ndarray, pos: Optional[np.ndarray], cfg) -> Tuple[np.n
     else:  # "depth" or any other single-frame mode
         # [T, 2, H, W] -> assume polarity transform reduced to [T, H, W] or similar
         # If still [T, 2, H, W], collapse polarity by sum; otherwise, keep as is.
+        print(f"Reshaping for depth mode: input shape {arr.shape}")
         if arr.ndim == 4 and arr.shape[1] == 2:
             arr = arr.sum(axis=1)  # simple collapse to [H, W] (choose your policy)
         # Ensure shape is [H, W] or [H, W, C]
@@ -236,11 +244,15 @@ def reshape_x_pos(arr: np.ndarray, pos: Optional[np.ndarray], cfg) -> Tuple[np.n
             arr = arr[..., None]  # [H, W, 1]
         elif arr.ndim == 3 and arr.shape[0] not in (1, 2, 3, 4):  # likely [T, H, W]
             arr = np.transpose(arr, (1, 2, 0))
-        if pos is not None and hasattr(pos, "ndim") and pos.ndim == 4:
+        print(f"Reshaping for depth mode: pos shape {pos.shape}")
+        if pos.ndim == 4 and pos.shape[1] == 1:
+            pos = pos.sum(axis=1)  # collapse polarity if still present
+        if pos is not None and hasattr(pos, "ndim"):
             if pos.ndim == 2:
                 pos = pos[..., None]  # [H, W, 1]
             elif pos.ndim == 3 and pos.shape[0] not in (1, 2, 3, 4):  # likely [T, H, W]
                 pos = np.transpose(pos, (1, 2, 0))
+        print(f"Reshaping for depth mode: output shape {arr.shape}, pos shape {pos.shape if pos is not None else None}")
         return arr, pos
 
 def dataset_to_numpy(dataset, cfg) -> Tuple[np.ndarray, np.ndarray]:
@@ -265,39 +277,68 @@ def dataset_to_numpy(dataset, cfg) -> Tuple[np.ndarray, np.ndarray]:
             events = x["data"]
             pos = x.get("pos", None)
             arr = np.array(events)
-            x_reshaped, _ = reshape_x_pos(arr, np.array(pos) if pos is not None else None, cfg)
+            x_reshaped, pos = reshape_x_pos(arr, np.array(pos) if pos is not None else None, cfg)
             if cfg.dataset == "roigesture_coords":
                 pos_mean = None
                 if pos is not None:
-                    # Example analysis: compute center of mass of ROI position map in first frame
-                    # A.shape = (16, 32, 32, 1)
-                    A = np.squeeze(pos, axis=1)  # -> (16, 32, 32)
-
-                    H, W = A.shape[1], A.shape[2]
-
-                    yy, xx = np.indices((H, W))  # yy, xx -> (32, 32)
-
-                    tot = A.sum(axis=(1, 2))  # (16,)
-
-                    mean_y = (A * yy).sum(axis=(1, 2)) / tot
-                    mean_x = (A * xx).sum(axis=(1, 2)) / tot
-
-                    pos_mean = np.stack([mean_y, mean_x], axis=1)  # (16, 2)
-                    x_list.append({"data": x_reshaped, "pos":pos_mean})
+                    # Compute center of mass for ROI position map
+                    # Handling different shapes based on cfg.mode:
+                    # - fwdPass: pos.shape = [T, H, W, 1] -> pos_mean.shape = [T, 2]
+                    # - hybrid:  pos.shape = [T', H, W, 2*NUM_CHANNELS] -> pos_mean.shape = [T', 2]
+                    # - depth:   pos.shape = [H, W, 1] or [H, W, C] -> pos_mean.shape = [2]
+                    
+                    if cfg.mode == "depth":
+                        # Single frame case: squeeze to [H, W] and compute one center of mass
+                        A = np.squeeze(pos)  # [H, W]
+                        if A.ndim == 1:  # Edge case: if becomes 1D, reshape back
+                            A = np.expand_dims(A, 0)
+                        if A.ndim == 2:
+                            H, W = A.shape
+                            yy, xx = np.indices((H, W))
+                            tot = A.sum()
+                            if tot > 0:
+                                mean_y = (A * yy).sum() / tot
+                                mean_x = (A * xx).sum() / tot
+                                pos_mean = np.array([mean_y, mean_x])  # (2,)
+                            else:
+                                pos_mean = np.array([0.0, 0.0])
+                    else:
+                        # Time-series case (fwdPass or hybrid): squeeze last dimension(s) to get [T, H, W]
+                        # Remove any singleton dimensions except the batch/time dimension
+                        A = pos.copy()
+                        # For fwdPass: [T, H, W, 1] -> squeeze -> [T, H, W]
+                        # For hybrid: [T', H, W, 2*NUM_CHANNELS] -> squeeze or flatten channels
+                        while A.ndim > 3 and (A.shape[-1] == 1 or A.shape[1] == 1):
+                            if A.shape[-1] == 1:
+                                A = np.squeeze(A, axis=-1)
+                            if A.shape[1] == 1:
+                                A = np.squeeze(A, axis=1)
+                        
+                        # Now A should be [T, H, W] or [T, H, W, C]
+                        if A.ndim == 4:
+                            # If still 4D (hybrid case), flatten channel dimension for COM calculation
+                            T, H, W, C = A.shape
+                            A = A.reshape(T, H, W, -1).sum(axis=3)  # [T, H, W]
+                        
+                        if A.ndim == 3:
+                            T, H, W = A.shape
+                            yy, xx = np.indices((H, W))  # [H, W], [H, W]
+                            
+                            # Compute center of mass for each time step
+                            tot = A.sum(axis=(1, 2))  # [T]
+                            # Avoid division by zero
+                            tot = np.where(tot > 0, tot, 1.0)
+                            
+                            mean_y = (A * yy).sum(axis=(1, 2)) / tot  # [T]
+                            mean_x = (A * xx).sum(axis=(1, 2)) / tot  # [T]
+                            
+                            pos_mean = np.stack([mean_y, mean_x], axis=1)  # [T, 2]
+                    
+                    x_list.append({"data": x_reshaped, "pos": pos_mean})
             elif cfg.dataset == "roigesture_matrix":
                 x_list.append({"data": x_reshaped, "pos":pos})
-            elif cfg.dataset == "roigesture_3D":
-                ## use pos as an additional channel by concatenating along the channel dimension
-                if pos is not None:
-                    pos_reshaped, _ = reshape_x_pos(np.array(pos), None, cfg)
-                    # Concatenate along channel dimension (last dim)
-                    x_combined = np.concatenate([x_reshaped, pos_reshaped], axis=-1)
-                    x_list.append(x_combined)
-                else:
-                    print("ERROR: pos is None for an ROI sample; using only data.")
-                    exit(-1)
             else:
-                print(f"ERROR: Unrecognized ROI dataset type '{cfg.dataset}'; expected 'roigesture_coords', 'roigesture_matrix', or 'roigesture_3D'.")
+                print(f"ERROR: Unrecognized ROI dataset type '{cfg.dataset}'; expected 'roigesture_coords', 'roigesture_matrix'.")
                 exit(-1)
         else:
             # Non-ROI: plain arrays
@@ -401,8 +442,6 @@ def get_ROI_numpy(cfg):
     """
     dataset_path = "rois_and_coordinates/datasets"
     cache_dir = f"./cache/DVS_ROI_{cfg.mode}_{cfg.frames}_{cfg.channels}/"
-    if cfg.mode != "fwdPass" and cfg.dataset == "roigesture_3D":
-        cache_dir = f"./cache/DVS_ROI_3D_{cfg.mode}_{cfg.frames}_{cfg.channels}/"
     # cache_dir = f"cache/DVS_ROI_{cfg.mode}_{polarity}_{cfg.frames}_{cfg.channels}_{n_pol}/"
     _ensure_cache_dir(cache_dir)
     print("cache_dir:", cache_dir)

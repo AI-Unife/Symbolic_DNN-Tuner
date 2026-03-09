@@ -87,6 +87,7 @@ def train_model(
     if is_roi:
         # ROI case: train_data = [data, pos]
         data_array, pos_array = train_data
+        print(f"Creating dataset with ROI inputs: data shape={data_array.shape}, pos shape={pos_array.shape}")
         # Create dataset where each sample is ((data_frame, pos_frame), label)
         # So when iterating, we get batch_input = (batch_data, batch_pos) and batch_y
         ds = tf.data.Dataset.from_tensor_slices(((data_array, pos_array), train_labels))
@@ -138,7 +139,7 @@ def train_model(
                 # batch_x[:, t] : [B, ...]
                 if is_roi:
                     # For ROI: pass both data and pos
-                    out_t = model([batch_x[:, t], batch_pos], training=True)  # [B, C]
+                    out_t = model([batch_x[:, t], batch_pos[:, t]], training=True)  # [B, C]
                 else:
                     out_t = model(batch_x[:, t], training=True)  # [B, C]
                 ta = ta.write(t, out_t)
@@ -214,7 +215,7 @@ def train_model(
             time_steps_val = test_data_array.shape[1]
             outputs_val_list = []
             for t in range(time_steps_val):
-                outputs_val_list.append(model([test_data_array[:, t], test_pos_array], training=False))
+                outputs_val_list.append(model([test_data_array[:, t], test_pos_array[:, t]], training=False))
             val_outputs = tf.stack(outputs_val_list, axis=1)  # [B_val, T, C]
         else:
             time_steps_val = test_data.shape[1]
@@ -241,6 +242,11 @@ def train_model(
         logs = {"loss": avg_loss, "accuracy": avg_acc, "val_loss": val_loss, "val_accuracy": val_acc}
         for cb in callbacks:
             cb.on_epoch_end(epoch, logs)
+        
+        # Check if any callback (e.g., EarlyStopping) requested to stop training
+        if model.stop_training:
+            print(f"Stopping training at epoch {epoch + 1}/{epochs} (EarlyStopping triggered)")
+            break
 
     for cb in callbacks:
         cb.on_train_end()
@@ -282,7 +288,7 @@ def eval_model(model: tf.keras.Model, X, y: tf.Tensor) -> Tuple[float, float]:
 
     for t in range(time_steps):
         if is_roi:
-            outputs_val_list.append(model([X_data[:, t], X_pos], training=False))
+            outputs_val_list.append(model([X_data[:, t], X_pos[:, t]], training=False))
         else:
             outputs_val_list.append(model(X_data[:, t], training=False))
 

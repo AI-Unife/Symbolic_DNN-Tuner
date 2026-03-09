@@ -31,7 +31,7 @@ class NeuralNetwork (ABC):
         # Check if ROI dataset (has pos_train attribute)
         self.is_roi = hasattr(self.dataset, 'pos_train') and self.dataset.pos_train is not None
         print(f"Initialized NeuralNetwork with dataset. ROI mode: {self.is_roi}")
-        self.dataset.normalize_data()
+        self.dataset.data_as_float32()
 
         self.exp_cfg = load_cfg()
         self.n_classes = self.dataset.n_classes

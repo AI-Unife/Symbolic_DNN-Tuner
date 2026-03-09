@@ -117,7 +117,7 @@ def _validate(d: Dict[str, Any]) -> None:
         d['backend'] = 'tf'
     
     # dataset
-    dataset = d.get("dataset", "light")
+    dataset = d.get("dataset", "light").lower().replace("-", "")
     if dataset not in _VALID_DATASETS:
         print(f"WARNING: Invalid dataset '{dataset}'. Choose from: {sorted(_VALID_DATASETS)}. Set to 'light'")
         d['dataset'] = 'light'
