@@ -11,7 +11,7 @@ from components.lfi_integration import LfiIntegration
 from components.storing_experience import StoringExperience
 from components.improvement_checker import ImprovementChecker
 from components.integral import integrals
-from quantizer.quantizer_POTQ import quantizer_module
+# from quantizer.quantizer_POTQ import quantizer_module
 from exp_config import load_cfg
 
 from modules.module import module
@@ -99,6 +99,7 @@ class controller:
         self.modules = module(self.exp_cfg.mod_list)
         if "flops_module" in self.exp_cfg.mod_list:
             self.flops_th = self.modules.get_module("flops_module").flops_th
+            self.params_th = self.modules.get_module("flops_module").nparams_th
         if "hardware_module" in self.exp_cfg.mod_list:
             max_latency = self.modules.get_module("hardware_module").max_latency
             max_cost = self.modules.get_module("hardware_module").max_cost
@@ -277,12 +278,12 @@ class controller:
             
             # --- SCORING LOGIC ---
             ### TODO: Refactor this section for correct score return ###
-            if self.exp_cfg.quantization:
-                quantizer = quantizer_module(opt=params["optimizer"])
-                _ = quantizer.quantizer_function(self.model) 
-                q_loss, q_acc = quantizer.evaluate_quantized_model(self.dataset.X_test, self.dataset.Y_test)
-                self.score = -float(q_acc) 
-                quantizer.log_function()
+            # if self.exp_cfg.quantization:
+            #     quantizer = quantizer_module(opt=params["optimizer"])
+            #     _ = quantizer.quantizer_function(self.model)
+            #     q_loss, q_acc = quantizer.evaluate_quantized_model(self.dataset.X_test, self.dataset.Y_test)
+            #     self.score = -float(q_acc)
+            #     quantizer.log_function()
             
             if (len(self.modules.modules_obj) > 0) and self.modules.ready() and self.modules.all_zeros_weights():
                 _, _, opt_value = self.modules.optimiziation()
@@ -292,20 +293,20 @@ class controller:
             else:
                 self.score = -float(self.scoreNN[1]) 
 
+            # 5. Logging
+            self.log()
+            self.modules.print()
+            self.modules.log()
+            self.iter += 1
         else:
             # --- CONSTRAINT VIOLATION ---
             self.scoreNN, self.history, self.model = None, None, self.nn.model
-            
+
             self.modules.state(self.model, self.nn.flops, self.nn.nparams)
             self.score = PENALTY_SCORE
 
-        # 5. Logging
-        self.log()
-        self.modules.print()
-        self.modules.log()
 
         # 6. Best Model Tracking
-        self.iter += 1
         if self.score < self.best_score:
             print(f"[INFO] New Best Score: {self.score:.4f} (Previous: {self.best_score:.4f})")
             self.best_score = self.score
@@ -378,7 +379,7 @@ class controller:
                 facts_list_module = list(self.modules.values().values())
                 self.only_modules = True
             # First diagnosis iteration: assemble rule base from modules and build logic program
-            if self.iter == 1:
+            if self.iter <= 1:
                 self.rules, self.actions, self.problems = self.modules.get_rules()
 
                 for module, no_err in zip(self.modules.modules_obj, self.modules.modules_ready):
@@ -447,4 +448,19 @@ class controller:
             print(f"\nACCURACY: {0.0}\n")
             f.write("None \n")
         f.close()
+
+        f = open(f"{self.exp_cfg.name}/algorithm_logs/score_report.txt", "a")
+        if self.score is not None:
+            print(f"\nSCORE: {self.score}\n")
+            f.write(str(self.score) + "\n")
+        else:
+            print(f"\nSCORE: {0.0}\n")
+            f.write("None \n")
+        f.close()
+
+        if "flops_module" not in self.exp_cfg.mod_list:
+            f = open(f"{self.exp_cfg.name}/algorithm_logs/params_report.txt", "a")
+            params = self.backend.get_params(self.model)
+            f.write(str(params) + "\n")
+            f.close()
 
