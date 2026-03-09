@@ -236,7 +236,7 @@ def reshape_x_pos(arr: np.ndarray, pos: Optional[np.ndarray], cfg) -> Tuple[np.n
     else:  # "depth" or any other single-frame mode
         # [T, 2, H, W] -> assume polarity transform reduced to [T, H, W] or similar
         # If still [T, 2, H, W], collapse polarity by sum; otherwise, keep as is.
-        print(f"Reshaping for depth mode: input shape {arr.shape}")
+        # print(f"Reshaping for depth mode: input shape {arr.shape}")
         if arr.ndim == 4 and arr.shape[1] == 2:
             arr = arr.sum(axis=1)  # simple collapse to [H, W] (choose your policy)
         # Ensure shape is [H, W] or [H, W, C]
@@ -244,7 +244,7 @@ def reshape_x_pos(arr: np.ndarray, pos: Optional[np.ndarray], cfg) -> Tuple[np.n
             arr = arr[..., None]  # [H, W, 1]
         elif arr.ndim == 3 and arr.shape[0] not in (1, 2, 3, 4):  # likely [T, H, W]
             arr = np.transpose(arr, (1, 2, 0))
-        print(f"Reshaping for depth mode: pos shape {pos.shape}")
+        # print(f"Reshaping for depth mode: pos shape {pos.shape}")
         if pos.ndim == 4 and pos.shape[1] == 1:
             pos = pos.sum(axis=1)  # collapse polarity if still present
         if pos is not None and hasattr(pos, "ndim"):
@@ -252,7 +252,7 @@ def reshape_x_pos(arr: np.ndarray, pos: Optional[np.ndarray], cfg) -> Tuple[np.n
                 pos = pos[..., None]  # [H, W, 1]
             elif pos.ndim == 3 and pos.shape[0] not in (1, 2, 3, 4):  # likely [T, H, W]
                 pos = np.transpose(pos, (1, 2, 0))
-        print(f"Reshaping for depth mode: output shape {arr.shape}, pos shape {pos.shape if pos is not None else None}")
+        # print(f"Reshaping for depth mode: output shape {arr.shape}, pos shape {pos.shape if pos is not None else None}")
         return arr, pos
 
 def dataset_to_numpy(dataset, cfg) -> Tuple[np.ndarray, np.ndarray]:
