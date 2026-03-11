@@ -96,7 +96,7 @@ Nota: i launcher aggiungono il project root a `sys.path` per permettere import a
 
 - PyTorch (`pytorch_implementation/`)
   - `pytorch_implementation/main.py`: costruisce `TunerConfig` (nell'esempio usa `fixed_hyperparams` per delle esecuzioni riproducibili)
-  - `pytorch_implementation/neural_network.py`: training loop PyTorch e salvataggio `state_dict` e manifest
+  - `pytorch_implementation/neural_network.py`: training loop PyTorch e salvataggio full model (`model_path`) e manifest
   - `pytorch_implementation/model.py`: wrapper `TorchModel(TunerModel, nn.Module)` con `ModuleList` e ricostruzione layer
   - `pytorch_implementation/module_backend.py`: `get_flops()` via `torch.utils.flop_counter`
 
@@ -144,7 +144,7 @@ Checkpoint/manifest:
 - salva i pesi/modello in `Model/` e/o `Weights/`
 - chiama `self.save_manifest({...})` (definito in `components/neural_network.py`) includendo:
   - `params`, `input_shape`, `n_classes`
-  - puntatori al file pesi/modello (framework-specifici)
+  - puntatori al file pesi/modello (framework-specifici, es. `model_path` nel backend PyTorch)
 
 ### Step 3: implementare il backend per i moduli (`module_backend.py`)
 

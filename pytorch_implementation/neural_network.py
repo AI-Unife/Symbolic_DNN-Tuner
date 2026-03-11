@@ -73,18 +73,23 @@ class NeuralNetwork (NeuralNetwork):
             array = array[..., None]
         return torch.from_numpy(array).permute(0, 3, 1, 2).contiguous().float()
 
-    def from_checkpoint(self, manifest):
-        params = manifest["params"]
-        input_shape = tuple(manifest["input_shape"])
-        n_classes = manifest["n_classes"]
+    def _load_full_model(self, model_path: str):
+        try:
+            model = torch.load(model_path, map_location=self.device, weights_only=False)
+        except TypeError:
+            model = torch.load(model_path, map_location=self.device)
 
-        model = self.from_scratch(input_shape, n_classes, params)
-
-        state_dict_path = manifest.get("state_dict")
-        if state_dict_path:
-            model.load_state_dict(torch.load(state_dict_path, map_location=self.device))
+        if not isinstance(model, TorchModel):
+            raise TypeError(f"Expected TorchModel from checkpoint '{model_path}', got {type(model).__name__}")
 
         return model
+
+    def from_checkpoint(self, manifest):
+        model_path = manifest.get("model_path")
+        if not model_path:
+            raise ValueError("PyTorch checkpoint missing model_path")
+
+        return self._load_full_model(model_path)
 
     def from_scratch(self, input_shape, n_classes, params):
         activation_function = self.activation_map[params['activation']]
@@ -186,12 +191,12 @@ class NeuralNetwork (NeuralNetwork):
         # Save Model
         model_name_id = time()
         model_path = f"Model/model-{model_name_id}.pth"
-        torch.save(self.model.state_dict(), model_path)
+        torch.save(self.model, model_path)
 
         self.last_model_id = model_name_id
 
         self.save_manifest({
-            "state_dict": model_path,
+            "model_path": model_path,
             "params": params,
             "input_shape": list(input_shape),
             "n_classes": self.dataset.n_classes,
@@ -316,7 +321,8 @@ class NeuralNetwork (NeuralNetwork):
                 break
 
         # Load best model
-        self.model.load_state_dict(torch.load(model_path))
+        self.model = self._load_full_model(model_path)
+        self.model.to(self.device)
 
         return [best_val_loss, best_val_acc], history, self.model
     
