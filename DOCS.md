@@ -69,7 +69,7 @@ In pratica: ogni backend implementa un wrapper/modello che "parla" il linguaggio
 Alcuni moduli (es. `modules/loss/hardware_module.py`) hanno bisogno di funzioni "di servizio" che dipendono dal framework (es. calcolo FLOPs).
 
 - `components/backend_interface.py` definisce `BackendInterface`
-- ogni implementazione fornisce `get_flops(...)` e (se utile) mapping/inspection dei layer
+- ogni implementazione fornisce `get_flops(...)`
 
 ## Come si usa (TensorFlow / PyTorch)
 
@@ -153,7 +153,6 @@ Implementa `components.backend_interface.BackendInterface`, in particolare:
 - `get_flops(model, input_shapes)`:
   - deve restituire un numero (FLOPs totali) coerente con il tuo framework/modello
   - nota: `hardware_module` passa il `TunerModel` restituito dal training
-- opzionali: `get_layer_info`, `get_layers`, `get_input_shape`, `get_output_shape`
 
 ### Step 4: creare un launcher (`main.py`)
 
