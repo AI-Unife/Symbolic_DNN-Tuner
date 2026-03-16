@@ -101,6 +101,43 @@ class NeuralNetwork (NeuralNetwork):
             activation_function=activation_function
         )
 
+    @staticmethod
+    def _l2_penalty(model: TorchModel):
+        l2 = None
+        for module in model.modules():
+            if isinstance(module, nn.Conv2d) and module.weight is not None:
+                weight_norm = module.weight.pow(2).sum()
+                l2 = weight_norm if l2 is None else l2 + weight_norm
+
+        if l2 is None:
+            return torch.tensor(0.0, device=next(model.parameters()).device)
+
+        return l2
+
+    def _evaluate(self, data_loader, criterion, params):
+        self.model.eval()
+        total_loss = 0.0
+        total_correct = 0
+        total_samples = 0
+
+        with torch.no_grad():
+            for inputs, labels in data_loader:
+                inputs, labels = inputs.to(self.device), labels.to(self.device)
+                outputs = self.model(inputs)
+                loss = criterion(outputs, labels)
+
+                if self.rgl:
+                    loss = loss + params['reg'] * self._l2_penalty(self.model)
+
+                batch_size = labels.size(0)
+                total_loss += loss.item() * batch_size
+                total_correct += (outputs.argmax(1) == labels).sum().item()
+                total_samples += batch_size
+
+        val_loss = total_loss / total_samples
+        val_acc = total_correct / total_samples
+        return val_loss, val_acc
+
     def insert_batch(self, model: TunerModel, params):
         """
         Inserts BatchNormalization operations into the PyTorch model.
@@ -188,19 +225,8 @@ class NeuralNetwork (NeuralNetwork):
         summary(self.model, [1, input_shape[2], input_shape[0], input_shape[1]])
         self.model.to(self.device)
 
-        # Save Model
         model_name_id = time()
-        model_path = f"Model/model-{model_name_id}.pth"
-        torch.save(self.model, model_path)
-
         self.last_model_id = model_name_id
-
-        self.save_manifest({
-            "model_path": model_path,
-            "params": params,
-            "input_shape": list(input_shape),
-            "n_classes": self.dataset.n_classes,
-        })
 
         # Define optimizer and loss function
         criterion = nn.CrossEntropyLoss()
@@ -216,7 +242,7 @@ class NeuralNetwork (NeuralNetwork):
             if not len(trainable_parameters):
                 continue
 
-            if module.type == LayerTypes.Conv2D:
+            if isinstance(module, nn.Conv2d):
                 lr = params["learning_rate"] * current_mul
                 current_mul /= lr_factor
             else:
@@ -259,7 +285,7 @@ class NeuralNetwork (NeuralNetwork):
 
         for epoch in range(self.epochs):
             self.model.train()
-            running_loss, correct = 0.0, 0
+            running_loss, correct, total_samples = 0.0, 0, 0
             for inputs, labels in train_loader:
                 inputs, labels = inputs.to(self.device), labels.to(self.device)
                 optimizer.zero_grad()
@@ -267,29 +293,19 @@ class NeuralNetwork (NeuralNetwork):
                 loss = criterion(outputs, labels)
                 # Regularization
                 if self.rgl:
-                    l2 = sum(p.pow(2).sum() for p in self.l2_params)
-                    loss = loss + params['reg'] * l2
+                    loss = loss + params['reg'] * self._l2_penalty(self.model)
                 loss.backward()
                 optimizer.step()
-                running_loss += loss.item()
+                batch_size = labels.size(0)
+                running_loss += loss.item() * batch_size
                 correct += (outputs.argmax(1) == labels).sum().item()
+                total_samples += batch_size
 
-            train_loss = running_loss / len(train_loader)
-            train_acc = correct / len(self.train_labels)
+            train_loss = running_loss / total_samples
+            train_acc = correct / total_samples
 
             # Validation
-            self.model.eval()
-            val_loss, val_correct = 0.0, 0
-            with torch.no_grad():
-                for inputs, labels in test_loader:
-                    inputs, labels = inputs.to(self.device), labels.to(self.device)
-                    outputs = self.model(inputs)
-                    loss = criterion(outputs, labels)
-                    val_loss += loss.item()
-                    val_correct += (outputs.argmax(1) == labels).sum().item()
-
-            val_loss /= len(test_loader)
-            val_acc = val_correct / len(self.test_labels)
+            val_loss, val_acc = self._evaluate(test_loader, criterion, params)
 
             # Update history
             history['loss'].append(train_loss)
@@ -320,10 +336,20 @@ class NeuralNetwork (NeuralNetwork):
                 print("Early stopping triggered.")
                 break
 
-        # Load best model
+        # Save and reload the trained model for checkpoint continuity across trials
+        model_path = f"Model/model-{model_name_id}.pth"
+        torch.save(self.model, model_path)
+        self.save_manifest({
+            "model_path": model_path,
+            "params": params,
+            "input_shape": list(input_shape),
+            "n_classes": self.dataset.n_classes,
+        })
+
         self.model = self._load_full_model(model_path)
         self.model.to(self.device)
 
-        return [best_val_loss, best_val_acc], history, self.model
+        score = self._evaluate(test_loader, criterion, params)
+        return [score[0], score[1]], history, self.model
     
     
