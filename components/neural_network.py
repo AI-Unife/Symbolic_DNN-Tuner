@@ -294,10 +294,11 @@ class NeuralNetwork (ABC):
                 if self.checkpoint_format == manifest["format"]:
                     return self.from_checkpoint(manifest)
 
+            return self.from_scratch(self.dataset.X_train.shape[1:], self.dataset.n_classes, params)
         except:
             print("=============== NUOVO MODELLO =================")
-        finally:
             return self.from_scratch(self.dataset.X_train.shape[1:], self.dataset.n_classes, params)
+            
 
     @abstractmethod
     def training(self, params, new, new_fc, new_conv, rem_conv, rem_fc, da, space):
