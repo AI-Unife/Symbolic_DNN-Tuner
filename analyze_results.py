@@ -213,7 +213,9 @@ class ResultsAnalyzer:
         if not flops_file.exists():
             flops_file = self.algorithm_logs_dir / "params_report.txt"
             if not flops_file.exists():
-                return None
+                flops_file = self.experiment_dir / "flops_report.txt"
+                if not flops_file.exists():
+                    return None
 
         flops_data = []
         try:
@@ -424,37 +426,61 @@ def analyze_all_experiments(parent_dir: Path, output_dir: Optional[Path] = None)
         
         # Collect info for total CSV
         best_result = analyzer.get_best_result()
-        if best_result:
-            summary_row = {
-                'experiment': exp_dir.name,
-                'best_iteration': best_result.iteration,
-                'best_accuracy': best_result.accuracy,
-                'best_score': best_result.score,
-                'best_nparams': best_result.nparams,
-                'best_flops': best_result.flops,
-                'best_latency': best_result.latency,
-                'best_hw_cost': best_result.hw_cost,
-                'best_hw_total_cost': best_result.hw_total_cost,
-                'best_hw_config': best_result.hw_config,
-            }
-            
-            # Add data from config.yaml with prefix 'config_'
-            for key, value in analyzer.config.items():
-                if key not in _EXCLUDED_CONFIG_KEYS:
-                    summary_row[f'{key}'] = value
-            
-            summary_data.append(summary_row)
+        
+        # Create a fake result if none found
+        if best_result is None:
+            print(f"  No valid results found, creating fake result\n")
+            best_result = ExperimentResult(
+                iteration=0,
+                accuracy=0.0,
+                flops=None,
+                nparams=None,
+                latency=None,
+                hw_cost=None,
+                hw_total_cost=None,
+                hw_config=None,
+                score=float('inf')
+            )
+        
+        summary_row = {
+            'experiment': exp_dir.name,
+            'best_iteration': best_result.iteration,
+            'best_accuracy': best_result.accuracy,
+            'best_score': best_result.score,
+            'best_nparams': best_result.nparams,
+            'best_flops': best_result.flops,
+            'best_latency': best_result.latency,
+            'best_hw_cost': best_result.hw_cost,
+            'best_hw_total_cost': best_result.hw_total_cost,
+            'best_hw_config': best_result.hw_config,
+        }
+        
+        # Add data from config.yaml with prefix 'config_'
+        for key, value in analyzer.config.items():
+            if key not in _EXCLUDED_CONFIG_KEYS:
+                summary_row[f'{key}'] = value
+        
+        summary_data.append(summary_row)
+        if best_result.score is not None and best_result.score != float('inf') and best_result.accuracy is not None:
             print(f"  Best result: iteration {best_result.iteration}, "
                   f"accuracy={best_result.accuracy:.4f}, score={best_result.score:.4f}\n")
         else:
-            print(f"  No valid results found\n")
+            print(f"  Fake result added (no valid results)\n")
     
     # Save total CSV
     if summary_data:
         summary_csv = output_dir / "summary_best_results.csv"
         try:
             with open(summary_csv, 'w', newline='') as f:
-                fieldnames = [col for col in summary_data[0].keys()]
+                # Collect all unique keys across all experiments
+                all_keys = []
+                seen = set()
+                for row in summary_data:
+                    for key in row.keys():
+                        if key not in seen:
+                            all_keys.append(key)
+                            seen.add(key)
+                fieldnames = all_keys
                 writer = csv.DictWriter(f, fieldnames=fieldnames)
                 writer.writeheader()
                 

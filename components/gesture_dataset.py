@@ -245,9 +245,9 @@ def reshape_x_pos(arr: np.ndarray, pos: Optional[np.ndarray], cfg) -> Tuple[np.n
         elif arr.ndim == 3 and arr.shape[0] not in (1, 2, 3, 4):  # likely [T, H, W]
             arr = np.transpose(arr, (1, 2, 0))
         # print(f"Reshaping for depth mode: pos shape {pos.shape}")
-        if pos.ndim == 4 and pos.shape[1] == 1:
-            pos = pos.sum(axis=1)  # collapse polarity if still present
         if pos is not None and hasattr(pos, "ndim"):
+            if pos.ndim == 4 and pos.shape[1] == 1:
+                pos = pos.sum(axis=1)  # collapse polarity if still present
             if pos.ndim == 2:
                 pos = pos[..., None]  # [H, W, 1]
             elif pos.ndim == 3 and pos.shape[0] not in (1, 2, 3, 4):  # likely [T, H, W]
@@ -289,9 +289,12 @@ def dataset_to_numpy(dataset, cfg) -> Tuple[np.ndarray, np.ndarray]:
                     
                     if cfg.mode == "depth":
                         # Single frame case: squeeze to [H, W] and compute one center of mass
-                        A = np.squeeze(pos)  # [H, W]
+                        A = np.squeeze(pos)  # Can be [H, W] or [H, W, C]
                         if A.ndim == 1:  # Edge case: if becomes 1D, reshape back
                             A = np.expand_dims(A, 0)
+                        # If 3D (H, W, C), sum over channels to get [H, W]
+                        if A.ndim == 3:
+                            A = A.sum(axis=2)  # Sum across all channels
                         if A.ndim == 2:
                             H, W = A.shape
                             yy, xx = np.indices((H, W))

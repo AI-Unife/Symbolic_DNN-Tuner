@@ -120,13 +120,13 @@ class LayerWiseLR(Optimizer):
             self._optimizer._create_slots(var_list)
 
     def get_config(self):
-        # Config del parent (include clipnorm/clipvalue, ecc.)
+        # Parent config (includes clipnorm/clipvalue, etc.)
         cfg = super().get_config()
 
-        # serializza l'optimizer interno in modo Keras-friendly
+        # serialize the inner optimizer in a Keras-friendly way
         base_opt_cfg = keras.optimizers.serialize(self._optimizer)
 
-        # multiplier deve essere JSON-serializzabile
+        # multiplier must be JSON-serializable
         mult_cfg = {str(k): float(v) if hasattr(v, "__float__") else v
                     for k, v in self._multiplier.items()}
 
@@ -139,7 +139,7 @@ class LayerWiseLR(Optimizer):
 
     @classmethod
     def from_config(cls, config):
-        # Estrai ciò che serve alla __init__
+        # Extract what is needed for __init__
         name = config.pop("name", "LWLR")
 
         opt_cfg = config.pop("optimizer", None)

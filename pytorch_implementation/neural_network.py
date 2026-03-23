@@ -264,7 +264,7 @@ class NeuralNetwork(BaseNeuralNetwork):
             if val_acc > best_val_acc + min_delta:
                 best_val_acc = val_acc
                 counter_acc = 0
-                if not saved: # Evita doppio salvataggio se ha già salvato per la loss
+                if not saved: # Avoid double save if already saved for loss
                     self.save_model(params)
                     print(f"  -> Model Saved (Best Acc: {best_val_acc:.4f})")
             else:
