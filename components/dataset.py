@@ -124,7 +124,7 @@ class TunerDataset:
         # print(self.X_train.shape[0], 'train samples')
         # print(self.X_test.shape[0], 'test samples')
         self.load_hf_dataset("cifar10", image_key="img", label_key="label")
-        # self.normalize_data()
+        self.normalize_data()
 
     def load_cifar_100(self):
         self.n_classes = 100
@@ -139,7 +139,7 @@ class TunerDataset:
         # print(self.X_test.shape[0], 'test samples')
 
         self.load_hf_dataset("cifar100", image_key="img", label_key="fine_label")
-        # self.normalize_data()
+        self.normalize_data()
 
     def load_mnist(self):
         self.n_classes = 10

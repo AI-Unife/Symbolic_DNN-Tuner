@@ -75,6 +75,7 @@ class DVSGestureROI(DVSGesture):
     def __init__(
         self,
         save_to: str,
+        output_size: Tuple,
         train: bool = True,
         transform: Optional[Callable] = None,
         target_transform: Optional[Callable] = None,
@@ -87,6 +88,11 @@ class DVSGestureROI(DVSGesture):
             transform=transform,
             target_transform=target_transform,
             transforms=transforms,
+        )
+        
+        self.output_size = output_size
+        self.location_on_system = (
+            self.location_on_system + f"_fs{self.output_size[0]}"
         )
         self.position_transform = position_transform
         self.train = train
@@ -443,8 +449,10 @@ def get_ROI_numpy(cfg):
     Returns:
         ((x_train, y_train), (x_test, y_test))
     """
-    dataset_path = "rois_and_coordinates/datasets"
-    cache_dir = f"./cache/DVS_ROI_{cfg.mode}_{cfg.frames}_{cfg.channels}/"
+    dataset_path = "rois_and_coordinates/datasets/"
+    cache_dir = f"./cache/DVS_ROI_fs16_{cfg.mode}_{cfg.frames}_{cfg.channels}/"
+    frame_size = 16
+    output_size = (frame_size, frame_size, 2)
     # cache_dir = f"cache/DVS_ROI_{cfg.mode}_{polarity}_{cfg.frames}_{cfg.channels}_{n_pol}/"
     _ensure_cache_dir(cache_dir)
     print("cache_dir:", cache_dir)
@@ -454,7 +462,7 @@ def get_ROI_numpy(cfg):
         # Reuse DVSGesture sensor size only as a (H,W) hint for downsampling,
         # since we target a fixed (64, 64) output anyway.
         # transforms.Downsample(sensor_size=tonic.datasets.DVSGesture.sensor_size, target_size=(64, 64)),
-        transforms.ToFrame(sensor_size=(32, 32, 2), n_time_bins=cfg.frames),
+        transforms.ToFrame(sensor_size=output_size, n_time_bins=cfg.frames),
     ]
 
     if cfg.mode == "fwdPass":
@@ -466,9 +474,11 @@ def get_ROI_numpy(cfg):
         target_transform = None
 
     transform = transforms.Compose(tfms)
+    
 
     train =  DVSGestureROI(
         dataset_path,
+        output_size=output_size,
         train=True,
         transform=transform,
         target_transform=target_transform,
@@ -477,6 +487,7 @@ def get_ROI_numpy(cfg):
     print("Loaded ROI training dataset with", len(train), "samples.")
     test = DVSGestureROI(
         dataset_path,
+        output_size=output_size,
         train=False,
         transform=transform,
         target_transform=target_transform,

@@ -16,20 +16,7 @@ from tensorflow.keras import Model
 from tensorflow import keras
 from tensorflow.keras.callbacks import TensorBoard, EarlyStopping
 from tensorflow.keras.optimizers import Optimizer
-from tensorflow.keras import backend as K
-from tensorflow.keras import regularizers as reg
-from tensorflow.keras.layers import (
-    Activation,
-    Conv2D,
-    Dense,
-    GlobalAveragePooling2D,
-    BatchNormalization,
-    Flatten,
-    MaxPooling2D,
-    Dropout,
-    Input,
-    Add
-)
+
 
 # ----------------------------- Utilities -------------------------------------
 
@@ -170,17 +157,6 @@ class NeuralNetwork(BaseNeuralNetwork):
 
 
     # --------------------------- Build the model -----------------------------
-
-    def _add_residual(self, shortcut, x, output_channels, activation, reg_layer):
-        # If input and output channel dimensions differ, align them via 1x1 conv
-        if shortcut.shape[-1] != output_channels:
-            shortcut = Conv2D(output_channels, (1, 1), padding="same", kernel_regularizer=reg_layer)(shortcut)
-        # Add skip connection
-        x = Add()([shortcut, x])
-        # Apply activation after addition (ResNet-style)
-    
-        x = Activation(activation)(x)
-        return x
 
 
     def build_network(self, params, layer_x_block=2):
