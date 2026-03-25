@@ -43,7 +43,7 @@
 11. [Quantization (`quantizer/`)](#11-quantization-quantizer)
 12. [Utility Scripts](#12-utility-scripts)
 13. [HPC Cluster Execution (SLURM)](#13-hpc-cluster-execution-slurm)
-14. [Design Patterns](#14-design-patterns)
+14. [Algorithm Logs Structure](#14-algorithm-logs-structure)
 15. [Debug Mode](#15-debug-mode)
 16. [Dependencies](#16-dependencies)
 17. [References](#17-references)
@@ -725,17 +725,287 @@ python analyze_results.py
 
 ---
 
-## 14. Design Patterns
+## 14. Algorithm Logs Structure
 
-| Pattern              | Where                                       | Purpose                                          |
-|----------------------|---------------------------------------------|--------------------------------------------------|
-| **Strategy**         | Backend (TF/PyTorch)                        | Framework interchangeability via `BackendInterface` |
-| **Template Method**  | `NeuralNetwork` ABC                         | Subclasses implement `build_network()`, `training()` |
-| **Factory**          | `module.load_modules()`                     | Dynamic loading of loss modules                   |
-| **Bridge**           | `NeuralSymbolicBridge`                      | Connecting numerical world ↔ Prolog reasoning     |
-| **Adapter**          | `ObjectiveWrapper`                          | Converts positional list ↔ parameter dictionary   |
-| **Command**          | `tuning_rules_symbolic`                     | Each action is an independently invocable method  |
-| **Observer**         | Callbacks (EarlyStopping, logging)          | Notifies events during training                   |
+The **`algorithm_logs/`** directory contains a complete set of files that record the behavior and results of the symbolic optimization algorithm during an experiment execution. These files enable detailed analysis of the tuning process, reconstruction of optimization history, and system learning.
+
+### 14.1 Log Files
+
+#### 14.1.1 `hyper-neural.txt` — Hyperparameter Space
+
+**Description**: Contains a Python dictionary for each optimization iteration, recording the values of hyperparameters tested.
+
+**Format**: One Python list per line, where each element is a dictionary with keys:
+- `num_neurons`: number of neurons in dense layers (e.g., 8, 16, 32, 64)
+- `unit_c1`, `unit_c2`: number of filters in convolutional blocks
+- `dr_f`: dropout rate in dense layer (e.g., 0.1-0.8)
+- `learning_rate`: learning rate (e.g., 0.0001-0.01)
+- `batch_size`: batch size (e.g., 16, 32, 64)
+- `optimizer`: optimizer type (SGD, Adam, Adamax, Adadelta, Adagrad, RMSprop)
+- `activation`: activation function (relu, elu, swish, selu)
+- `data_augmentation`: 0 or 1 (boolean)
+- `reg_l2`: L2 regularization (0 or value > 0)
+- `skip_connection`: 0 or 1 (boolean for residual connections)
+- `new_fc_X`: number of additional dense layers
+
+**Example**:
+```python
+# Iteration 1
+{'num_neurons': 32, 'unit_c1': 4, 'unit_c2': 8, 'dr_f': 0.5, 'learning_rate': 0.001, 'batch_size': 32, 'optimizer': 'adam', 'activation': 'relu', 'data_augmentation': 0, 'reg_l2': 0.0001, 'skip_connection': 0, 'new_fc_1': 0}
+
+# Iteration 2
+{'num_neurons': 24, 'unit_c1': 3, 'unit_c2': 6, 'dr_f': 0.3, 'learning_rate': 0.0005, 'batch_size': 16, 'optimizer': 'sgd', 'activation': 'elu', 'data_augmentation': 1, 'reg_l2': 0.0, 'skip_connection': 1, 'new_fc_1': 1}
+```
+
+#### 14.1.2 `acc_report.txt` — Accuracy Report
+
+**Description**: Contains the accuracy value on the validation set for each optimization iteration.
+
+**Format**: One float per line (range 0.0-1.0), ordered chronologically.
+
+**Typical Range**: Early steps show accuracy 0.4-0.6 (underfitting), progressing to 0.8-0.95 in final steps.
+
+**Example**:
+```
+0.485
+0.512
+0.548
+0.629
+0.734
+0.823
+0.891
+0.934
+```
+
+#### 14.1.3 `score_report.txt` — Objective Score
+
+**Description**: Records the objective function value (negated for maximizer compatibility) for each iteration.
+
+**Format**: One negative float per line, where the absolute value represents negated accuracy for optimization.
+
+**Usage**: Used by scikit-optimize for Bayesian guidance; relationship with `acc_report.txt` is: `score = -accuracy`.
+
+**Example**:
+```
+-0.485
+-0.512
+-0.548
+-0.629
+-0.734
+-0.823
+-0.891
+-0.934
+```
+
+#### 14.1.4 `params_report.txt` — Network Parameters
+
+**Description**: Records the number of parameters (or FLOPs) of the resulting neural network for each iteration.
+
+**Format**: One integer per line, representing total parameter count or floating-point operations.
+
+**Typical Range**: From 1-10 million (small networks) to 100-200 million (large networks) depending on experimental configuration.
+
+**Usage**: Correlation with accuracy; generally larger networks have better accuracy but higher computational cost.
+
+**Example**:
+```
+1250000
+2100000
+3450000
+5680000
+8900000
+12300000
+16750000
+24500000
+```
+
+#### 14.1.5 `diagnosis_symbolic_logs.txt` — Symbolic Diagnoses
+
+**Description**: Contains symbolic diagnoses generated by the ProbLog probabilistic model, identifying training problems in the neural network.
+
+**Format**: One Python list of strings per line, where each string is a diagnosis type.
+
+**Diagnosis Types**:
+- `underfitting`: Network has insufficient capacity for the task (accuracy < threshold)
+- `overfitting`: High training accuracy but low validation accuracy (significant gap)
+- `floating_loss`: Loss does not converge or fluctuates (training problem)
+- `need_skip`: Recommendation to add skip connections for improved gradient flow
+
+**Typical Evolution**: First steps dominated by `underfitting`, transition to `overfitting` in final steps, occasional `floating_loss` in problematic configurations.
+
+**Example**:
+```python
+['underfitting']
+['underfitting', 'floating_loss']
+['underfitting']
+['underfitting']
+['overfitting']
+['overfitting', 'need_skip']
+['floating_loss']
+['overfitting']
+```
+
+#### 14.1.6 `tuning_symbolic_logs.txt` — Proposed Tuning Actions
+
+**Description**: Contains the symbolic tuning actions proposed by the system to address the diagnoses identified in each iteration.
+
+**Format**: One Python list of strings per line, where each string is a tuning action type.
+
+**Action Types**:
+- `data_augmentation`: Add data augmentation to combat overfitting
+- `add_residual`: Add skip connections
+- `inc_conv_layers`: Increase number of convolutional layers
+- `inc_batch_size`: Increase batch size
+- `decr_lr`: Decrease learning rate
+- `dec_dropout`: Decrement dropout
+- `new_fc_layers`: Add additional dense layers
+- `new_conv_block`: Add convolutional blocks
+- `inc_neurons`: Increment number of neurons
+- `reg_l2`: Apply L2 regularization
+- `remove_reg_l2`: Remove L2 regularization
+
+**Evolution**: Early steps single actions (e.g., `['inc_neurons']`), intermediate steps with 2 actions (e.g., `['data_augmentation', 'add_residual']`), final steps with 2-3 complex actions.
+
+**Example**:
+```python
+['inc_neurons']
+['inc_neurons', 'inc_conv_layers']
+['inc_batch_size', 'decr_lr']
+['data_augmentation', 'add_residual']
+['dec_dropout']
+['data_augmentation', 'inc_neurons', 'add_residual']
+['decr_lr']
+['new_fc_layers', 'dec_dropout']
+```
+
+#### 14.1.7 `evidence.txt` — Evidence for Learning From Interpretations (LFI)
+
+**Description**: Records (action, result) pairs that document the effectiveness of each tuning action undertaken. Used by the Learning From Interpretations (LFI) system to adapt symbolic rule weights.
+
+**Format**: One Python tuple per line with structure: `[(action(method, diagnosis), success), ...]`
+
+**Success Field**: 
+- `True`: Action resolved the diagnosis (improved accuracy)
+- `False`: Action did not resolve the diagnosis (accuracy not improved)
+
+**Usage**: The LFI algorithm analyzes this file to learn which (action, diagnosis) combinations are most effective, adapting probabilistic rule weights for future iterations.
+
+**Example**:
+```python
+[(action(inc_neurons, underfitting), False), (action(inc_conv_layers, underfitting), False)]
+[(action(inc_batch_size, floating_loss), True), (action(decr_lr, floating_loss), True)]
+[(action(data_augmentation, overfitting), False)]
+[(action(add_residual, need_skip), True), (action(dec_dropout, overfitting), False)]
+```
+
+### 14.2 How to Use the Logs
+
+#### Python Analysis
+
+```python
+import json
+import ast
+
+# Path to experiment
+result_dir = "results_gesture/gesture/26_03_20_15_75562_gesture_hybrid_64_8_BASELINE"
+log_dir = f"{result_dir}/algorithm_logs"
+
+# Load files
+hyper_params = []
+with open(f"{log_dir}/hyper-neural.txt", "r") as f:
+    for line in f:
+        hyper_params.append(ast.literal_eval(line.strip()))
+
+accuracies = []
+with open(f"{log_dir}/acc_report.txt", "r") as f:
+    accuracies = [float(line.strip()) for line in f]
+
+diagnoses = []
+with open(f"{log_dir}/diagnosis_symbolic_logs.txt", "r") as f:
+    for line in f:
+        diagnoses.append(ast.literal_eval(line.strip()))
+
+actions = []
+with open(f"{log_dir}/tuning_symbolic_logs.txt", "r") as f:
+    for line in f:
+        actions.append(ast.literal_eval(line.strip()))
+
+evidence = []
+with open(f"{log_dir}/evidence.txt", "r") as f:
+    for line in f:
+        evidence.append(ast.literal_eval(line.strip()))
+
+# Analyze correlation between actions and accuracy improvement
+for i, (hyp, acc, diag, act) in enumerate(zip(hyper_params, accuracies, diagnoses, actions)):
+    if i > 0:
+        acc_improvement = accuracies[i] - accuracies[i-1]
+        print(f"Iteration {i}: Accuracy={acc:.3f} (+{acc_improvement:.3f}), "
+              f"Optimizer={hyp['optimizer']}, Actions={act}")
+        if 'underfitting' in diag:
+            print(f"  → Diagnosis: UNDERFITTING")
+        elif 'overfitting' in diag:
+            print(f"  → Diagnosis: OVERFITTING")
+```
+
+#### Statistics Extraction
+
+```python
+# Number of iterations
+n_iters = len(accuracies)
+print(f"Total iterations: {n_iters}")
+
+# Initial and final accuracy
+print(f"Initial accuracy: {accuracies[0]:.3f}")
+print(f"Final accuracy: {accuracies[-1]:.3f}")
+print(f"Improvement: {accuracies[-1] - accuracies[0]:.3f}")
+
+# Most frequent diagnoses
+from collections import Counter
+all_diagnoses = []
+for diag_list in diagnoses:
+    all_diagnoses.extend(diag_list)
+
+diag_counter = Counter(all_diagnoses)
+print(f"Diagnosis frequency: {dict(diag_counter)}")
+
+# Most frequent actions
+all_actions = []
+for action_list in actions:
+    all_actions.extend(action_list)
+
+action_counter = Counter(all_actions)
+print(f"Action frequency: {dict(action_counter)}")
+```
+
+### 14.3 Complete Directory Structure
+
+The typical structure of a results directory is as follows:
+
+```
+results_gesture/
+├── gesture/
+│   └── 26_03_20_15_75562_gesture_hybrid_64_8_BASELINE/  # Experiment identifier
+│       ├── algorithm_logs/  # Main logs directory
+│       │   ├── hyper-neural.txt          # 28 hyperparameters (one line per iteration)
+│       │   ├── acc_report.txt            # 28 accuracies (0.485 → 0.934)
+│       │   ├── score_report.txt          # 28 negative scores (-0.934 → -0.485)
+│       │   ├── params_report.txt         # 28 network parameter counts
+│       │   ├── diagnosis_symbolic_logs.txt # 28 symbolic diagnoses
+│       │   ├── tuning_symbolic_logs.txt   # 28 proposed tuning actions
+│       │   └── evidence.txt               # 27 (action, result) pairs
+│       ├── best_models/
+│       │   ├── best_accuracy_model.pth    # Best model for accuracy
+│       │   └── best_flops_model.pth       # Best model for FLOPs (if multi-objective)
+│       ├── config.yaml                    # Experiment configuration
+│       ├── results_summary.txt             # Final accuracy/FLOPs summary
+│       └── training_logs.txt               # Training logs for each step
+```
+
+**Numbering Notes**:
+- At each Bayesian optimization iteration, a new line is added to all 7 log files
+- `evidence.txt` contains n-1 rows (generates evidence AFTER testing configuration)
+- Files are **text-based** for ease of parsing and manual debugging
+
 
 ---
 
@@ -850,11 +1120,6 @@ Debug Mode is useful for:
 - 🔍 **Controller debugging**: Verify operations without waiting for training epochs
 - 📈 **Infrastructure profiling**: Analyze logging, saving, etc. overhead without heavy computation
 
-### Additional Information
-
-For detailed analysis of debug logic between PyTorch and TensorFlow, refer to:
-- [DEBUG_LOGIC_IT.md](DEBUG_LOGIC_IT.md) (Italian)
-- [DEBUG_LOGIC_EN.md](DEBUG_LOGIC_EN.md) (English)
 
 ---
 

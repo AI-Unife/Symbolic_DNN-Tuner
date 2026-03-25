@@ -43,7 +43,7 @@
 11. [Quantizzazione (`quantizer/`)](#11-quantizzazione-quantizer)
 12. [Script di Utilità](#12-script-di-utilità)
 13. [Esecuzione su Cluster HPC (SLURM)](#13-esecuzione-su-cluster-hpc-slurm)
-14. [Design Pattern Utilizzati](#14-design-pattern-utilizzati)
+14. [Struttura dei Log di Algoritmo](#14-struttura-dei-log-di-algoritmo)
 15. [Debug Mode](#15-debug-mode)
 16. [Dipendenze](#16-dipendenze)
 17. [Riferimenti Bibliografici](#17-riferimenti-bibliografici)
@@ -724,6 +724,210 @@ python analyze_results.py
 
 ---
 
+## 14. Struttura dei Log di Algoritmo
+
+La directory **`algorithm_logs/`** contiene un insieme completo di file che registrano il comportamento e i risultati dell'algoritmo di ottimizzazione simbolico durante l'esecuzione di un esperimento. Questi file consentono l'analisi dettagliata del processo di tuning, la ricostruzione della storia di ottimizzazione e l'apprendimento del sistema.
+
+### 14.1 File di Log
+
+#### 14.1.1 `hyper-neural.txt` — Spazio Iperparametrico
+
+**Descrizione**: Contiene un dizionario Python per ogni iterazione di ottimizzazione, registrando i valori degli iperparametri testati.
+
+**Formato**: Una lista Python per riga, dove ogni elemento è un dizionario con chiavi:
+- `num_neurons`: numero di neuroni nei layer densi (es. 8, 16, 32, 64)
+- `unit_c1`, `unit_c2`: numero di filtri nei blocchi convoluzionali
+- `dr_f`: dropout rate nel layer denso (es. 0.1-0.8)
+- `learning_rate`: tasso di apprendimento (es. 0.0001-0.01)
+- `batch_size`: dimensione del batch (es. 16, 32, 64)
+- `optimizer`: tipo di ottimizzatore (SGD, Adam, Adamax, Adadelta, Adagrad, RMSprop)
+- `activation`: funzione di attivazione (relu, elu, swish, selu)
+- `data_augmentation`: 0 o 1 (booleano)
+- `reg_l2`: regolarizzazione L2 (0 o valore > 0)
+- `skip_connection`: 0 o 1 (booleano per residual connections)
+- `new_fc_X`: numero di layer densi aggiuntivi
+
+**Esempio**:
+```python
+# Iterazione 1
+{'num_neurons': 32, 'unit_c1': 4, 'unit_c2': 8, 'dr_f': 0.5, 'learning_rate': 0.001, 'batch_size': 32, 'optimizer': 'adam', 'activation': 'relu', 'data_augmentation': 0, 'reg_l2': 0.0001, 'skip_connection': 0, 'new_fc_1': 0}
+
+# Iterazione 2
+{'num_neurons': 24, 'unit_c1': 3, 'unit_c2': 6, 'dr_f': 0.3, 'learning_rate': 0.0005, 'batch_size': 16, 'optimizer': 'sgd', 'activation': 'elu', 'data_augmentation': 1, 'reg_l2': 0.0, 'skip_connection': 1, 'new_fc_1': 1}
+```
+
+#### 14.1.2 `acc_report.txt` — Report di Accuratezza
+
+**Descrizione**: Contiene il valore di accuratezza nel validation set per ogni iterazione dell'ottimizzazione.
+
+**Formato**: Un numero float per riga (range 0.0-1.0), ordinati cronologicamente.
+
+**Intervallo tipico**: Nei primi step esperimenti mostrano accuratezza 0.4-0.6 (underfitting), con progressione a 0.8-0.95 negli step finali.
+
+**Esempio**:
+```
+0.485
+0.512
+0.548
+0.629
+0.734
+0.823
+0.891
+0.934
+```
+
+#### 14.1.3 `score_report.txt` — Score dell'Obiettivo
+
+**Descrizione**: Registra il valore della funzione obiettivo (negato per compatibilità con maximizer) per ogni iterazione.
+
+**Formato**: Un numero float negativo per riga, dove il valore assoluto rappresenta l'accuratezza negata per l'ottimizzazione.
+
+**Utilizzo**: Utilizzato da scikit-optimize per guida bayesiana; la relazione con `acc_report.txt` è: `score = -accuracy` se non sono presenti moduli.
+
+**Esempio**:
+```
+-0.485
+-0.512
+-0.548
+-0.629
+-0.734
+-0.823
+-0.891
+-0.934
+```
+
+#### 14.1.4 `params_report.txt` — Parametri di Rete
+
+**Descrizione**: Registra il numero di parametri (o FLOPs) della rete neurale risultante per ogni iterazione.
+
+**Formato**: Un numero intero per riga, rappresentante il numero totale di parametri o operazioni floating-point.
+
+**Intervallo tipico**: Da 1-10 milioni (reti piccole) a 100-200 milioni (reti grandi) in base alla configurazione sperimentale.
+
+**Utilizzo**: Correlazione con accuratezza; generalmente reti più grandi hanno accuratezza migliore ma costo computazionale più alto.
+
+**Esempio**:
+```
+1250000
+2100000
+3450000
+5680000
+8900000
+12300000
+16750000
+24500000
+```
+
+#### 14.1.5 `diagnosis_symbolic_logs.txt` — Diagnosi Simboliche
+
+**Descrizione**: Contiene le diagnosi simboliche generate dal modello probabilistico ProbLog, identificando i problemi di training nella rete neurale.
+
+**Formato**: Una lista Python di stringhe per riga, dove ogni stringa è un tipo di diagnosi.
+
+**Tipi di diagnosi**:
+- `underfitting`: La rete ha capacità insufficiente per il compito (accuratezza < threshold)
+- `overfitting`: Alta accuratezza di training ma bassa di validation (gap importante)
+- `floating_loss`: Loss non converge o fluttua (problema di training)
+- `need_skip`: Suggerimento di aggiungere skip connections per migliorare flusso del gradiente
+
+**Evoluzione tipica**: Primi step dominati da `underfitting`, transizione a `overfitting` negli step finali, presenza occasionale di `floating_loss` in configurazioni problematiche.
+
+**Esempio**:
+```python
+['underfitting']
+['underfitting', 'floating_loss']
+['underfitting']
+['underfitting']
+['overfitting']
+['overfitting', 'need_skip']
+['floating_loss']
+['overfitting']
+```
+
+#### 14.1.6 `tuning_symbolic_logs.txt` — Azioni di Tuning Proposte
+
+**Descrizione**: Contiene le azioni di tuning simboliche proposte dal sistema per affrontare le diagnosi identified in ogni iterazione.
+
+**Formato**: Una lista Python di stringhe per riga, dove ogni stringa è un tipo di azione di tuning.
+
+**Tipi di azioni**:
+- `data_augmentation`: Aggiungere data augmentation per combattere overfitting
+- `add_residual`: Aggiungere skip connections
+- `inc_conv_layers`: Incrementare numero di layer convoluzionali
+- `inc_batch_size`: Aumentare batch size
+- `decr_lr`: Diminuire learning rate
+- `dec_dropout`: Decrementare dropout
+- `new_fc_layers`: Aggiungere layer densi aggiuntivi
+- `new_conv_block`: Aggiungere blocchi convoluzionali
+- `inc_neurons`: Incrementare numero di neuroni
+- `reg_l2`: Applicare regolarizzazione L2
+- `remove_reg_l2`: Rimuovere regolarizzazione L2
+
+**Evoluzione**: Primi step actions singole (es. `['inc_neurons']`), step intermedi con 2 azioni (es. `['data_augmentation', 'add_residual']`), step finali con 2-3 azioni complesse.
+
+**Esempio**:
+```python
+['inc_neurons']
+['inc_neurons', 'inc_conv_layers']
+['inc_batch_size', 'decr_lr']
+['data_augmentation', 'add_residual']
+['dec_dropout']
+['data_augmentation', 'inc_neurons', 'add_residual']
+['decr_lr']
+['new_fc_layers', 'dec_dropout']
+```
+
+#### 14.1.7 `evidence.txt` — Evidenza per Apprendimento da Interpretazioni (LFI)
+
+**Descrizione**: Registra coppie (azione, risultato) che documentano l'efficacia di ogni azione di tuning intrapresa. Utilizzato dal sistema Learning From Interpretations (LFI) per adattare i pesi delle regole simboliche.
+
+**Formato**: Una tupla Python per riga con struttura: `[(action(metodo, diagnosi), successo), ...]`
+
+**Campo `successo`**: 
+- `True`: L'azione ha risolto la diagnosi (accuratezza migliorata)
+- `False`: L'azione non ha risolto la diagnosi (accuratezza non migliorata)
+
+**Utilizzo**: L'algoritmo di LFI analizza questo file per imparare quali combinazioni (azione, diagnosi) sono più efficaci, adattando i pesi delle regole probabilistiche per future iterazioni.
+
+**Esempio**:
+```python
+[(action(inc_neurons, underfitting), False), (action(inc_conv_layers, underfitting), False)]
+[(action(inc_batch_size, floating_loss), True), (action(decr_lr, floating_loss), True)]
+[(action(data_augmentation, overfitting), False)]
+[(action(add_residual, need_skip), True), (action(dec_dropout, overfitting), False)]
+```
+
+### 14.2 Struttura Completa della Directory
+
+La struttura tipica di una directory di risultati è la seguente:
+
+```
+results_gesture/
+├── gesture/
+│   └── 26_03_20_15_75562_gesture_hybrid_64_8_BASELINE/  # Identificativo esperimento
+│       ├── algorithm_logs/  # Directory principale dei log
+│       │   ├── hyper-neural.txt          # 28 iperparametri (una riga per iterazione)
+│       │   ├── acc_report.txt            # 28 accuratezze (0.485 → 0.934)
+│       │   ├── score_report.txt          # 28 score negativi (-0.934 → -0.485)
+│       │   ├── params_report.txt         # 28 conteggi parametri network
+│       │   ├── diagnosis_symbolic_logs.txt # 28 diagnosi symboliche
+│       │   ├── tuning_symbolic_logs.txt   # 28 azioni di tuning proposte
+│       │   └── evidence.txt               # 27 coppie (azione, risultato)
+│       ├── best_models/
+│       │   ├── best_accuracy_model.pth    # Miglior modello per accuratezza
+│       │   └── best_flops_model.pth       # Miglior modello per FLOPs (se multi-obiettivo)
+│       ├── config.yaml                    # Configurazione dell'esperimento
+│       ├── results_summary.txt             # Riassunto finale accuratezza/FLOPs
+│       └── training_logs.txt               # Log di training di ciascun step
+```
+
+**Note sulla Numerazione**:
+- A ogni iterazione di ottimizzazione bayesiana, una nuova riga viene aggiunta ai 7 file log
+- `evidence.txt` contiene n-1 righe (genera l'evidenza DOPO il test della configurazione)
+- File sono **text-based** per facilità di parsing e debugging manuale
+
+---
+
 ## 15. Debug Mode
 
 ### Definizione
@@ -835,11 +1039,6 @@ Il Debug Mode è utile per:
 - 🔍 **Debug del controller**: Verificare le operazioni senza attendere epoche di training
 - 📈 **Profiling dell'infrastruttura**: Analizzare overhead di logging, saving, etc. senza calcolo pesante
 
-### Informazioni Aggiuntive
-
-Per analisi dettagliata della logica di debug tra PyTorch e TensorFlow, consultare:
-- [DEBUG_LOGIC_IT.md](DEBUG_LOGIC_IT.md) (Italiano)
-- [DEBUG_LOGIC_EN.md](DEBUG_LOGIC_EN.md) (Inglese)
 
 ---
 
