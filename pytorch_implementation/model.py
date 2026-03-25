@@ -71,7 +71,7 @@ class ConvBlock(nn.Module):
         return out
 
 
-class TorchModel(TunerModel, nn.Module):
+class TorchModel(nn.Module, TunerModel):
     """
     PyTorch implementation of a TunerModel that extends nn.Module.
     Provides bidirectional mapping between layer types and PyTorch modules,

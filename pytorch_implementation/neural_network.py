@@ -6,6 +6,7 @@ from typing import Any, List, Tuple, Dict
 import re
 
 import copy
+import numpy as np
 
 from torch import nn, optim
 from torchvision import transforms
@@ -133,6 +134,7 @@ class NeuralNetwork(BaseNeuralNetwork):
         if self.model is None:
             print("Error: Model is not built.")
             exit(1)
+
             
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
@@ -164,6 +166,8 @@ class NeuralNetwork(BaseNeuralNetwork):
             
         self.criterion = nn.CrossEntropyLoss()
         self.model.optimizer = optimizer
+        
+            
         
         # Layer wise learning rate
         parameters = []
@@ -216,34 +220,51 @@ class NeuralNetwork(BaseNeuralNetwork):
         min_delta = 0.005
         counter_loss = 0
         counter_acc = 0
-
+        
+        
+        history = {'loss': [], 'val_loss': [], 'accuracy': [], 'val_accuracy': []}
         for epoch in range(self.exp_cfg.epochs):
-            self.model.train()
-            running_loss, correct = 0.0, 0
-            for inputs, labels in train_loader:
-                inputs, labels = inputs.to(self.device), labels.to(self.device)
-                optimizer.zero_grad()
-                outputs = self.model(inputs)
-                loss = self.criterion(outputs, labels)
-                # Regularization
-                if self.rgl:
-                    l2 = sum(p.pow(2).sum() for p in self.l2_params)
-                    loss = loss + params['reg'] * l2
-                loss.backward()
-                optimizer.step()
-                running_loss += loss.item()
-                correct += (outputs.argmax(1) == labels).sum().item()
+            # Check if "debug" is in the experiment name
+            if 'debug' in self.exp_cfg.name.lower():
+                # Generate random values
+                train_loss = float(np.random.uniform(0.5, 2.0))
+                val_loss = float(np.random.uniform(0.5, 2.0))
+                train_acc = float(np.random.uniform(0.4, 0.95))
+                val_acc = float(np.random.uniform(0.4, 0.95))
+                
+                # Update history
+                history['loss'].append(train_loss)
+                history['val_loss'].append(val_loss)
+                history['accuracy'].append(train_acc)
+                history['val_accuracy'].append(val_acc)
+                
+            else:
+                self.model.train()
+                running_loss, correct = 0.0, 0
+                for inputs, labels in train_loader:
+                    inputs, labels = inputs.to(self.device), labels.to(self.device)
+                    optimizer.zero_grad()
+                    outputs = self.model(inputs)
+                    loss = self.criterion(outputs, labels)
+                    # Regularization
+                    if self.rgl:
+                        l2 = sum(p.pow(2).sum() for p in self.l2_params)
+                        loss = loss + params['reg'] * l2
+                    loss.backward()
+                    optimizer.step()
+                    running_loss += loss.item()
+                    correct += (outputs.argmax(1) == labels).sum().item()
 
-            train_loss = running_loss / len(train_loader)
-            train_acc = correct / len(self.train_labels)
-            score = self.eval_model(self.model, test_loader)
-            val_loss, val_acc = score[0], score[1]
+                train_loss = running_loss / len(train_loader)
+                train_acc = correct / len(self.train_labels)
+                score = self.eval_model(self.model, test_loader)
+                val_loss, val_acc = score[0], score[1]
 
-            # Update history
-            history['loss'].append(train_loss)
-            history['val_loss'].append(val_loss)
-            history['accuracy'].append(train_acc)
-            history['val_accuracy'].append(val_acc)
+                # Update history
+                history['loss'].append(train_loss)
+                history['val_loss'].append(val_loss)
+                history['accuracy'].append(train_acc)
+                history['val_accuracy'].append(val_acc)
 
             print(f"Epoch {epoch+1}: loss={train_loss:.4f}, val_loss={val_loss:.4f}, acc={train_acc:.4f}, val_acc={val_acc:.4f}")
 

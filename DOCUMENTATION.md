@@ -44,8 +44,9 @@
 12. [Script di Utilità](#12-script-di-utilità)
 13. [Esecuzione su Cluster HPC (SLURM)](#13-esecuzione-su-cluster-hpc-slurm)
 14. [Design Pattern Utilizzati](#14-design-pattern-utilizzati)
-15. [Dipendenze](#15-dipendenze)
-16. [Riferimenti Bibliografici](#16-riferimenti-bibliografici)
+15. [Debug Mode](#15-debug-mode)
+16. [Dipendenze](#16-dipendenze)
+17. [Riferimenti Bibliografici](#17-riferimenti-bibliografici)
 
 ---
 
@@ -723,21 +724,126 @@ python analyze_results.py
 
 ---
 
-## 14. Design Pattern Utilizzati
+## 15. Debug Mode
 
-| Pattern              | Dove                                        | Scopo                                            |
-|----------------------|---------------------------------------------|--------------------------------------------------|
-| **Strategy**         | Backend (TF/PyTorch)                        | Intercambiabilità del framework via `BackendInterface` |
-| **Template Method**  | `NeuralNetwork` ABC                         | Le sottoclassi implementano `build_network()`, `training()` |
-| **Factory**          | `module.load_modules()`                     | Caricamento dinamico dei moduli di loss           |
-| **Bridge**           | `NeuralSymbolicBridge`                      | Collegamento mondo numerico ↔ ragionamento Prolog |
-| **Adapter**          | `ObjectiveWrapper`                          | Converte lista posizionale ↔ dizionario parametri |
-| **Command**          | `tuning_rules_symbolic`                     | Ogni azione è un metodo invocabile indipendentemente |
-| **Observer**         | Callback (EarlyStopping, logging)           | Notifica eventi durante il training               |
+### Definizione
+
+Il **Debug Mode** è una modalità operativa che permette di testare la pipeline di tuning senza eseguire il training effettivo della rete neurale. Quando il nome dell'esperimento contiene la parola **"debug"** (case-insensitive), il sistema genera valori casuali di loss e accuracy per ogni epoca, simulando un training completo.
+
+### Utilizzo
+
+Per attivare il Debug Mode, includere la parola "debug" nel nome dell'esperimento:
+
+```bash
+# Attiva Debug Mode
+python symbolic_tuner.py --name debug_test_experiment --backend tf --epoch 10 --eval 5
+
+# Attiva Debug Mode col backend PyTorch
+python symbolic_tuner.py --name debug_torch_test --backend torch --epoch 10 --eval 5
+
+# Disattiva Debug Mode (niente "debug" nel nome)
+python symbolic_tuner.py --name experiment_v1 --backend tf --epoch 10 --eval 5
+```
+
+### Implementazione per Backend
+
+#### PyTorch (`pytorch_implementation/neural_network.py`)
+
+Il check del debug mode avviene **dentro il loop di epoch**, permettendo alternanza tra debug e training reale:
+
+```python
+for epoch in range(self.exp_cfg.epochs):
+    if 'debug' in self.exp_cfg.name.lower():
+        # Genera valori casuali per questa epoca
+        train_loss = float(np.random.uniform(0.5, 2.0))
+        val_loss = float(np.random.uniform(0.5, 2.0))
+        train_acc = float(np.random.uniform(0.4, 0.95))
+        val_acc = float(np.random.uniform(0.4, 0.95))
+    else:
+        # Esegue il training reale
+        self.model.train()
+        # ... forward pass, backward pass, evaluation
+```
+
+**Vantaggi**:
+- ✅ Flessibilità: Permette test rapidi senza perdere la struttura
+- ✅ Overhead minimo: Solo un if per epoca
+- ✅ Mantiene la compatibility con early stopping e learning rate scheduling
+
+**Output console**:
+```
+Epoch 1: loss=1.2345, val_loss=1.5678, acc=0.6234, val_acc=0.5890
+Epoch 2: loss=1.0987, val_loss=1.4321, acc=0.6789, val_acc=0.6234
+```
+
+#### TensorFlow (`tensorflow_implementation/neural_network.py`)
+
+Il check del debug mode avviene **prima del training**, creando due branch separati:
+
+```python
+if 'debug' in self.exp_cfg.name.lower():
+    # Genera tutte le epoche con valori casuali
+    for epoch in range(self.epochs):
+        train_loss = float(np.random.uniform(0.5, 2.0))
+        # ... genera valori e stampa nel formato TensorFlow
+else:
+    # Esegue il training reale
+    history = self.model.model.fit(...)
+```
+
+**Vantaggi**:
+- ✅ Chiarezza strutturale: Separazione netta tra debug e training
+- ✅ Realismo output: Include batch count e timing metriche
+- ✅ Completezza: Gestisce tutti i parametri di configurazione
+
+**Output console** (formato TensorFlow reale):
+```
+Epoch 1/100
+17/17 - 0s - loss: 1.2345 - accuracy: 0.6234 - val_loss: 1.5678 - val_accuracy: 0.5890 - 175ms/epoch - 10ms/step
+Epoch 2/100
+17/17 - 0s - loss: 1.0987 - accuracy: 0.6789 - val_loss: 1.4321 - val_accuracy: 0.6234 - 180ms/epoch - 11ms/step
+```
+
+### Distribuzione dei Valori Casuali
+
+Entrambe le implementazioni usano `np.random.uniform()` con i seguenti intervalli:
+
+| Parametro | Min | Max | Motivo |
+|-----------|-----|-----|--------|
+| Loss (train/val) | 0.5 | 2.0 | Range realistico per classificazione su CIFAR-10/ImageNet |
+| Accuracy (train/val) | 0.4 | 0.95 | Range corrispondente a early-stage training |
+| Epoch time (ms) | 150 | 200 | Simulazione realistica di timing hardware |
+
+### Setup Configurato Automaticamente
+
+**Prima** del debug check, entrambe le implementazioni configurano comunque:
+
+1. **Ottimizzatore** (SGD, Adam, RMSprop)
+2. **Loss function** (CrossEntropyLoss per PyTorch, categorical_crossentropy per TF)
+3. **Learning rate scheduler** (ReduceLROnPlateau) – anche se non utilizzato
+4. **Data loaders/preparation** (DataLoader per PyTorch, X_train/X_test per TF)
+
+Questo garantisce che il `model.optimizer` sia sempre disponibile per il controller, anche in debug mode.
+
+### Casi d'Uso Principali
+
+Il Debug Mode è utile per:
+
+- 🧪 **Test rapidi della pipeline**: Verificare il flusso senza attendere il training
+- ⚡ **Validazione della struttura del codice**: Controllare che logging, callbacks e risultati funzionino
+- 📊 **Verifica della logica di diagnosi**: Testare il raginonamento simbolico e le azioni proposte
+- 🔍 **Debug del controller**: Verificare le operazioni senza attendere epoche di training
+- 📈 **Profiling dell'infrastruttura**: Analizzare overhead di logging, saving, etc. senza calcolo pesante
+
+### Informazioni Aggiuntive
+
+Per analisi dettagliata della logica di debug tra PyTorch e TensorFlow, consultare:
+- [DEBUG_LOGIC_IT.md](DEBUG_LOGIC_IT.md) (Italiano)
+- [DEBUG_LOGIC_EN.md](DEBUG_LOGIC_EN.md) (Inglese)
 
 ---
 
-## 15. Dipendenze
+## 16. Dipendenze
 
 ```
 tensorflow==2.15          # Backend TF (opzionale se si usa PyTorch)
@@ -759,7 +865,7 @@ torchvision
 
 ---
 
-## 16. Riferimenti Bibliografici
+## 17. Riferimenti Bibliografici
 
 1. Fraccaroli, M., Lamma, E., & Riguzzi, F. (2022). *Symbolic DNN-tuner*. Machine Learning, 111(2), 625–650. [DOI: 10.1007/s10994-021-06097-1](https://link.springer.com/article/10.1007/s10994-021-06097-1)
 

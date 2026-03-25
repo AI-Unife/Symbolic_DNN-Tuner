@@ -232,6 +232,8 @@ class NeuralNetwork(BaseNeuralNetwork):
         if self.model.model is None:
             print("Error: Model is not built.")
             exit(1)
+        
+        
         # Unique id for artifacts of this run
         model_name_id = datetime.now().strftime("%y_%m_%d_%H_%M_%S_%f")
 
@@ -288,26 +290,58 @@ class NeuralNetwork(BaseNeuralNetwork):
             X_test = self.dataset.X_test
 
         # --- Train ---
-        if (self.exp_cfg.mode in ("fwdPass", "hybrid")) and "gesture" in self.exp_cfg.dataset :
-        
-            history = train_model(
-                self.model.model, opt,
-                X_train, self.dataset.Y_train,
-                X_test, self.dataset.Y_test,
-                self.epochs, params,
-                [tensorboard, es]
-            )
-        else:
-            history = self.model.model.fit(
-                X_train, self.dataset.Y_train,
-                epochs=self.epochs,
-                batch_size=int(params["batch_size"]),
-                verbose=2,
-                validation_data=(X_test, self.dataset.Y_test),
-                callbacks=[tensorboard, es],
-            ).history
-        # --- Evaluate ---
-        score = self.eval_model()
+        # Check if "debug" is in the experiment name
+        if 'debug' in self.exp_cfg.name.lower():
+            # Generate random history
+            history = {'loss': [], 'val_loss': [], 'accuracy': [], 'val_accuracy': []}
+            
+            for epoch in range(self.epochs):
+                # Generate random values
+                train_loss = float(np.random.uniform(0.5, 2.0))
+                val_loss = float(np.random.uniform(0.5, 2.0))
+                train_acc = float(np.random.uniform(0.4, 0.95))
+                val_acc = float(np.random.uniform(0.4, 0.95))
+                
+                # Update history
+                history['loss'].append(train_loss)
+                history['val_loss'].append(val_loss)
+                history['accuracy'].append(train_acc)
+                history['val_accuracy'].append(val_acc)
+                
+                # Generate random batch and timing info
+                num_batches = 17
+                epoch_time_ms = int(np.random.uniform(150, 200))
+                step_time_ms = epoch_time_ms // num_batches
+                
+                print(f"Epoch {epoch+1}/{self.exp_cfg.epochs}")
+                print(f"{num_batches}/{num_batches} - 0s - loss: {train_loss:.4f} - accuracy: {train_acc:.4f} - val_loss: {val_loss:.4f} - val_accuracy: {val_acc:.4f} - {epoch_time_ms}ms/epoch - {step_time_ms}ms/step")
+            
+            # Return random final scores
+            final_loss = float(np.random.uniform(0.5, 2.0))
+            final_acc = float(np.random.uniform(0.4, 0.95))
+            score = [final_loss, final_acc]
+            
+        else: 
+            if (self.exp_cfg.mode in ("fwdPass", "hybrid")) and "gesture" in self.exp_cfg.dataset :
+            
+                history = train_model(
+                    self.model.model, opt,
+                    X_train, self.dataset.Y_train,
+                    X_test, self.dataset.Y_test,
+                    self.epochs, params,
+                    [tensorboard, es]
+                )
+            else:
+                history = self.model.model.fit(
+                    X_train, self.dataset.Y_train,
+                    epochs=self.epochs,
+                    batch_size=int(params["batch_size"]),
+                    verbose=2,
+                    validation_data=(X_test, self.dataset.Y_test),
+                    callbacks=[tensorboard, es],
+                ).history
+            # --- Evaluate ---
+            score = self.eval_model()
 
         try:
             dash_model_path = f"{self.exp_cfg.name}/dashboard/model/model.keras"
