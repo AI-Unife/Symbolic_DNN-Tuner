@@ -76,7 +76,14 @@ min_list([H|T],M):-
     H < M,
     min_list(T,H).
 
+gap_tr_te_acc :- a(A), va(VA), last(A,LTA), last(VA,ScoreA),
+                Res is LTA - ScoreA, abs2(Res,Res1), Res1 > 0.2.
+gap_tr_te_loss :- l(L), vl(VL), last(L,LTL), last(VL,ScoreL),
+                Res is LTL - ScoreL, abs2(Res,Res1), Res1 > 0.2.
+
 is_overfitting:- vl(L_val), loss_increase(L_val,0,5,100).
+is_overfitting:- gap_tr_te_acc; gap_tr_te_loss.
+
 
 vanish_gradient :- grad_global_norm(G), vanish_th(Th), G < Th.
 exploding_gradient :- grad_global_norm(G), exploding_th(Th), G > Th.

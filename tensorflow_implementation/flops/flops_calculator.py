@@ -65,17 +65,31 @@ class flop_calculator:
 # ])
 
 
-def analyze_model(initial_model):
+def analyze_model(initial_model, input_shapes=None):
     """
-    method used to obtain the number of flops
-    :param model: model whose flops need to be calculated
+    Analyze the model's FLOPs using the provided input shapes.
+    
+    :param initial_model: model whose flops need to be calculated
+    :param input_shapes: list of input shapes (optional, defaults to model.inputs)
     :return: number of total flops
     """
     model = initial_model
 
-    # concrete function to apply to each layer to obtain inputs value
-    concrete = tf.function(lambda *inputs: model.model(*inputs))
-    specs = [tf.TensorSpec([1, *inputs.shape[1:]]) for inputs in initial_model.model.inputs]
+    # Use provided input_shapes if available, otherwise infer from model
+    if input_shapes is None:
+        specs = [tf.TensorSpec([1, *inputs.shape[1:]]) for inputs in initial_model.model.inputs]
+    else:
+        specs = [tf.TensorSpec([1, *shape]) for shape in input_shapes]
+    
+    # Create concrete function with correct number of inputs
+    if len(specs) == 1:
+        concrete = tf.function(lambda x: model.model(x), autograph=False)
+    else:
+        # For multiple inputs (e.g., dual ROI inputs), pass as a list
+        def call_model(*inputs):
+            return model.model(list(inputs))
+        concrete = tf.function(call_model, autograph=False)
+    
     concrete_func = concrete.get_concrete_function(*specs)
 
     # total_flops, graph_nodes = get_flops(concrete_func)

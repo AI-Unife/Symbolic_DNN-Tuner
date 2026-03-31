@@ -9,6 +9,7 @@ from components.neural_network import NeuralNetwork as BaseNeuralNetwork
 from components.backend_interface import BackendInterface
 from components.dataset import TunerDataset
 from tensorflow_implementation.model import TFModel
+from tensorflow_implementation.custom_train import train_model, eval_model
 
 import tensorflow as tf
 from tensorflow.keras import Model
@@ -159,8 +160,9 @@ class NeuralNetwork(BaseNeuralNetwork):
     def __init__(self, backend:BackendInterface, dataset: TunerDataset, da: bool, reg: bool, residual: bool):
         super().__init__(backend, dataset, da, reg, residual)
         # Framework-specific preprocessing
-        self.dataset.Y_train = tf.keras.utils.to_categorical(self.dataset.Y_train, self.dataset.n_classes)
-        self.dataset.Y_test = tf.keras.utils.to_categorical(self.dataset.Y_test, self.dataset.n_classes)
+        if self.dataset.n_classes > 1 and self.dataset.Y_train.ndim == 1:
+            self.dataset.Y_train = tf.keras.utils.to_categorical(self.dataset.Y_train, self.dataset.n_classes)
+            self.dataset.Y_test = tf.keras.utils.to_categorical(self.dataset.Y_test, self.dataset.n_classes)
         if self.dataset.X_train.ndim == 3:
             self.dataset.X_train = self.dataset.X_train[..., None]
             self.dataset.X_test = self.dataset.X_test[..., None]
@@ -191,18 +193,44 @@ class NeuralNetwork(BaseNeuralNetwork):
         """
         # 1) clear session
         tf.keras.backend.clear_session()
+        if (self.exp_cfg.mode in ("fwdPass", "hybrid")) and "gesture" in self.exp_cfg.dataset :
+            input_shape = self.dataset.X_train.shape[2:]  # (H, W, C) for gesture pipeline
+            pos_input_shape = self.dataset.pos_train.shape[2:] if self.is_roi else None
+        else:
+            input_shape = self.dataset.X_train.shape[1:]  # generic (H, W, C)
+            pos_input_shape = self.dataset.pos_train.shape[1:] if self.is_roi else None
+        
+        print(f"Building model with input_shape={input_shape}, pos_input_shape={pos_input_shape}, layer_x_block={layer_x_block}")
+        # Model will handle separate branches
         self.model = TFModel(
-            input_shape=self.dataset.X_train.shape[1:],
+            input_shape=input_shape,
             params=params,
+            is_roi=self.is_roi,
             n_classes=self.dataset.n_classes,
+            pos_input_shape=pos_input_shape,
             layer_x_block=layer_x_block
             )
         if self.exp_cfg.verbose > 1:
             self.model.model.summary()
         if "flops_module" in self.exp_cfg.mod_list:
-            # Compute FLOPs (approximate; counts MACs as 2 FLOPs
-            self.flops, self.nparams = self.backend.get_flops(self.model, [self.dataset.X_train.shape[1:]])
-            print(f"FLOPs: {self.flops}, Params: {self.nparams}")
+            # Compute FLOPs (approximate; counts MACs as 2 FLOPs)
+            # Use same shape logic as build_network: shape[2:] for gesture fwdPass/hybrid data
+            if (self.exp_cfg.mode in ("fwdPass", "hybrid")) and "gesture" in self.exp_cfg.dataset:
+                data_shape = self.dataset.X_train.shape[2:]
+                if self.is_roi:
+                    pos_shape = self.dataset.pos_train.shape[2:]
+            else:
+                data_shape = self.dataset.X_train.shape[1:]
+                if self.is_roi:
+                    pos_shape = self.dataset.pos_train.shape[1:]
+            
+            if self.is_roi:
+                # For ROI: pass both data and pos input shapes
+                input_shapes = [data_shape, pos_shape]
+            else:
+                # For regular: pass only data input shape
+                input_shapes = [data_shape]
+            self.flops, self.nparams = self.backend.get_flops(self.model, input_shapes)
         if "hardware_module" in self.exp_cfg.mod_list:
             # Compute total latency cost
             from modules.loss.hardware_module import hardware_module
@@ -271,29 +299,35 @@ class NeuralNetwork(BaseNeuralNetwork):
         self.model.optimizer = opt
 
         # --- Callbacks ---
-        es = EarlyStopping(monitor="val_accuracy", min_delta=0.005, patience=20, verbose=1,
+        es = EarlyStopping(monitor="val_accuracy", min_delta=0.005, patience=30, verbose=1,
                             mode="max", restore_best_weights=True)
         # --- Compile ---
         self.model.model.compile(loss="categorical_crossentropy", optimizer=opt, metrics=["accuracy"])
+        
+        if self.is_roi:
+            X_train = [self.dataset.X_train, self.dataset.pos_train]
+            X_test = [self.dataset.X_test, self.dataset.pos_test]
+        else:
+            X_train = self.dataset.X_train
+            X_test = self.dataset.X_test
 
         # --- Train ---
+        if (self.exp_cfg.mode in ("fwdPass", "hybrid")) and "gesture" in self.exp_cfg.dataset :
         
-        if "debug" in self.exp_cfg.name:
-            history = {k: [] for k in ["loss", "accuracy", "val_loss", "val_accuracy"]}
-            for _ in range(self.exp_cfg.epochs):
-                history["val_loss"].append(random.uniform(0.1, 0.5))
-                history["val_accuracy"].append(random.uniform(0.1, 1.0))
-                history["loss"].append(random.uniform(0.1, 0.5))
-                history["accuracy"].append(random.uniform(0.1, 1.0))
+            history = train_model(
+                self.model.model, opt,
+                X_train, self.dataset.Y_train,
+                X_test, self.dataset.Y_test,
+                self.epochs, params,
+                [tensorboard, es]
+            )
         else:
-            
-            
             history = self.model.model.fit(
-                self.dataset.X_train, self.dataset.Y_train,
+                X_train, self.dataset.Y_train,
                 epochs=self.epochs,
                 batch_size=int(params["batch_size"]),
-                verbose=1,
-                validation_data=(self.dataset.X_test, self.dataset.Y_test),
+                verbose=2,
+                validation_data=(X_test, self.dataset.Y_test),
                 callbacks=[tensorboard, es],
             ).history
         # --- Evaluate ---
@@ -315,12 +349,15 @@ class NeuralNetwork(BaseNeuralNetwork):
         return score, history, self.model
     
     def eval_model(self):
-        if "debug" in self.exp_cfg.name:
-            score = [random.uniform(0.1, 0.5), random.uniform(0.1, 1.0)]
+        if self.is_roi:
+            X_test = [self.dataset.X_test, self.dataset.pos_test]
         else:
-            score = self.model.model.evaluate(self.dataset.X_test, self.dataset.Y_test, verbose=1)
+            X_test = self.dataset.X_test
+        if (self.exp_cfg.mode in ("fwdPass", "hybrid")) and "gesture" in self.exp_cfg.dataset:
+            score = eval_model(self.model.model, X_test, self.dataset.Y_test)
+        else:        
+            score = self.model.model.evaluate(X_test, self.dataset.Y_test, verbose=2)
         return score
-    
     
     def save_model(self):
         """Helper to handle safe model saving."""

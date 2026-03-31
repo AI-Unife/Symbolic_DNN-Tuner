@@ -11,15 +11,15 @@ class flops_module(common_interface):
 
     #weight of the module for the final loss calculation
     cfg = load_cfg()
-    #weight of the module for the final loss calculation
-    weight = cfg.get('w_FLOPS', 0.33)
+    weight = cfg.get("w_flops", 0.33) 
+    print("FLOPS module weight: " + str(weight))
 
 
     def __init__(self):
         # self.epsilon = 0.33
         self.cfg = load_cfg()
-        self.flops_th = self.cfg.get('flops_th',  150000000) #150000000 # 150 MFLOPs
-        self.nparams_th = self.cfg.get('nparams_th',2500000) # 2.5M params
+        self.flops_th = self.cfg.flops_th # 150000000 # 150 MFLOPs
+        self.nparams_th = self.cfg.nparams_th # 2500000 # 2.5M params
         self.tuner_opt_function = []
         self.flops_gap = []
         self.tuner_steps = 0
@@ -39,13 +39,23 @@ class flops_module(common_interface):
 
     def optimiziation_function(self, *args):
         # norm flops between 0 - 1
-        flops_th = 1
-        nflops = self.flops / self.flops_th
-        fit_up_flops = flops_th - nflops
-        res = -fit_up_flops
-        self.flops_gap.append(fit_up_flops)
+        # flops_th = 1
+        # nflops = self.flops / self.flops_th
+        # fit_up_flops = flops_th - nflops
+        # res = -fit_up_flops
+        # self.flops_gap.append(fit_up_flops)
+        # self.tuner_steps += 1
+        # self.tuner_opt_function.append(res)
+        
+        ### res based on gap between nparams and nparams_th
+        params_th = 1
+        nparams = self.nparams / self.nparams_th
+        fit_up_params = params_th - nparams
+        res = -fit_up_params
+        self.flops_gap.append(fit_up_params)
         self.tuner_steps += 1
         self.tuner_opt_function.append(res)
+        
         return res
 
     def plotting_function(self):
@@ -60,6 +70,6 @@ class flops_module(common_interface):
     def log_function(self):
         # if os.path.exists("{}/graph_report.txt".format(cfg.NAME_EXP)):
         #     os.remove("{}/graph_report.txt".format(cfg.NAME_EXP))
-        f = open("{}/flops_report.txt".format(self.cfg.name), "a")
-        f.write(str(self.flops_th) + " " + str(self.flops) + "\n")
+        f = open("{}/algorithm_logs/flops_report.txt".format(self.cfg.name), "a")
+        f.write(str(self.nparams) + " " + str(self.flops) + "\n")
         f.close()

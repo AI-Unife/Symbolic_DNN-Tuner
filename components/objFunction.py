@@ -33,7 +33,5 @@ class ObjectiveWrapper:
         
         # 3. Run the training and get the score
         score = self.controller.training(space_dict)
-        
-        
-        print("Score:", score, flush=True)
+    
         return float(score)

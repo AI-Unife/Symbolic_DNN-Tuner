@@ -17,6 +17,6 @@ class BackendInterface:
     
     def get_flops(self, model, input_shapes):
         raise NotImplementedError
-
+    
     def get_params(self, model):
         raise NotImplementedError

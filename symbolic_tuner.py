@@ -227,21 +227,33 @@ def parse_args() -> argparse.Namespace:
                         help='quantize the network')
     parser.add_argument("--verbose", type=int, default=2, 
                         help="Verbosity level (0: silent, 1: print space, 2: print space and model summary)")
-    parser.add_argument('--w_FLOPS', type=float, default=0.33,
+    parser.add_argument('--w_flops', type=float, default=0.3,
                         help="Weight Flops loss")
     parser.add_argument('--w_HW', type=float, default=0.33,
                         help="Weight HW loss")
-    parser.add_argument('--lacc', type=float, default=0.10,
+    parser.add_argument('--lacc', type=float, default=0.30,
                         help="if 1-acc>lacc --> Underfitting")
     parser.add_argument('--flops_th', type=int, default=150000000,
                          help="Max number of FLOPS")
-    parser.add_argument('--nparams_th', type=int, default=2500000,
+    parser.add_argument('--nparams_th', type=int, default=1500000,
                         help="Max number of PARAMS")
     parser.add_argument(
         "--opt", type=str, default="filtered",
         choices=["standard", "filtered", "basic", "RS", "RS_ruled"],
         help="Optimizer type for the analysis"
     )
+    
+    #### Gesture option
+    parser.add_argument("--frames", type=int, default=16,
+                        help="Number of frames for gesture dataset")
+    parser.add_argument("--mode", type=str, default="fwdPass",
+                        choices=["fwdPass", "depth", "hybrid"],
+                        help="Experiment mode (fwdPass, depth, hybrid)")
+    parser.add_argument("--channels", type=int, default=2,
+                        help="Number of channels for the dataset")
+    parser.add_argument("--polarity", type=str, default="both",
+                        choices=["both", "sum", "sub", "drop"],
+                        help="Polarity for event-based datasets")
 
     args = parser.parse_args()
 
@@ -305,8 +317,13 @@ if __name__ == "__main__":
         dataset.load_mnist()
     elif dataset_name == "cifar10_light" or dataset_name == "light_cifar" or dataset_name == "light":
         dataset.load_light_cifar()
+    elif dataset_name == "gesture":
+        dataset.load_gesture()
+    elif "roigesture" in dataset_name:
+        dataset.load_roi_gesture()
     else:
-        raise ValueError(f"Unknown dataset: {cfg.dataset}. Supported: cifar10, cifar100, mnist, cifar10_light")
+        print(f"Unknown dataset: {cfg.dataset}. Supported: cifar10, cifar100, mnist, light, gesture, roigesture_matrix and roigesture_coords.")
+        exit(1)
 
     # --- 3. Controller and Space Setup ---
     neural_network_cls = neural_network.NeuralNetwork

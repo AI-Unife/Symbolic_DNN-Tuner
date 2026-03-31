@@ -26,13 +26,12 @@ from dataclasses import dataclass, field
 try:
     import tkinter as tk
     from tkinter import filedialog
-
     TKINTER_AVAILABLE = False
 except ImportError:
     TKINTER_AVAILABLE = False
 
-_EXCLUDED_CONFIG_KEYS = ["name", "verbose", "polarity", "created_at"]
 
+_EXCLUDED_CONFIG_KEYS = ["name", "verbose", "polarity", "created_at"]
 
 @dataclass
 class ExperimentResult:
@@ -52,11 +51,11 @@ class ExperimentResult:
 
 class ResultsAnalyzer:
     """Analyzer for experiment results"""
-
+    
     def __init__(self, experiment_dir: str):
         """
         Initialize the analyzer.
-
+        
         Args:
             experiment_dir: Experiment folder containing algorithm_logs/
         """
@@ -66,46 +65,46 @@ class ResultsAnalyzer:
         self.has_flops_module = False
         self.has_hardware_module = False
         self.config: Dict[str, Any] = {}  # Experiment configuration
-
+        
     def load_results(self) -> bool:
         """
         Load all results from log files.
-
+        
         Returns:
             True if logs were loaded successfully, False otherwise
         """
         # Load config.yaml file
         self._load_config_yaml()
-
+        
         if not self.algorithm_logs_dir.exists():
             print(f"  algorithm_logs folder not found in {self.experiment_dir}")
             return False
-
+        
         # Load accuracies
         accuracies = self._load_accuracies()
         if not accuracies:
             print(f"  No acc_report.txt file found")
             return False
-
+        
         scores = self._load_scores()
         if scores:
             print(f"  score_report.txt file found, will use scores calculated during training")
         else:
             print(f"  No score_report.txt file found, will use -accuracy as approximation")
-
+        
         # Load hyperparameters
         # hyperparams_list = self._load_hyperparams()
-
+        
         # Load FLOPS data
         flops_data = self._load_flops_data()
         if flops_data:
             self.has_flops_module = True
-
+        
         # Load hardware data
         hw_data = self._load_hardware_data()
         if hw_data:
             self.has_hardware_module = True
-
+        
         # Combine the data
         max_iterations = max(
             len(accuracies),
@@ -113,7 +112,7 @@ class ResultsAnalyzer:
             len(flops_data) if flops_data else 0,
             len(hw_data) if hw_data else 0
         )
-
+        
         for i in range(max_iterations):
             result = ExperimentResult(
                 iteration=i + 1,
@@ -127,24 +126,24 @@ class ResultsAnalyzer:
                 score=scores[i] if scores and i < len(scores) else None,
                 # hyperparams=hyperparams_list[i] if i < len(hyperparams_list) else None,
             )
-
+            
             # Calculate score: -accuracy if no modules are present
             if result.score is None:
                 if result.accuracy is not None:
                     result.score = -result.accuracy
                 else:
                     result.score = None
-
+            
             self.results.append(result)
-
+        
         return True
-
+    
     def _load_accuracies(self) -> List[Optional[float]]:
         """Load accuracies from acc_report.txt file"""
         acc_file = self.algorithm_logs_dir / "acc_report.txt"
         if not acc_file.exists():
             return []
-
+        
         accuracies = []
         try:
             with open(acc_file, 'r') as f:
@@ -157,15 +156,15 @@ class ResultsAnalyzer:
         except Exception as e:
             print(f"  Error reading {acc_file}: {e}")
             return []
-
+        
         return accuracies
-
+    
     def _load_scores(self) -> List[Optional[float]]:
         """Load scores from score_report.txt file"""
         score_file = self.algorithm_logs_dir / "score_report.txt"
         if not score_file.exists():
             return []
-
+        
         scores = []
         try:
             with open(score_file, 'r') as f:
@@ -178,15 +177,15 @@ class ResultsAnalyzer:
         except Exception as e:
             print(f"  Error reading {score_file}: {e}")
             return []
-
+        
         return scores
-
+    
     def _load_hyperparams(self) -> List[Optional[Dict[str, Any]]]:
         """Load hyperparameters from hyper-neural.txt file"""
         hp_file = self.algorithm_logs_dir / "hyper-neural.txt"
         if not hp_file.exists():
             return []
-
+        
         hyperparams = []
         try:
             with open(hp_file, 'r') as f:
@@ -205,9 +204,9 @@ class ResultsAnalyzer:
         except Exception as e:
             print(f"  Error reading {hp_file}: {e}")
             return []
-
+        
         return hyperparams
-
+    
     def _load_flops_data(self) -> Optional[List[Tuple[float, float]]]:
         """Load FLOPS data from flops_report.txt file"""
         flops_file = self.algorithm_logs_dir / "flops_report.txt"
@@ -232,15 +231,15 @@ class ResultsAnalyzer:
         except Exception as e:
             print(f"  Error reading {flops_file}: {e}")
             return None
-
+        
         return flops_data if flops_data else None
-
+    
     def _load_hardware_data(self) -> Optional[List[Tuple[float, float, float, str]]]:
         """Load hardware data from hardware_report.txt file"""
         hw_file = self.algorithm_logs_dir / "hardware_report.txt"
         if not hw_file.exists():
             return None
-
+        
         hw_data = []
         try:
             with open(hw_file, 'r') as f:
@@ -254,14 +253,14 @@ class ResultsAnalyzer:
                             float(parts[0]),  # latency
                             float(parts[1]),  # cost
                             float(parts[2]),  # total_cost
-                            parts[3].strip()  # config
+                            parts[3].strip()   # config
                         ))
         except Exception as e:
             print(f"  Error reading {hw_file}: {e}")
             return None
-
+        
         return hw_data if hw_data else None
-
+    
     def _load_config_yaml(self) -> None:
         """Load configuration from config.yaml file"""
         config_file = self.experiment_dir / "config.yaml"
@@ -269,35 +268,35 @@ class ResultsAnalyzer:
             print(f"  config.yaml file not found in {self.experiment_dir}")
             self.config = {}
             return
-
+        
         try:
             with open(config_file, 'r') as f:
                 self.config = yaml.safe_load(f) or {}
         except Exception as e:
             print(f"  Error reading config.yaml: {e}")
             self.config = {}
-
+    
     def get_best_result(self) -> Optional[ExperimentResult]:
         """Return the best result (lowest score)"""
         valid_results = [r for r in self.results if r.score is not None]
         if not valid_results:
             return None
         return min(valid_results, key=lambda r: r.score)
-
+    
     def save_experiment_csv(self, output_csv: Path) -> bool:
         """
         Save the experiment results to CSV.
-
+        
         Args:
             output_csv: Path of the output CSV file
-
+            
         Returns:
             True if save was successful
         """
         if not self.results:
             print(f"  No results to save")
             return False
-
+        
         try:
             with open(output_csv, 'w', newline='') as f:
                 # Determine columns dynamically
@@ -306,23 +305,23 @@ class ResultsAnalyzer:
                     'nparams', 'flops',
                     'latency', 'hw_cost', 'hw_total_cost', 'hw_config'
                 ]
-
+                
                 # Add fields for hyperparameters
                 all_hp_keys = set()
                 # for result in self.results:
                 #     if result.hyperparams:
                 #         all_hp_keys.update(result.hyperparams.keys())
-
+                
                 fieldnames.extend(sorted(all_hp_keys))
-
+                
                 # Add fields from config.yaml
                 if self.config:
                     config_keys = sorted([k for k in self.config.keys() if k not in fieldnames])
                     fieldnames.extend(config_keys)
-
+                
                 writer = csv.DictWriter(f, fieldnames=fieldnames)
                 writer.writeheader()
-
+                
                 for result in self.results:
                     row = {
                         'iteration': result.iteration,
@@ -335,19 +334,19 @@ class ResultsAnalyzer:
                         'hw_total_cost': result.hw_total_cost,
                         'hw_config': result.hw_config,
                     }
-
+                    
                     # Add hyperparameters
                     # if result.hyperparams:
                     #     for key in all_hp_keys:
                     #         row[key] = result.hyperparams.get(key, '')
-
+                    
                     # Add data from config.yaml
                     for key, value in self.config.items():
                         if key not in row:
                             row[key] = value
-
+                    
                     writer.writerow(row)
-
+            
             return True
         except Exception as e:
             print(f"  Error saving CSV: {e}")
@@ -357,19 +356,19 @@ class ResultsAnalyzer:
 def select_parent_directory() -> Optional[Path]:
     """
     Ask the user to select the parent folder containing the experiments.
-
+    
     Returns:
         Path of the selected folder or None if cancelled
     """
     if TKINTER_AVAILABLE:
         root = tk.Tk()
         root.withdraw()  # Hide the main window
-
+        
         directory = filedialog.askdirectory(
             title="Select the parent folder containing the experiments",
             initialdir=os.path.expand_user("~")
         )
-
+        
         return Path(directory) if directory else None
     else:
         # Fallback: ask via command line
@@ -383,38 +382,38 @@ def select_parent_directory() -> Optional[Path]:
 def analyze_all_experiments(parent_dir: Path, output_dir: Optional[Path] = None):
     """
     Analyze all experiments in the parent folder.
-
+    
     Args:
         parent_dir: Parent folder containing the experiments
         output_dir: Output folder (default: parent_dir)
     """
     if output_dir is None:
         output_dir = parent_dir
-
+    
     output_dir.mkdir(parents=True, exist_ok=True)
-
+    
     # Find all subfolders with algorithm_logs
     experiments = []
     for item in parent_dir.iterdir():
         if item.is_dir() and (item / "algorithm_logs").exists():
             experiments.append(item)
-
+    
     if not experiments:
         print(f"No experiments found in {parent_dir}")
         return
-
+    
     print(f"\nFound {len(experiments)} experiments\n")
-
+    
     # Analyze each experiment
     summary_data = []
-
+    
     for exp_dir in sorted(experiments):
         print(f"📈 Analyzing: {exp_dir.name}")
-
+        
         analyzer = ResultsAnalyzer(exp_dir)
         if not analyzer.load_results():
             continue
-
+        
         # Save CSV for this experiment
         if output_dir != parent_dir:
             exp_csv = output_dir / f"{exp_dir.name}_results.csv"
@@ -422,7 +421,7 @@ def analyze_all_experiments(parent_dir: Path, output_dir: Optional[Path] = None)
             exp_csv = exp_dir / f"{exp_dir.name}_results.csv"
         if analyzer.save_experiment_csv(exp_csv):
             print(f"  CSV saved: {exp_csv.name}")
-
+        
         # Collect info for total CSV
         best_result = analyzer.get_best_result()
         if best_result:
@@ -438,18 +437,18 @@ def analyze_all_experiments(parent_dir: Path, output_dir: Optional[Path] = None)
                 'best_hw_total_cost': best_result.hw_total_cost,
                 'best_hw_config': best_result.hw_config,
             }
-
+            
             # Add data from config.yaml with prefix 'config_'
             for key, value in analyzer.config.items():
                 if key not in _EXCLUDED_CONFIG_KEYS:
                     summary_row[f'{key}'] = value
-
+            
             summary_data.append(summary_row)
             print(f"  Best result: iteration {best_result.iteration}, "
                   f"accuracy={best_result.accuracy:.4f}, score={best_result.score:.4f}\n")
         else:
             print(f"  No valid results found\n")
-
+    
     # Save total CSV
     if summary_data:
         summary_csv = output_dir / "summary_best_results.csv"
@@ -458,12 +457,11 @@ def analyze_all_experiments(parent_dir: Path, output_dir: Optional[Path] = None)
                 fieldnames = [col for col in summary_data[0].keys()]
                 writer = csv.DictWriter(f, fieldnames=fieldnames)
                 writer.writeheader()
-
+                
                 # Sort by score
-                sorted_data = sorted(summary_data,
-                                     key=lambda x: x['experiment'] if x['experiment'] is not None else float('inf'))
+                sorted_data = sorted(summary_data, key=lambda x: x['experiment'] if x['experiment'] is not None else float('inf'))
                 writer.writerows(sorted_data)
-
+            
             print(f"Summary CSV saved: {summary_csv.name}")
         except Exception as e:
             print(f"Error saving summary CSV: {e}")
@@ -473,10 +471,10 @@ def analyze_all_experiments(parent_dir: Path, output_dir: Optional[Path] = None)
 
 def main():
     """Main function"""
-    print("\n" + "=" * 70)
+    print("\n" + "="*70)
     print("  EXPERIMENT RESULTS ANALYZER - Symbolic DNN Tuner")
-    print("=" * 70 + "\n")
-
+    print("="*70 + "\n")
+    
     # Check if arguments have been passed
     if len(sys.argv) > 1:
         # Batch mode: use command line arguments
@@ -484,11 +482,11 @@ def main():
         if not parent_dir.exists():
             print(f"Folder not found: {parent_dir}")
             return
-
+        
         output_dir = Path(sys.argv[2]) if len(sys.argv) > 2 else None
         if output_dir and not output_dir.exists():
             output_dir.mkdir(parents=True, exist_ok=True)
-
+        
         print(f"Input folder: {parent_dir}")
         if output_dir:
             print(f"Output folder: {output_dir}\n")
@@ -498,13 +496,13 @@ def main():
         if parent_dir is None:
             print("No folder selected")
             return
-
+        
         print(f"\nSelected folder: {parent_dir}\n")
-
+        
         # Ask if save CSV in a different folder (only if not in stdin)
         try:
             use_custom_output = input("Save results in a different folder? (y/n): ").lower() == 'y'
-
+            
             output_dir = None
             if use_custom_output:
                 if TKINTER_AVAILABLE:
@@ -527,13 +525,13 @@ def main():
         except EOFError:
             # If stdin is closed, use non-interactive mode
             output_dir = None
-
+    
     # Analyze experiments
     analyze_all_experiments(parent_dir, output_dir)
-
-    print("\n" + "=" * 70)
+    
+    print("\n" + "="*70)
     print("  Analysis completed!")
-    print("=" * 70 + "\n")
+    print("="*70 + "\n")
 
 
 if __name__ == "__main__":

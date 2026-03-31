@@ -90,7 +90,7 @@ class controller:
         }
         self.lacc: float = lacc_dict.get(self.exp_cfg.dataset, 0.20)
         self.hloss: float = np.log(self.dataset.n_classes)
-        self.acc_w = 0.77  # weight of accuracy in combined score
+        self.acc_w = 0.7  # weight of accuracy in combined score
         self.vanish_th = 1e-8
         self.exploding_th = 100.0
 
@@ -255,7 +255,7 @@ class controller:
         
         # 3. Check Constraints 
         if "flops_module" in self.exp_cfg.mod_list:
-            self.flops_ok = (self.nn.flops is None) or (self.nn.flops <= self.flops_th)
+            self.flops_ok = (self.nn.flops is None) or (self.nn.flops <= self.flops_th and self.nn.nparams <= self.params_th)
         else:
             self.flops_ok = True
         if "hardware_module" in self.exp_cfg.mod_list:
@@ -264,7 +264,7 @@ class controller:
             self.latency_ok = True
 
         if not self.flops_ok:
-            print(f"[WARNING] Constraint Violated: FLOPs {self.nn.flops} > {self.flops_th}")
+            print(f"[WARNING] Constraint Violated: FLOPs {self.nn.flops} > {self.flops_th} or Params {self.nn.nparams} > {self.params_th}")
         if not self.latency_ok:
             print(f"[WARNING] Constraint Violated: Latency Cost {self.nn.tot_latency_cost} > {self.latency_th}")
 
@@ -276,13 +276,13 @@ class controller:
             # Update Modules State (passiamo il modello addestrato)
             self.modules.state(self.model, self.nn.flops, self.nn.nparams)
             
-            # --- SCORING LOGIC ---
-            ### TODO: Refactor this section for correct score return ###
+            # # --- SCORING LOGIC ---
+            # ### TODO: Refactor this section for correct score return ###
             # if self.exp_cfg.quantization:
             #     quantizer = quantizer_module(opt=params["optimizer"])
-            #     _ = quantizer.quantizer_function(self.model)
+            #     _ = quantizer.quantizer_function(self.model) 
             #     q_loss, q_acc = quantizer.evaluate_quantized_model(self.dataset.X_test, self.dataset.Y_test)
-            #     self.score = -float(q_acc)
+            #     self.score = -float(q_acc) 
             #     quantizer.log_function()
             
             if (len(self.modules.modules_obj) > 0) and self.modules.ready() and self.modules.all_zeros_weights():
@@ -301,9 +301,14 @@ class controller:
         else:
             # --- CONSTRAINT VIOLATION ---
             self.scoreNN, self.history, self.model = None, None, self.nn.model
-
+            
             self.modules.state(self.model, self.nn.flops, self.nn.nparams)
             self.score = PENALTY_SCORE
+            # 5. Logging
+            self.log()
+            self.modules.print()
+            self.modules.log()
+            self.iter += 1
 
 
         # 6. Best Model Tracking
@@ -448,7 +453,7 @@ class controller:
             print(f"\nACCURACY: {0.0}\n")
             f.write("None \n")
         f.close()
-
+        
         f = open(f"{self.exp_cfg.name}/algorithm_logs/score_report.txt", "a")
         if self.score is not None:
             print(f"\nSCORE: {self.score}\n")
@@ -457,10 +462,11 @@ class controller:
             print(f"\nSCORE: {0.0}\n")
             f.write("None \n")
         f.close()
-
+            
         if "flops_module" not in self.exp_cfg.mod_list:
             f = open(f"{self.exp_cfg.name}/algorithm_logs/params_report.txt", "a")
             params = self.backend.get_params(self.model)
             f.write(str(params) + "\n")
             f.close()
+        
 

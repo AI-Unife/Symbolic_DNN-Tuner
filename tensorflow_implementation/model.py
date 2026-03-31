@@ -6,7 +6,7 @@ from typing import List, Dict, Any
 
 import tensorflow as tf
 from tensorflow.keras import layers, Model
-from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, Dense, Dropout, Flatten, BatchNormalization, GlobalAveragePooling2D, Activation
+from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, Dense, Dropout, Flatten, BatchNormalization, GlobalAveragePooling2D, Activation, Concatenate
 from keras.optimizers import *
 from components.colors import colors
 from components.neural_network import NeuralNetwork
@@ -24,6 +24,7 @@ class TFModel(TunerModel):
         LayerTypes.Dense: layers.Dense,
         LayerTypes.BatchNormalization: layers.BatchNormalization,
         LayerTypes.Flatten: layers.Flatten,
+        LayerTypes.Concatenate: layers.Concatenate,
         LayerTypes.ELU: "elu",
         LayerTypes.ReLU: "relu",
         LayerTypes.SeLU: "selu",
@@ -35,17 +36,19 @@ class TFModel(TunerModel):
     to_type_map[layers.Activation] = "activation"
     to_type_map["silu"] = LayerTypes.SiLU
 
-    def __init__(self, input_shape, params, n_classes, layer_x_block=2):
+    def __init__(self, input_shape, params, n_classes, is_roi=False, pos_input_shape=None, layer_x_block=2):
         super(TFModel, self).__init__()
         
         self.input_shape = input_shape
         self.params = params
         self.n_classes = n_classes
+        self.is_roi = is_roi
+        self.pos_input_shape = pos_input_shape
         self.residual = params.get("residual_connections", False)
         self.reg = params.get("l2_regularization", False)
         self.da = params.get("data_augmentation", False)
 
-        batch = True #self.exp_cfg.dataset == 'tinyimagenet'
+        batch = self.reg.l2() if self.reg else None
         self.model = None
         # 2) Build a new CNN
 
@@ -70,6 +73,7 @@ class TFModel(TunerModel):
             x = Conv2D(params["unit_c1"] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
             x = Activation(params["activation"])(x)
             x = BatchNormalization()(x) if batch else x
+        # x = Dropout(params["dr_f"])(x)
         x = MaxPooling2D(pool_size=(2, 2))(x)
 
         shortcut = x
@@ -87,6 +91,8 @@ class TFModel(TunerModel):
         x = MaxPooling2D(pool_size=(2, 2))(x)
 
 
+        
+
         # Dynamically added conv blocks (conv -> act -> conv -> act -> pool -> dropout)
         added_convs = [k for k in params if re.match(r"new_conv_\d+$", k) and params[k] > 0]
         for layer_key in sorted(added_convs, key=lambda s: int(s.split("_")[-1])):  # stable order
@@ -102,9 +108,19 @@ class TFModel(TunerModel):
                 x = Conv2D(params[layer_key] * params['num_neurons'], (3, 3), padding="same", kernel_regularizer=reg_layer)(x)
                 x = Activation(params["activation"])(x)
                 x = BatchNormalization()(x) if batch else x
+            
+            # x = Dropout(params["dr_f"])(x)
             x = MaxPooling2D(pool_size=(2, 2))(x)
 
         x = GlobalAveragePooling2D()(x) if batch else Flatten()(x)
+        
+        # If ROI dataset, concatenate flattened pos with x
+        pos_input = None
+        # Now concatenate pos input if ROI dataset
+        if self.is_roi:
+            pos_input = Input(shape=self.pos_input_shape, name="pos_input")
+            pos_flat = Flatten()(pos_input)
+            x = tf.keras.layers.Concatenate()([x, pos_flat])
         
 
         # Dynamically added FC layers
@@ -117,7 +133,10 @@ class TFModel(TunerModel):
         outputs = Dense(self.n_classes, kernel_regularizer=reg_layer, activation="softmax")(x)
 
         # Build model with appropriate inputs
-        self.model = Model(inputs=inputs, outputs=outputs)
+        if self.is_roi and pos_input is not None:
+            self.model = Model(inputs=[inputs, pos_input], outputs=outputs)
+        else:
+            self.model = Model(inputs=inputs, outputs=outputs)
         
         self.create_specs()
    
@@ -230,6 +249,12 @@ class TFModel(TunerModel):
                 type=layer_type,
                 module=layer
             )
+        elif layer_type == LayerTypes.Concatenate:
+            return LayerSpec(
+                name=layer.name,
+                type=layer_type,
+                module=layer
+            )
         else:
             raise Exception("Missing LayerSpec for layer of type " + layer.__class__.__name__)
 
@@ -278,6 +303,10 @@ class TFModel(TunerModel):
             )
         elif layer_spec.type == LayerTypes.BatchNormalization:
             return layers.BatchNormalization(
+                name=layer_spec.name,
+            )
+        elif layer_spec.type == LayerTypes.Concatenate:
+            return layers.Concatenate(
                 name=layer_spec.name,
             )
         else:
