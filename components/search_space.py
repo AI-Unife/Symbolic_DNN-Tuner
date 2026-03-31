@@ -38,7 +38,7 @@ class search_space:
         """
 
         self.search_space = Space([
-            Categorical(name='num_neurons', categories=[8, 16, 32, 64]),
+            Categorical(name='num_neurons', categories=[4, 8, 16, 32, 64]),
             Integer(1, 4,  name='unit_c1'),
             Integer(1, 8, name='unit_c2'),
             Real(0.03, 0.5,  name='dr_f'),
@@ -46,20 +46,20 @@ class search_space:
             Categorical(categories=[8, 16, 32, 64],  name='batch_size'),
             Categorical(['Adam', 'Adamax', 'SGD', 'Adagrad', 'Adadelta'], name='optimizer'),
             Categorical(['relu', 'elu', 'selu', 'swish'], name='activation'),
-            Categorical(name='data_augmentation', categories=[False, True] if self.cfg.opt in ['standard', 'RS_ruled'] else [False]),
-            Categorical(name="reg_l2", categories=[False, True] if self.cfg.opt in ['standard', 'RS_ruled'] else [False]),
-            Categorical(name="skip_connection", categories=[False, True] if self.cfg.opt in ['standard', 'RS_ruled'] else [False])
+            Categorical(name='data_augmentation', categories=[False, True] if self.cfg.opt in ['standard', 'RS'] else [False]),
+            Categorical(name="reg_l2", categories=[False, True] if self.cfg.opt in ['standard', 'RS'] else [False]),
+            Categorical(name="skip_connection", categories=[False, True] if self.cfg.opt in ['standard', 'RS'] else [False])
 
         ])
         for b in range(1, max_block + 1):
             conv_name = f'new_conv_{b}'
-            if self.cfg.opt in ['standard', 'RS_ruled']:
+            if self.cfg.opt in ['standard', 'RS']:
                 self.search_space.dimensions.append(Integer(0, 16, name=conv_name))
             else:
                 self.search_space.dimensions.append(Integer(-1, 0, name=conv_name))
         for d in range(1, max_dense + 1):
             dense_name = f'new_fc_{d}'
-            if self.cfg.opt in ['standard', 'RS_ruled']:
+            if self.cfg.opt in ['standard', 'RS']:
                 self.search_space.dimensions.append(Integer(0, 32, name=dense_name))
             else:
                 self.search_space.dimensions.append(Integer(-1, 0, name=dense_name))

@@ -61,7 +61,7 @@ class TFModel(TunerModel):
         self.reg = params.get("reg_l2", False)
         self.da = params.get("data_augmentation", False)
 
-        batch = True if "gesture" not in self.cfg.dataset else False  # self.reg if self.reg else None
+        batch = False # if "gesture" not in self.cfg.dataset else False  # self.reg if self.reg else None
         self.model = None
         # 2) Build a new CNN
 

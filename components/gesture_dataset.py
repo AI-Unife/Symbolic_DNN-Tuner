@@ -450,8 +450,8 @@ def get_ROI_numpy(cfg):
         ((x_train, y_train), (x_test, y_test))
     """
     dataset_path = "rois_and_coordinates/datasets/"
-    cache_dir = f"./cache/DVS_ROI_fs16_{cfg.mode}_{cfg.frames}_{cfg.channels}/"
     frame_size = 16
+    cache_dir = f"./cache/DVS_ROI_reshaped_{frame_size}_{cfg.mode}_{cfg.frames}_{cfg.channels}/"
     output_size = (frame_size, frame_size, 2)
     # cache_dir = f"cache/DVS_ROI_{cfg.mode}_{polarity}_{cfg.frames}_{cfg.channels}_{n_pol}/"
     _ensure_cache_dir(cache_dir)
@@ -482,7 +482,7 @@ def get_ROI_numpy(cfg):
         train=True,
         transform=transform,
         target_transform=target_transform,
-        position_transform=ROIMapTransform(n_time_bins=cfg.frames),
+        position_transform=ROIMapTransform(n_time_bins=cfg.frames, output_size=output_size),
     )
     print("Loaded ROI training dataset with", len(train), "samples.")
     test = DVSGestureROI(
@@ -491,7 +491,7 @@ def get_ROI_numpy(cfg):
         train=False,
         transform=transform,
         target_transform=target_transform,
-        position_transform=ROIMapTransform(n_time_bins=cfg.frames),
+        position_transform=ROIMapTransform(n_time_bins=cfg.frames, output_size=output_size),
     )
 
     cached_train = tonic.DiskCachedDataset(train, cache_path=os.path.join(cache_dir, "train"))
@@ -499,16 +499,6 @@ def get_ROI_numpy(cfg):
 
     x_train, y_train = dataset_to_numpy(cached_train, cfg) 
     x_test, y_test = dataset_to_numpy(cached_test, cfg)
-    # Handle multi-dimensional y (e.g., [B, T, C] one-hot): use first time step to determine class
-    # if y_train.ndim > 1:
-    #     y_for_split = np.argmax(y_train[:, 0, :], axis=1) if y_train.ndim == 3 else np.argmax(y_train, axis=1)
-    # else:
-    #     y_for_split = y_train
-    # x_train, x_test, y_train, y_test = train_test_split(
-    #     x, y, test_size=0.2, random_state=42, stratify=y_for_split
-    # )
-    # x_train, y_train = dataset_to_numpy(cached_train, cfg)
-    # x_test, y_test = dataset_to_numpy(cached_test, cfg)
 
     return (x_train, y_train), (x_test, y_test)
 

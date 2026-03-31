@@ -148,7 +148,7 @@ class TunerDataset:
             image_key="image",
             label_key="label",
         )
-        self.normalize_data()
+        # self.normalize_data()
         
     def load_tiny_imagenet(self):
         from PIL import Image
