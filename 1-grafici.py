@@ -67,6 +67,8 @@ class ExperimentResult:
     hw_total_cost: Optional[float]
     hw_config: Optional[str]
     evidence: Optional[Tuple[Tuple[str, str], bool]]        # Nuovo campo per memorizzare i dati di evidence
+    diagnosis: Optional[List[str]]                          # Nuovo campo per memorizzare le diagnosi trovate in ogni iterazione
+    tuning: Optional[List[str]]                             # Nuovo campo per memorizzare le soluzioni di tuning applicate in ogni iterazione
     score: Optional[float] = None  # Calculated as -accuracy if no modules are present
     # hyperparams: Optional[Dict[str, Any]]
 
@@ -127,6 +129,10 @@ class ResultsAnalyzer:
             self.has_hardware_module = True
 
         evidence_data = self._load_evidence_data()      # Carico i dati di evidence
+
+        diagnosis_data = self._load_diagnosis_data()      # Carico i dati di diagnosis (se disponibili)
+
+        tuning_data = self._load_tuning_data()      # Carico i dati di tuning (se disponibili)
         
         # Combine the data
         max_iterations = max(
@@ -134,7 +140,9 @@ class ResultsAnalyzer:
             # len(hyperparams_list),
             len(flops_data) if flops_data else 0,
             len(hw_data) if hw_data else 0,
-            len(evidence_data) if evidence_data else 0      #considero anche la lunghezza dei dati di evidence per determinare il numero di iterazioni da analizzare
+            len(evidence_data) if evidence_data else 0,      #considero anche la lunghezza dei dati di evidence per determinare il numero di iterazioni da analizzare
+            len(diagnosis_data) if diagnosis_data else 0,     #considero anche la lunghezza dei dati di diagnosis per determinare il numero di iterazioni da analizzare
+            len(tuning_data) if tuning_data else 0           #considero anche la lunghezza dei dati di tuning per determinare il numero di iterazioni da analizzare
         )
         
         for i in range(max_iterations):
@@ -149,7 +157,9 @@ class ResultsAnalyzer:
                 hw_config=hw_data[i][3] if hw_data and i < len(hw_data) else None,
                 score=scores[i] if scores and i < len(scores) else None,
                 # hyperparams=hyperparams_list[i] if i < len(hyperparams_list) else None,
-                evidence=evidence_data[i] if evidence_data and i < len(evidence_data) else None     # Aggiungo i dati di evidence al risultato
+                evidence=evidence_data[i] if evidence_data and i < len(evidence_data) else None,     # Aggiungo i dati di evidence al risultato
+                diagnosis=diagnosis_data[i] if diagnosis_data and i < len(diagnosis_data) else None,     # Aggiungo i dati di diagnosis al risultato
+                tuning=tuning_data[i] if tuning_data and i < len(tuning_data) else None               # Aggiungo i dati di tuning al risultato
             )
             
             # Calculate score: -accuracy if no modules are present
@@ -302,6 +312,54 @@ class ResultsAnalyzer:
             return None
         
         return evidence_data if evidence_data else None
+    
+    # !!! NUOVA FUNZIONE PER CARICARE I DATI DI DIAGNOSIS
+    def _load_diagnosis_data(self) -> Optional[List[List[str]]]:
+        """Load diagnosis data from diagnosis_symbolic_logs.txt file"""
+        diagnosis_file = self.algorithm_logs_dir / "diagnosis_symbolic_logs.txt"
+        if not diagnosis_file.exists():
+            return None
+        
+        diagnosis_data = []
+        try:
+            with open(diagnosis_file, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    line = line.replace("[","").replace("]","").replace("'", "").replace(" ", "")    # Rimuovo i simboli superflui per ottenere solo i dati
+                    diagnoses = line.split(',')  # Ogni diagnosi è separata da una virgola, quindi splitto la linea in base a questo carattere
+                    diagnosis_data.append(diagnoses)
+
+        except Exception as e:
+            print(f"  Error reading {diagnosis_file}: {e}")
+            return None
+        
+        return diagnosis_data if diagnosis_data else None
+    
+    # !!! NUOVA FUNZIONE PER CARICARE I DATI DI TUNING
+    def _load_tuning_data(self) -> Optional[List[List[str]]]:
+        """Load tuning data from tuning_symbolic_logs.txt file"""
+        tuning_file = self.algorithm_logs_dir / "tuning_symbolic_logs.txt"
+        if not tuning_file.exists():
+            return None
+        
+        tuning_data = []
+        try:
+            with open(tuning_file, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    line = line.replace("[","").replace("]","").replace("'", "").replace(" ", "")    # Rimuovo i simboli superflui per ottenere solo i dati
+                    tunings = line.split(',')  # Ogni soluzione di tuning è separata da una virgola, quindi splitto la linea in base a questo carattere
+                    tuning_data.append(tunings)
+
+        except Exception as e:
+            print(f"  Error reading {tuning_file}: {e}")
+            return None
+        
+        return tuning_data if tuning_data else None
 
 
 def analyze_all_experiments(parent_dir: Path, output_dir: Optional[Path] = None):
@@ -441,6 +499,97 @@ def analyze_all_experiments(parent_dir: Path, output_dir: Optional[Path] = None)
             fig.savefig(output_dir / f"{exp_dir.name}_evidence.png")
             plt.close(fig)
 
+        # Grafico la frequenza dei metodi intrapresi (indipendentemente dal successo) per capire qual è il più usato
+        print (f"  - Generating method frequency bar plot for {exp_dir.name} ")
+        grafici_tuning = 0
+        grafico_evidence = False
+        grafico_t=False
+
+        if any(r.tuning is not None for r in analyzer.results):
+            grafici_tuning+=1
+            grafico_t=True
+        if any(r.evidence is not None for r in analyzer.results):
+            grafici_tuning+=1
+            grafico_evidence = True
+
+        if grafici_tuning >0:
+            fig, ax = plt.subplots(1,grafici_tuning, figsize=(10 * grafici_tuning, 6))
+            if grafici_tuning == 1:
+                ax = [ax]
+            idx=0
+            if grafico_evidence:
+                df['Metodo'] = df['Tupla'].apply(lambda x: x[0])   # Creo una nuova colonna "Metodo" estraendo solo la prima parte della tupla, che rappresenta l'azione intrapresa, in modo da poterla usare come categoria per il grafico a barre
+                frequenza_azioni = df['Metodo'].value_counts()     # Calcolo la frequenza di ogni metodo intrapresa utilizzando value_counts, ottenendo una serie con i metodi come indice e le frequenze come valori
+                frequenza_azioni.plot(kind='bar', color='blue', ax=ax[idx])  # Genero un bar plot con le frequenze dei metodi, usando il colore blu
+                ax[idx].set_title('Frequenza dei Metodi Intrapresi')
+                ax[idx].set_xlabel('Metodo Intrapreso')
+                ax[idx].set_ylabel('Frequenza')
+                ax[idx].set_xticklabels(frequenza_azioni.index, rotation=45, ha='right', rotation_mode='anchor')
+                idx+=1
+            if grafico_t:
+                tuning_data = []      # Lista per memorizzare le diagnosi trovate nei diagnosis_symbolic_logs
+                for r in analyzer.results:
+                    if r.tuning is not None:
+                        tuning_data.extend(r.tuning)   # Aggiungo tutte le diagnosi trovate in questa iterazione alla lista generale
+
+                df_tuning = pd.DataFrame(tuning_data, columns=['Tuning'])   # Creo un DataFrame con una colonna "Tuning" per i dati di tuning_symbolic_logs
+                frequenza_tuning = df_tuning['Tuning'].value_counts()        # Calcolo la frequenza di ogni diagnosi utilizzando value_counts, ottenendo una serie con le diagnosi come indice e le frequenze come valori
+                frequenza_tuning.plot(kind='bar', color='orange', ax=ax[idx])       # Genero un bar plot con le frequenze delle diagnosi, usando il colore arancione
+                ax[idx].set_title('Frequenza delle Diagnosi (tuning_symbolic_logs)')
+                ax[idx].set_xlabel('Diagnosi')
+                ax[idx].set_ylabel('Frequenza')
+                ax[idx].set_xticklabels(frequenza_tuning.index, rotation=45, ha='right', rotation_mode='anchor')
+
+            fig.tight_layout()
+            fig.savefig(output_dir / f"{exp_dir.name}_action_frequency.png")
+            plt.close(fig)
+
+        # Grafico le specifiche diagnosi sia da dati di evidence che da diagnosis_symbolic_logs
+        print (f"  - Generating diagnosis frequency bar plot for {exp_dir.name} ")
+        grafici_diagnosi = 0
+        grafico_evidence = False
+        grafico_d=0
+
+        if any(r.diagnosis is not None for r in analyzer.results):
+            grafici_diagnosi+=1
+            grafico_d=True
+        if any(r.evidence is not None for r in analyzer.results):
+            grafici_diagnosi+=1
+            grafico_evidence = True
+        if grafici_diagnosi >0:
+            
+            fig, ax = plt.subplots(1,grafici_diagnosi, figsize=(10 * grafici_diagnosi, 6))
+            if grafici_diagnosi == 1:
+                ax = [ax]
+            idx=0
+            if grafico_evidence:
+                df['Diagnosi'] = df['Tupla'].apply(lambda x: x[1])   # Creo una nuova colonna "Diagnosi" estraendo solo la seconda parte della tupla, che rappresenta la diagnosi, in modo da poterla usare come categoria per il grafico a barre
+                frequenza_azioni = df['Diagnosi'].value_counts()     # Calcolo la frequenza di ogni diagnosi utilizzando value_counts, ottenendo una serie con le diagnosi come indice e le frequenze come valori
+                frequenza_azioni.plot(kind='bar', color='blue', ax=ax[0])  # Genero un bar plot con le frequenze delle diagnosi, usando il colore blu
+                ax[0].set_title('Frequenza delle Diagnosi')
+                ax[0].set_xlabel('Diagnosi')
+                ax[0].set_ylabel('Frequenza')
+                ax[0].set_xticklabels(frequenza_azioni.index, rotation=45, ha='right', rotation_mode='anchor')
+                idx=1
+
+            # Se sono disponibili anche i dati di diagnosis_symbolic_logs, genero un secondo grafico a barre per mostrare la frequenza delle diagnosi trovate in questi log
+            if grafico_d:   # Controllo se ci sono dati di diagnosis_symbolic_logs disponibili in almeno un'iterazione
+                diagnosis_data = []      # Lista per memorizzare le diagnosi trovate nei diagnosis_symbolic_logs
+                for r in analyzer.results:
+                    if r.diagnosis is not None:
+                        diagnosis_data.extend(r.diagnosis)   # Aggiungo tutte le diagnosi trovate in questa iterazione alla lista generale
+
+                df_diagnosis = pd.DataFrame(diagnosis_data, columns=['Diagnosi'])   # Creo un DataFrame con una colonna "Diagnosi" per i dati di diagnosis_symbolic_logs
+                frequenza_diagnosi = df_diagnosis['Diagnosi'].value_counts()        # Calcolo la frequenza di ogni diagnosi utilizzando value_counts, ottenendo una serie con le diagnosi come indice e le frequenze come valori
+                frequenza_diagnosi.plot(kind='bar', color='orange', ax=ax[idx])       # Genero un bar plot con le frequenze delle diagnosi, usando il colore arancione
+                ax[idx].set_title('Frequenza delle Diagnosi (diagnosis_symbolic_logs)')
+                ax[idx].set_xlabel('Diagnosi')
+                ax[idx].set_ylabel('Frequenza')
+                ax[idx].set_xticklabels(frequenza_diagnosi.index, rotation=45, ha='right', rotation_mode='anchor')
+
+            fig.tight_layout()
+            fig.savefig(output_dir / f"{exp_dir.name}_diagnosis_frequency.png")
+            plt.close(fig)
 
 def main():
     """Main function"""
