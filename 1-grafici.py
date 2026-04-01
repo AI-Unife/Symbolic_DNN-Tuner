@@ -535,8 +535,8 @@ def analyze_all_experiments(parent_dir: Path, output_dir: Optional[Path] = None)
                 df_tuning = pd.DataFrame(tuning_data, columns=['Tuning'])   # Creo un DataFrame con una colonna "Tuning" per i dati di tuning_symbolic_logs
                 frequenza_tuning = df_tuning['Tuning'].value_counts()        # Calcolo la frequenza di ogni diagnosi utilizzando value_counts, ottenendo una serie con le diagnosi come indice e le frequenze come valori
                 frequenza_tuning.plot(kind='bar', color='orange', ax=ax[idx])       # Genero un bar plot con le frequenze delle diagnosi, usando il colore arancione
-                ax[idx].set_title('Frequenza delle Diagnosi (tuning_symbolic_logs)')
-                ax[idx].set_xlabel('Diagnosi')
+                ax[idx].set_title('Frequenza dei Tuning (tuning_symbolic_logs)')
+                ax[idx].set_xlabel('Tuning Applicato')
                 ax[idx].set_ylabel('Frequenza')
                 ax[idx].set_xticklabels(frequenza_tuning.index, rotation=45, ha='right', rotation_mode='anchor')
 
@@ -590,6 +590,33 @@ def analyze_all_experiments(parent_dir: Path, output_dir: Optional[Path] = None)
             fig.tight_layout()
             fig.savefig(output_dir / f"{exp_dir.name}_diagnosis_frequency.png")
             plt.close(fig)
+
+            # Per ogni iterazione, mostro quali diagnosi sono state trovate e quali soluzioni di tuning sono state applicate, creando un grafico con le iterazioni sull'asse x e le diagnosi/soluzioni sull'asse y
+            print (f"  - Generating diagnosis and tuning timeline plot for {exp_dir.name} ")
+            fig, ax = plt.subplots(figsize=(15, 8))
+            timeline_data = []   # Lista per memorizzare i dati da graficare nella timeline
+            for r in analyzer.results:
+                if r.diagnosis is not None:
+                    for diag in r.diagnosis:
+                        timeline_data.append((r.iteration, diag, 'diagnosis'))   # Aggiungo una tupla con iterazione, diagnosi e tipo "diagnosis" alla lista della timeline
+                if r.tuning is not None:
+                    for tune in r.tuning:
+                        timeline_data.append((r.iteration, tune, 'tuning'))     # Aggiungo una tupla con iterazione, soluzione di tuning e tipo "tuning" alla lista della timeline
+            if timeline_data:
+                df_timeline = pd.DataFrame(timeline_data, columns=['Iteration', 'Evento', 'Tipo'])   # Creo un DataFrame con colonne per iterazione, evento (diagnosi o tuning) e tipo (diagnosis o tuning)
+                df_timeline['Color'] = df_timeline['Tipo'].apply(lambda x: 'blue' if x == 'diagnosis' else 'orange')  # Creo una colonna "Color" per distinguere visivamente diagnosi e tuning nel grafico
+                ax.scatter([], [], color='blue', label='Diagnosis')   # Aggiungo un punto fittizio per la legenda delle diagnosi
+                ax.scatter([], [], color='orange', label='Tuning')    # Aggiungo un punto fittizio per la legenda delle soluzioni di tuning
+                ax.legend()
+                for _, row in df_timeline.iterrows():
+                    ax.scatter(row['Iteration'], row['Evento'], color=row['Color'])   # Aggiungo un punto al grafico per ogni evento, usando il colore corrispondente al tipo
+                ax.set_title('Timeline di Diagnosi e Tuning')
+                ax.set_xlabel('Iterazione')
+                ax.set_ylabel('Evento')
+                ax.grid()
+                fig.tight_layout()
+                fig.savefig(output_dir / f"{exp_dir.name}_diagnosis_tuning_timeline.png")
+                plt.close(fig)
 
 def main():
     """Main function"""
