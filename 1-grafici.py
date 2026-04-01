@@ -14,14 +14,12 @@ The user will be asked to select the parent folder containing the experiments.
 
 import os
 import sys
-import csv
-import json
 import yaml
-import ast
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Any
 from dataclasses import dataclass, field
 import matplotlib.pyplot as plt
+import pandas as pd
 
 # Try to import tkinter, fallback if not available
 try:
@@ -68,9 +66,9 @@ class ExperimentResult:
     hw_cost: Optional[float]
     hw_total_cost: Optional[float]
     hw_config: Optional[str]
-    score: Optional[float]
-    # hyperparams: Optional[Dict[str, Any]]
+    evidence: Optional[Tuple[Tuple[str, str], bool]]        # Nuovo campo per memorizzare i dati di evidence
     score: Optional[float] = None  # Calculated as -accuracy if no modules are present
+    # hyperparams: Optional[Dict[str, Any]]
 
 class ResultsAnalyzer:
     """Analyzer for experiment results"""
@@ -127,13 +125,16 @@ class ResultsAnalyzer:
         hw_data = self._load_hardware_data()
         if hw_data:
             self.has_hardware_module = True
+
+        evidence_data = self._load_evidence_data()      # Carico i dati di evidence
         
         # Combine the data
         max_iterations = max(
             len(accuracies),
             # len(hyperparams_list),
             len(flops_data) if flops_data else 0,
-            len(hw_data) if hw_data else 0
+            len(hw_data) if hw_data else 0,
+            len(evidence_data) if evidence_data else 0      #considero anche la lunghezza dei dati di evidence per determinare il numero di iterazioni da analizzare
         )
         
         for i in range(max_iterations):
@@ -148,6 +149,7 @@ class ResultsAnalyzer:
                 hw_config=hw_data[i][3] if hw_data and i < len(hw_data) else None,
                 score=scores[i] if scores and i < len(scores) else None,
                 # hyperparams=hyperparams_list[i] if i < len(hyperparams_list) else None,
+                evidence=evidence_data[i] if evidence_data and i < len(evidence_data) else None     # Aggiungo i dati di evidence al risultato
             )
             
             # Calculate score: -accuracy if no modules are present
@@ -272,6 +274,34 @@ class ResultsAnalyzer:
             return None
         
         return hw_data if hw_data else None
+    
+    # !!! NUOVA FUNZIONE PER CARICARE I DATI DI EVIDENCE
+    def _load_evidence_data(self) -> Optional[List[Tuple[Tuple[str, str], bool]]]:
+        """Load evidence data from evidence.txt file"""
+        evidence_file = self.algorithm_logs_dir / "evidence.txt"
+        if not evidence_file.exists():
+            return None
+        
+        evidence_data = []
+        try:
+            with open(evidence_file, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    line = line.replace("[","").replace("]","").replace("action", "").replace("(", "").replace(")", "").replace(" ", "")    # Rimuovo le parole e i simboli superflui per ottenere solo i dati
+                    parts = line.split(',')
+                    if len(parts) >= 0:
+                        for i in range (0, len(parts)-2, 3):    #i dati sono in tripletta, quindi ciclo con step di 3 per prenderli correttamente
+                            action = (parts[i+0], parts[i+1])
+                            success = parts[i+2].lower() == 'true'  # Converto la stringa che trovo in booleano
+                            evidence_data.append((action, success))
+
+        except Exception as e:
+            print(f"  Error reading {evidence_file}: {e}")
+            return None
+        
+        return evidence_data if evidence_data else None
 
 
 def analyze_all_experiments(parent_dir: Path, output_dir: Optional[Path] = None):
@@ -311,12 +341,13 @@ def analyze_all_experiments(parent_dir: Path, output_dir: Optional[Path] = None)
 
     # Iniziano modifiche   !!! 
         # creo 3 grafici per ogni esperimento nella stessa figura: accuracy, score e nparams (se disponibili)
+        # prima di tutto controllo quali dati sono disponibili per decidere quanti grafici creare 
         num_plots = 0
         plotAccuracy = False
         plotScore = False
         plotParams = False
 
-        for i in range(len(analyzer.results)):
+        for i in range(len(analyzer.results)):  # controllo se c'è almeno un dato di accuratezza valido per decidere se creare il grafico dell'accuratezza
             if analyzer.results[i].accuracy is not None:
                 num_plots += 1
                 plotAccuracy = True
@@ -332,18 +363,18 @@ def analyze_all_experiments(parent_dir: Path, output_dir: Optional[Path] = None)
                 plotParams = True
                 break
 
-        print(f"  - {num_plots} plots to generate for {exp_dir.name}")
+        print(f"  - {num_plots} line plots to generate for {exp_dir.name}")
         
         if num_plots == 0:
             continue
 
-        fig, axes = plt.subplots(1,num_plots, figsize=(10 * num_plots, 6))
+        fig, axes = plt.subplots(1,num_plots, figsize=(10 * num_plots, 6))      # adatto la dimensione della figura al numero di grafici da creare
         # Grafici linea per l'accuratezza
         idx = 0
         if plotAccuracy:
             axes[idx].plot(
-                [r.iteration for r in analyzer.results if r.accuracy is not None],
-                [r.accuracy for r in analyzer.results if r.accuracy is not None],
+                [r.iteration for r in analyzer.results if r.accuracy is not None],  #asse x sono le iterazioni
+                [r.accuracy for r in analyzer.results if r.accuracy is not None],   #asse y sono le accuratezze, filtro solo quelle non None
                 label=exp_dir.name, color='red'
             )
             axes[idx].set_title(f"Accuracy - {exp_dir.name}")
@@ -356,8 +387,8 @@ def analyze_all_experiments(parent_dir: Path, output_dir: Optional[Path] = None)
         # Grafici linea per lo score
         if plotScore:
             axes[idx].plot(
-                [r.iteration for r in analyzer.results if r.score is not None and r.score<0], 
-                [r.score for r in analyzer.results if r.score is not None and r.score<0],
+                [r.iteration for r in analyzer.results if r.score is not None and r.score<0],   #asse x sono le iterazioni
+                [r.score for r in analyzer.results if r.score is not None and r.score<0],       #asse y sono gli score, filtro solo quelli non None e negativi 
                 label=exp_dir.name, color='blue'
             )
             axes[idx].set_title(f"Score - {exp_dir.name}")
@@ -370,8 +401,8 @@ def analyze_all_experiments(parent_dir: Path, output_dir: Optional[Path] = None)
         # Grafici linea per il numero di parametri
         if plotParams:
             axes[idx].plot(
-                [r.iteration for r in analyzer.results if r.nparams is not None],
-                [r.nparams for r in analyzer.results if r.nparams is not None],
+                [r.iteration for r in analyzer.results if r.nparams is not None],       #asse x sono le iterazioni
+                [r.nparams for r in analyzer.results if r.nparams is not None],         #asse y sono il numero di parametri, filtro solo quelli non None
                 label=exp_dir.name, color='green'
             )
             axes[idx].set_title(f"Number of Parameters - {exp_dir.name}")
@@ -383,6 +414,32 @@ def analyze_all_experiments(parent_dir: Path, output_dir: Optional[Path] = None)
         plt.tight_layout()
         plt.savefig(output_dir / f"{exp_dir.name}_graphs.png")
         plt.close()
+
+        # Grafico a barre per i dati di evidence
+        dati_evidence = []          # Lista per memorizzare i dati di evidence da graficare  
+        for r in analyzer.results:
+            if r.evidence is not None:
+                dati_evidence.append(r.evidence)
+
+        if dati_evidence:       # Se ci sono dati di evidence da graficare, genero il grafico a barre
+            print (f"  - Generating evidence bar plot for {exp_dir.name} ")
+            fig, ax = plt.subplots(figsize=(15, 8))
+            df = pd.DataFrame(dati_evidence, columns=['Tupla', 'Condizione'])       # Creo un DataFrame con due colonne: una per la tupla (azione) e una per la condizione (successo o fallimento) per aiutarmi nel definire assi e nei calcoli
+
+            df['Etichetta'] = df['Tupla'].apply(lambda x: "-".join(map(str, x)))    # Creo una nuova colonna "Etichetta" unendo i valori della tupla in una stringa, in modo da poterla usare come etichetta sull'asse x del grafico a barre
+
+            conteggi = pd.crosstab(df['Etichetta'], df['Condizione'])           # Utilizzo crosstab per contare quante volte ogni etichetta ha avuto successo (True) e fallimento (False), ottenendo una tabella con le etichette come righe e le condizioni come colonne, con i conteggi corrispondenti.
+
+            conteggi.plot(kind='bar', color=['red', 'green'], ax=ax) # Generiamo bar plot: Rosso per False, Verde per True
+
+            ax.set_title('Conteggio True vs False per Categoria')
+            ax.set_xlabel('Categorie (Tuple)')
+            ax.set_ylabel('Frequenza')
+            ax.set_xticklabels(conteggi.index, rotation=45, ha='right', rotation_mode='anchor') # Ruoto e allineo le etichette sull'asse x
+            ax.legend(['Falso', 'Vero'])
+            fig.tight_layout()
+            fig.savefig(output_dir / f"{exp_dir.name}_evidence.png")
+            plt.close(fig)
 
 
 def main():
