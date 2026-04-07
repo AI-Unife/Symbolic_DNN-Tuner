@@ -481,7 +481,7 @@ def _calculate_hardware(exp_dir: Path) -> Optional[Tuple[float, float, float, st
     ]
 
     cost_par = 10000.0
-    weight_cost = 0.3
+    weight_cost = 0.7
     max_latency = 0.008
     max_cost = 30000.0
     log_file = "profiler_logs.txt"
@@ -664,7 +664,17 @@ def analyze_all_experiments(parent_dir: Path, output_dir: Optional[Path] = None)
         summary_csv = output_dir / "summary_best_results.csv"
         try:
             with open(summary_csv, 'w', newline='') as f:
-                fieldnames = [col for col in summary_data[0].keys()]
+                base_columns = [
+                    'experiment', 'best_iteration', 'best_accuracy', 'best_score',
+                    'best_nparams', 'best_flops',
+                    'best_latency', 'best_hw_cost', 'best_hw_total_cost', 'best_hw_config',
+                ]
+                all_columns = set()
+                for row in summary_data:
+                    all_columns.update(row.keys())
+                extra_columns = sorted(col for col in all_columns if col not in base_columns)
+                fieldnames = [col for col in base_columns if col in all_columns] + extra_columns
+
                 writer = csv.DictWriter(f, fieldnames=fieldnames)
                 writer.writeheader()
                 
