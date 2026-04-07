@@ -19,11 +19,12 @@ class hardware_module(common_interface):
     #weight of the module for the final loss calculation
     weight = 0.33
 
-    def __init__(self, weight_cost: float = 0.3):
+    def __init__(self, weight_cost: float = 0.7):
         # cost value per square millimeter, 10K / mm2
         self.cost_par = 10000
         # attribute indicating how much cost weighs against latency value
         self.weight_cost = weight_cost
+        print(colors.OKBLUE, f"|  --------- INITIALIZING HARDWARE MODULE WITH COST WEIGHT {self.weight_cost}  -------  |\n", colors.ENDC)
         # max latency value in second 
         self.max_latency = 0.008 #120FPS,
         # max manifacturing cost value

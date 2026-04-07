@@ -1,7 +1,7 @@
 import subprocess
 from itertools import product
 
-datasets_cifar = ['CIFAR-10', 'CIFAR-100', 'tinyImageNet']
+datasets_cifar = ['cifar10', 'cifar100', 'tinyimagenet']
 optimizers = ['filtered', 'RS_ruled', 'basic', 'standard', 'RS']
 seeds = [42, 123, 96, 7, 84]
 
@@ -37,7 +37,7 @@ def generate_params_file(output_path: str = "params_gesture.txt"):
     Generate a params.txt file for job arrays, where each line is a parameter combination
     starting from 'gesture'. Ignores prefixes and IDs.
     """
-    datasets = ["gesture"] # "roigesture_matrix", "roigesture_coords", 
+    datasets = ["roigesture_matrix", "roigesture_coords"] # "roigesture_matrix", "roigesture_coords", 
     params_th = [1000000, 10000000000]  # 1M and 100G params, for example
     
 
@@ -61,9 +61,9 @@ def generate_params_file(output_path: str = "params_gesture.txt"):
     print(f"✅ File '{output_path}' generato con {len(lines)} combinazioni.")
 
 def main():
-    # job_configs = generate_jobs()
-    # save_job_configs_to_file(job_configs)
-    generate_params_file()
+    job_configs = generate_jobs()
+    save_job_configs_to_file(job_configs)
+    # generate_params_file()
 
 if __name__ == "__main__":
     main()

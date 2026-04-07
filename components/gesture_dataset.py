@@ -57,7 +57,6 @@ class BothPolarity:
 class DVSGestureROI(DVSGesture):
     """A modified version of the DVSGesture eventset that returns regions-of-interest (ROIs) and their coordinates."""
 
-    sensor_size = (32, 32, 2)
     dtype = np.dtype(
         [("x", np.int16), ("y", np.int16), ("p", bool), ("t", np.int64)]
     )
@@ -453,16 +452,14 @@ def get_ROI_numpy(cfg):
     frame_size = 16
     cache_dir = f"./cache/DVS_ROI_reshaped_{frame_size}_{cfg.mode}_{cfg.frames}_{cfg.channels}/"
     output_size = (frame_size, frame_size, 2)
-    # cache_dir = f"cache/DVS_ROI_{cfg.mode}_{polarity}_{cfg.frames}_{cfg.channels}_{n_pol}/"
     _ensure_cache_dir(cache_dir)
     print("cache_dir:", cache_dir)
 
     tfms: List = [
         transforms.Denoise(filter_time=10000),
-        # Reuse DVSGesture sensor size only as a (H,W) hint for downsampling,
-        # since we target a fixed (64, 64) output anyway.
-        # transforms.Downsample(sensor_size=tonic.datasets.DVSGesture.sensor_size, target_size=(64, 64)),
-        transforms.ToFrame(sensor_size=output_size, n_time_bins=cfg.frames),
+        # Downsample and ToFrame expect 2D spatial sizes (H, W) only, not including polarity
+        transforms.Downsample(sensor_size=(32, 32), target_size=(frame_size, frame_size)),
+        transforms.ToFrame(sensor_size=(frame_size, frame_size, 2), n_time_bins=cfg.frames),
     ]
 
     if cfg.mode == "fwdPass":
