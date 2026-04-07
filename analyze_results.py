@@ -30,7 +30,9 @@ try:
 except ImportError:
     TKINTER_AVAILABLE = False
 
-
+from tensorflow_implementation.flops.flops_calculator import analyze_model
+import nvdla.profiler as profiler
+from components.model_interface import LayerSpec, LayerTypes, Params
 _EXCLUDED_CONFIG_KEYS = ["name", "verbose", "polarity", "created_at"]
 
 @dataclass
@@ -275,7 +277,7 @@ class ResultsAnalyzer:
         except Exception as e:
             print(f"  Error reading config.yaml: {e}")
             self.config = {}
-    
+
     def get_best_result(self) -> Optional[ExperimentResult]:
         """Return the best result (lowest score)"""
         valid_results = [r for r in self.results if r.score is not None]
@@ -352,6 +354,205 @@ class ResultsAnalyzer:
             print(f"  Error saving CSV: {e}")
             return False
 
+def _calculate_flops(exp_dir: Path) -> Optional[float]:
+    """Load the best model from exp_dir/Model/best-model.keras and compute FLOPs."""
+    try:
+        from tensorflow import keras
+    except Exception as e:
+        print(f"  TensorFlow not available, cannot calculate FLOPS: {e}")
+        return None
+
+    model_path = exp_dir / "Model" / "best-model.keras"
+    if not model_path.exists():
+        print(f"  Model file not found: {model_path}")
+        return None
+
+    try:
+        model = keras.models.load_model(model_path, compile=False)
+        flops, _ = analyze_model(model)
+        return flops.total_float_ops
+    except Exception as e:
+        print(f"  Error calculating FLOPS from model: {e}")
+        return None
+
+def _extract_shape(shape_obj: Any) -> Optional[List[int]]:
+    """Normalize keras/tensor shapes to a plain list of ints."""
+    if shape_obj is None:
+        return None
+
+    shape = shape_obj
+    if hasattr(shape_obj, "shape"):
+        shape = shape_obj.shape
+
+    if isinstance(shape, (list, tuple)) and shape and isinstance(shape[0], (list, tuple)):
+        shape = shape[0]
+
+    try:
+        normalized = [int(dim) if dim is not None else None for dim in shape]
+    except Exception:
+        return None
+
+    return normalized
+
+
+def _build_model_specs(model: Any) -> Dict[str, LayerSpec]:
+    """Build minimal LayerSpec map required by the NVDLA profiler."""
+    try:
+        from tensorflow.keras.layers import Conv2D, Dense
+    except Exception:
+        return {}
+
+    specs: Dict[str, LayerSpec] = {}
+    for layer in model.layers:
+        if isinstance(layer, Conv2D):
+            in_shape = _extract_shape(layer.input)
+            out_shape = _extract_shape(layer.output)
+            if not in_shape or not out_shape or len(in_shape) < 4 or len(out_shape) < 4:
+                continue
+            if any(v is None for v in (in_shape[1], in_shape[2], in_shape[3], out_shape[1], out_shape[2], out_shape[3])):
+                continue
+            specs[layer.name] = LayerSpec(
+                name=layer.name,
+                type=LayerTypes.Conv2D,
+                module=layer,
+                params={
+                    Params.IN_CHANNELS: in_shape[3],
+                    Params.IN_HEIGHT: in_shape[1],
+                    Params.IN_WIDTH: in_shape[2],
+                    Params.OUT_CHANNELS: out_shape[3],
+                    Params.OUT_HEIGHT: out_shape[1],
+                    Params.OUT_WIDTH: out_shape[2],
+                    Params.KERNEL_SIZE: layer.kernel_size,
+                    Params.STRIDE: layer.strides,
+                    Params.PADDING: layer.padding,
+                    Params.BIAS: layer.use_bias,
+                }
+            )
+        elif isinstance(layer, Dense):
+            in_shape = _extract_shape(layer.input)
+            out_shape = _extract_shape(layer.output)
+            if not in_shape or not out_shape or len(in_shape) < 2 or len(out_shape) < 2:
+                continue
+            if any(v is None for v in (in_shape[-1], out_shape[-1])):
+                continue
+            specs[layer.name] = LayerSpec(
+                name=layer.name,
+                type=LayerTypes.Dense,
+                module=layer,
+                params={
+                    Params.IN_FEATURES: in_shape[-1],
+                    Params.OUT_FEATURES: out_shape[-1],
+                    Params.BIAS: layer.use_bias,
+                }
+            )
+
+    return specs
+
+
+def _calculate_hardware(exp_dir: Path) -> Optional[Tuple[float, float, float, str]]:
+    """Estimate latency/cost/total_cost/config for exp_dir/Model/best-model.keras."""
+    try:
+        from tensorflow import keras
+    except Exception as e:
+        print(f"  TensorFlow not available, cannot calculate hardware metrics: {e}")
+        return None
+
+    model_path = exp_dir / "Model" / "best-model.keras"
+    if not model_path.exists():
+        print(f"  Model file not found for hardware estimate: {model_path}")
+        return None
+
+    try:
+        model = keras.models.load_model(model_path, compile=False)
+    except Exception as e:
+        print(f"  Error loading model for hardware estimate: {e}")
+        return None
+
+    model_specs = _build_model_specs(model)
+    if not model_specs:
+        print("  Hardware estimate skipped: no supported Conv2D/Dense layers found")
+        return None
+
+    specs_dir = Path(__file__).resolve().parent / "nvdla" / "specs"
+    nvdla_list = [
+        {"name": "nv_small", "path": "nv_small64_fp32.yaml", "area": 2.824},
+        {"name": "nv_small256", "path": "nv_small256_fp32.yaml", "area": 3.091},
+        {"name": "nv_large", "path": "nv_large2048_fp32.yaml", "area": 3.809},
+    ]
+
+    cost_par = 10000.0
+    weight_cost = 0.3
+    max_latency = 0.008
+    max_cost = 30000.0
+    log_file = "profiler_logs.txt"
+
+    best_hw: Optional[Tuple[float, float, float, str]] = None
+    for cfg in nvdla_list:
+        cfg_path = specs_dir / cfg["path"]
+        if not cfg_path.exists():
+            continue
+
+        try:
+            nvdla_profiler = profiler.nvdla(cfg_path)
+            total_latency_ns = 0.0
+            for layer_spec in model_specs.values():
+                if layer_spec.type == LayerTypes.Conv2D:
+                    out_size = [
+                        1,
+                        layer_spec.get(Params.OUT_CHANNELS),
+                        layer_spec.get(Params.OUT_HEIGHT),
+                        layer_spec.get(Params.OUT_WIDTH),
+                    ]
+                    padding = 0 if layer_spec.get(Params.PADDING) == "valid" else int(layer_spec.get(Params.KERNEL_SIZE)[0] - 1) / 2
+                    input_size = [
+                        1,
+                        layer_spec.get(Params.IN_CHANNELS),
+                        layer_spec.get(Params.IN_HEIGHT),
+                        layer_spec.get(Params.IN_WIDTH),
+                    ]
+                    conv_obj = profiler.Conv2d(
+                        nvdla_profiler,
+                        log_file,
+                        layer_spec.name,
+                        out_size,
+                        input_size[1],
+                        out_size[1],
+                        layer_spec.get(Params.KERNEL_SIZE)[0],
+                        layer_spec.get(Params.STRIDE)[0],
+                        padding,
+                        1,
+                        layer_spec.get(Params.BIAS),
+                    )
+                    total_latency_ns += conv_obj.forward(input_size)
+                elif layer_spec.type == LayerTypes.Dense:
+                    out_size = [1, layer_spec.get(Params.OUT_FEATURES)]
+                    dense_obj = profiler.Linear(
+                        nvdla_profiler,
+                        log_file,
+                        layer_spec.name,
+                        out_size,
+                        layer_spec.get(Params.IN_FEATURES),
+                        layer_spec.get(Params.OUT_FEATURES),
+                        layer_spec.get(Params.BIAS),
+                    )
+                    total_latency_ns += dense_obj.forward([1, layer_spec.get(Params.IN_FEATURES)])
+
+            latency = total_latency_ns / (10 ** 9)
+            cost = round(cost_par * cfg["area"], 2)
+            latency_temp = latency / max_latency
+            cost_temp = cost / max_cost
+            total_cost = round((cost_temp * weight_cost) + (latency_temp * (1 - weight_cost)), 4)
+
+            current_hw = (latency, cost, total_cost, cfg["name"])
+            if best_hw is None or current_hw[2] < best_hw[2]:
+                best_hw = current_hw
+        except Exception as e:
+            print(f"  Error profiling hardware config {cfg['name']}: {e}")
+
+    if best_hw is None:
+        print("  Hardware estimate unavailable: no valid NVDLA configuration")
+
+    return best_hw
 
 def select_parent_directory() -> Optional[Path]:
     """
@@ -425,6 +626,15 @@ def analyze_all_experiments(parent_dir: Path, output_dir: Optional[Path] = None)
         # Collect info for total CSV
         best_result = analyzer.get_best_result()
         if best_result:
+            if best_result.flops is None:
+                recalculated_flops = _calculate_flops(exp_dir)
+                if recalculated_flops is not None:
+                    best_result.flops = recalculated_flops
+
+            if any(value is None for value in [best_result.latency, best_result.hw_cost, best_result.hw_total_cost, best_result.hw_config]):
+                hw_metrics = _calculate_hardware(exp_dir)
+                if hw_metrics is not None:
+                    best_result.latency, best_result.hw_cost, best_result.hw_total_cost, best_result.hw_config = hw_metrics
             summary_row = {
                 'experiment': exp_dir.name,
                 'best_iteration': best_result.iteration,
