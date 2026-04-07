@@ -251,7 +251,7 @@ def reshape_x_pos(arr: np.ndarray, pos: Optional[np.ndarray], cfg) -> Tuple[np.n
             arr = np.transpose(arr, (1, 2, 0))
         # print(f"Reshaping for depth mode: pos shape {pos.shape}")
         if pos is not None and hasattr(pos, "ndim"):
-            if pos.ndim == 4 and pos.shape[1] == 1:
+            if pos.ndim == 4 and pos.shape[1] == 2:
                 pos = pos.sum(axis=1)  # collapse polarity if still present
             if pos.ndim == 2:
                 pos = pos[..., None]  # [H, W, 1]
@@ -295,6 +295,7 @@ def dataset_to_numpy(dataset, cfg) -> Tuple[np.ndarray, np.ndarray]:
                     if cfg.mode == "depth":
                         # Single frame case: squeeze to [H, W] and compute one center of mass
                         A = np.squeeze(pos)  # Can be [H, W] or [H, W, C]
+                        # print(f"[DEBUG] Depth mode pos shape after squeeze: {A.shape}")
                         if A.ndim == 1:  # Edge case: if becomes 1D, reshape back
                             A = np.expand_dims(A, 0)
                         # If 3D (H, W, C), sum over channels to get [H, W]
@@ -310,6 +311,7 @@ def dataset_to_numpy(dataset, cfg) -> Tuple[np.ndarray, np.ndarray]:
                                 pos_mean = np.array([mean_y, mean_x])  # (2,)
                             else:
                                 pos_mean = np.array([0.0, 0.0])
+                        # print(f"[DEBUG] Depth mode pos_mean: {pos_mean}")
                     else:
                         # Time-series case (fwdPass or hybrid): squeeze last dimension(s) to get [T, H, W]
                         # Remove any singleton dimensions except the batch/time dimension
