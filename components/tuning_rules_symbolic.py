@@ -231,9 +231,9 @@ class tuning_rules_symbolic:
         """
         # itereate over each hyperparameter and if one of these is a convolutional
         # or dense layer decrease the lower value of the range
-        valid_names = ['unit_c1', 'unit_c2', 'unit_d']
+        valid_names = ['unit_c1', 'unit_c2', 'unit_d', 'new_conv', 'new_fc']
         for hp in self.space:
-            for name in valid_names or 'new_conv' in hp.name or 'new_fc' in hp.name:
+            for name in valid_names:
                 if name in hp.name and hp.high > 0:
                     hp.low = max(params[hp.name] - 1, 1)
 
@@ -278,21 +278,20 @@ class tuning_rules_symbolic:
         # itereate over each hyperparameter and if one of these is a convolutional
         # or dense layer increase the upper value of the range
         for hp in self.space:
-            if hp.high > 0:
-                if 'unit_c1' in hp.name:
-                    hp.high = min(params['unit_c1'] + 1, 4)
-                if 'unit_c2' in hp.name:
-                    hp.high = min(params['unit_c2'] + 1, 8)
-                if 'new_conv' in hp.name:
-                    try:
-                        hp.high = min(params[hp.name] + 1, 16)
-                    except KeyError:
-                        continue
-                if 'new_fc' in hp.name:
-                    try:
-                        hp.high = min(params[hp.name] + 1, 32)
-                    except KeyError:
-                        continue
+            if 'unit_c1' in hp.name and hp.high > 0:
+                hp.high = min(params['unit_c1'] + 1, 4)
+            if 'unit_c2' in hp.name  and hp.high > 0:
+                hp.high = min(params['unit_c2'] + 1, 8)
+            if 'new_conv' in hp.name and hp.high > 0:
+                try:
+                    hp.high = min(params[hp.name] + 1, 16)
+                except KeyError:
+                    continue
+            if 'new_fc' in hp.name and hp.high > 0:
+                try:
+                    hp.high = min(params[hp.name] + 1, 32)
+                except KeyError:
+                    continue
 
     def dec_batch_size(self, params):
         """
