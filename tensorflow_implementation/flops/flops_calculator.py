@@ -73,10 +73,12 @@ def analyze_model(initial_model, input_shapes=None):
     :param input_shapes: list of input shapes (optional, defaults to model.inputs)
     :return: number of total flops
     """
-    if hasattr(initial_model, 'model'):
+    if isinstance(initial_model, keras.Model):
+        model = initial_model
+    elif hasattr(initial_model, 'model'):
         model = initial_model.model
     else:
-        model = initial_model
+        raise ValueError(f"Unsupported model type: {type(initial_model)}")
 
     # Use provided input_shapes if available, otherwise infer from model
     if input_shapes is None:

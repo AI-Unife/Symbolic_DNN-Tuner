@@ -16,7 +16,7 @@ class DotDict(dict):
                 self[k] = DotDict(v).freeze()
         return self
 
-# ---------------- Schema con default (identici al parser di symbolic_tuner.py) ----------------
+# ---------------- Schema with defaults (identical to the symbolic_tuner.py parser) ----------------
 @dataclass
 class ConfigSchema:
     backend: str = "tf"                          # tf | torch
@@ -41,16 +41,16 @@ class ConfigSchema:
     channels: int = 2                            # Number of channels for the dataset
     polarity: str = "both"                       # Polarity for event-based datasets (both, sum, sub, drop)
 
-# ---------------- Validazione (stesse regole del parser) ----------------
+# ---------------- Validation (same rules as the parser) ----------------
 _VALID_MODULES = {"hardware_module", "flops_module"}
 _VALID_OPT = {"standard", "filtered", "basic", "RS", "RS_ruled"}
 _VALID_BACKENDS = {"tf", "torch"}
-_VALID_DATASETS = {"light", "cifar10", "cifar100", "mnist", "gesture", "roigesture_coords", "roigesture_matrix", "roigesture_3D"}
+_VALID_DATASETS = {"light", "cifar10", "cifar100", "mnist", "tinyimagenet", "gesture", "roigesture_coords", "roigesture_matrix", "roigesture_3D"}
 
 def create_config_file(exp_dir: str | Path, overrides: Optional[Dict[str, Any]] = None) -> Path:
     """
-    Crea (o sovrascrive) un file config.yaml nella cartella dell'esperimento.
-    Usa i default dello schema e applica gli override passati come dict.
+    Create (or overwrite) a config.yaml file in the experiment directory.
+    Uses schema defaults and applies the overrides passed as a dict.
     """
     p = Path(exp_dir).expanduser().resolve()
     p.mkdir(parents=True, exist_ok=True)
@@ -84,15 +84,15 @@ def create_config_file(exp_dir: str | Path, overrides: Optional[Dict[str, Any]] 
     if overrides:
         base.update(overrides)
 
-    # timestamp utile per tracciabilità
+    # timestamp useful for traceability
     base["created_at"] = datetime.datetime.now().isoformat(timespec="seconds")
 
-    # salva YAML
+    # save YAML
     import yaml
     with open(cfg_path, "w") as f:
         yaml.safe_dump(base, f, sort_keys=False, allow_unicode=True)
 
-    print(f"[exp_config] Creato config.yaml in: {cfg_path}")
+    print(f"[exp_config] Created config.yaml at: {cfg_path}")
     return cfg_path
 
 def _validate(d: Dict[str, Any]) -> None:
@@ -137,7 +137,7 @@ def _validate(d: Dict[str, Any]) -> None:
         d['polarity'] = 'both'
 
 # ---------------- Loader + discovery ----------------
-_ENV_KEY = "EXP_CONFIG"   # puoi impostarlo per puntare al config della run
+_ENV_KEY = "EXP_CONFIG"   # set this to point to the run's config file
 _lock = threading.Lock()
 _cached_path: Optional[Path] = None
 _cached_mtime: Optional[float] = None
@@ -150,16 +150,16 @@ def _discover_config_path() -> Path:
         p = Path(env).expanduser().resolve()
         if p.is_file():
             return p
-    raise FileNotFoundError("config.yaml non trovato. Imposta ENV EXP_CONFIG o lancia da dentro la cartella esperimento.")
+    raise FileNotFoundError("config.yaml not found. Set ENV EXP_CONFIG or run from inside the experiment directory.")
 
 def _read_yaml(path: Path) -> Dict[str, Any]:
     data = yaml.safe_load(path.read_text()) or {}
     if not isinstance(data, dict):
-        raise ValueError(f"{path} deve essere un mapping YAML (dict).")
+        raise ValueError(f"{path} must be a YAML mapping (dict).")
     return data
 
 def _apply_defaults(d: Dict[str, Any]) -> Dict[str, Any]:
-    """Riempi con i default dello schema."""
+    """Fill in with schema defaults."""
     schema = ConfigSchema()
     merged = {
         "backend": d.get("backend", schema.backend),
@@ -194,7 +194,7 @@ def load_cfg_from_path(path: str | Path, *, validate: bool = True) -> DotDict:
     return DotDict(d).freeze()
 
 def load_cfg(force: bool = False) -> DotDict:
-    """Carica (e cache-a) il config 'attivo' secondo le regole di discovery."""
+    """Load (and cache) the 'active' config according to discovery rules."""
     global _cached_path, _cached_mtime, _cached_cfg
     with _lock:
         path = _discover_config_path()
@@ -209,7 +209,7 @@ def load_cfg(force: bool = False) -> DotDict:
         return _cached_cfg
 
 def set_active_config(path: str | Path) -> None:
-    """Imposta (per il processo corrente) il file di config da usare."""
+    """Set (for the current process) the config file to use."""
     p = Path(path).expanduser().resolve()
     os.environ[_ENV_KEY] = str(p)
 

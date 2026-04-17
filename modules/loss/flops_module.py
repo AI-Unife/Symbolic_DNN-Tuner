@@ -38,25 +38,26 @@ class flops_module(common_interface):
         print("PARAMS: " + str(self.nparams))
 
     def optimiziation_function(self, *args):
+        if "gesture" in self.cfg.dataset.lower():
+            # for gesture dataset, we want to minimize params more than flops, since the models are already very light
+            params_th = 1
+            nparams = self.nparams / self.nparams_th
+            fit_up_params = params_th - nparams
+            res = -fit_up_params
+            self.flops_gap.append(fit_up_params)
+            self.tuner_steps += 1
+            self.tuner_opt_function.append(res)
+            return res
+        else: 
         # norm flops between 0 - 1
-        # flops_th = 1
-        # nflops = self.flops / self.flops_th
-        # fit_up_flops = flops_th - nflops
-        # res = -fit_up_flops
-        # self.flops_gap.append(fit_up_flops)
-        # self.tuner_steps += 1
-        # self.tuner_opt_function.append(res)
-        
-        ### res based on gap between nparams and nparams_th
-        params_th = 1
-        nparams = self.nparams / self.nparams_th
-        fit_up_params = params_th - nparams
-        res = -fit_up_params
-        self.flops_gap.append(fit_up_params)
-        self.tuner_steps += 1
-        self.tuner_opt_function.append(res)
-        
-        return res
+            flops_th = 1
+            nflops = self.flops / self.flops_th
+            fit_up_flops = flops_th - nflops
+            res = -fit_up_flops
+            self.flops_gap.append(fit_up_flops)
+            self.tuner_steps += 1
+            self.tuner_opt_function.append(res)
+            return res
 
     def plotting_function(self):
         x = list(range(self.tuner_steps))

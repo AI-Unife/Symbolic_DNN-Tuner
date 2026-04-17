@@ -17,18 +17,14 @@ class hardware_module(common_interface):
     problems = ['out_range']
     
     #weight of the module for the final loss calculation
-    try:
-        cfg = load_cfg()
-        # weight of the module for the final loss calculation
-        weight = cfg.get('w_HW', 0.33)
-    except:
-        weight = 0.33
+    weight = 0.33
 
-    def __init__(self, weight_cost: float = 0.3):    
+    def __init__(self, weight_cost: float = 0.7):
         # cost value per square millimeter, 10K / mm2
         self.cost_par = 10000
         # attribute indicating how much cost weighs against latency value
         self.weight_cost = weight_cost
+        print(colors.OKBLUE, f"|  --------- INITIALIZING HARDWARE MODULE WITH COST WEIGHT {self.weight_cost}  -------  |\n", colors.ENDC)
         # max latency value in second 
         self.max_latency = 0.008 #120FPS,
         # max manifacturing cost value
@@ -69,7 +65,6 @@ class hardware_module(common_interface):
         # import current model reference
         self.model = args[0]
 
-        ### TODO: Aggiungere flag per costo monetario assente
         # for each configuration calculate the latency and the total cost
         for config_key in self.nvdla:
             config_path = self.specs_dir + self.nvdla[config_key]['path']
@@ -119,8 +114,6 @@ class hardware_module(common_interface):
         nvdla_profiler = profiler.nvdla(config_p)
         log_file = "profiler_logs.txt"
 
-        ### TODO: flag pyrtorch o TF --> self.cfg.get('framework', 'pytorch')
-        ### TODO: creare tuner EMBER per Torch nel file nvdla/profiler.py
         for layer_spec in self.model.layers.values():
             if layer_spec.type == LayerTypes.Conv2D:
                 out_size = [batch, layer_spec.get(Params.OUT_CHANNELS), layer_spec.get(Params.OUT_HEIGHT), layer_spec.get(Params.OUT_WIDTH)]

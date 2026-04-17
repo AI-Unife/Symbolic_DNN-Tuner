@@ -156,7 +156,7 @@ class controller:
         # - single sample:          (H, W, C)        -> H=shape[0], W=shape[1]
         td = getattr(self, "train_data", None)
         if td is None or not hasattr(td, "shape"):
-            # Fallback to controller.X_train if presente nel tuo progetto
+            # Fallback to controller.X_train if present in the project
             td = getattr(self, "X_train", None)
             if td is None or not hasattr(td, "shape"):
                 # ultimo fallback
@@ -273,7 +273,7 @@ class controller:
             # --- START TRAINING ---
             self.scoreNN, self.history, self.model = self.nn.training(params)
             
-            # Update Modules State (passiamo il modello addestrato)
+            # Update Modules State (pass the trained model)
             self.modules.state(self.model, self.nn.flops, self.nn.nparams)
             
             # # --- SCORING LOGIC ---

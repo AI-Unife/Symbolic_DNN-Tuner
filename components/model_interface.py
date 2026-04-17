@@ -2,6 +2,9 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import List, Any, Dict, Optional
 from enum import Enum
+from exp_config import load_cfg
+
+
 
 class InsertPosition(Enum):
     Before = "Before"
@@ -174,6 +177,9 @@ class LayerSpec:
 class TunerModel(ABC):
 
     layers: Dict[str, LayerSpec] = {}
+    
+    def __init__(self):
+        self.cfg = load_cfg()
 
     def __str__(self):
         s = "\n"

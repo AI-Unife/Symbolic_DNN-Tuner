@@ -89,11 +89,12 @@ class ResultsAnalyzer:
             return False
         
         scores = self._load_scores()
-        if scores:
+        has_score_file = bool(scores)
+        if has_score_file:
             print(f"  score_report.txt file found, will use scores calculated during training")
         else:
-            print(f"  No score_report.txt file found, will use -accuracy as approximation")
-        
+            print("  No score_report.txt file found, score will be recomputed from module logs when possible")
+
         # Load hyperparameters
         # hyperparams_list = self._load_hyperparams()
         
@@ -131,11 +132,8 @@ class ResultsAnalyzer:
             
             # Calculate score: -accuracy if no modules are present
             if result.score is None:
-                if result.accuracy is not None:
-                    result.score = -result.accuracy
-                else:
-                    result.score = None
-            
+                result.score = self._recompute_score(result)
+
             self.results.append(result)
         
         return True
@@ -354,6 +352,59 @@ class ResultsAnalyzer:
             print(f"  Error saving CSV: {e}")
             return False
 
+    def _safe_float(self, value: Any) -> Optional[float]:
+        """Convert values coming from config/logs to float when possible."""
+        if value is None:
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    def _recompute_score(self, result: ExperimentResult) -> Optional[float]:
+        """Recompute score when score_report is missing, following controller training logic."""
+        PENALTY_SCORE = 1e10
+        acc_w = 0.7
+
+        accuracy = self._safe_float(result.accuracy)
+        nparams = self._safe_float(result.nparams)
+        hw_total_cost = self._safe_float(result.hw_total_cost)
+
+        mod_list = self.config.get("mod_list", [])
+        if isinstance(mod_list, str):
+            mod_list = [mod_list]
+        if not isinstance(mod_list, list):
+            mod_list = []
+
+        use_flops_module = ("flops_module" in mod_list) if mod_list else (nparams is not None)
+        use_hw_module = ("hardware_module" in mod_list) if mod_list else (hw_total_cost is not None)
+
+        has_module_data = (use_flops_module and nparams is not None) or (use_hw_module and hw_total_cost is not None)
+        if accuracy is None:
+            return PENALTY_SCORE if has_module_data else None
+
+        opt_value = 0.0
+        has_opt_term = False
+
+        if use_flops_module and nparams is not None:
+            nparams_th = self._safe_float(self.config.get("nparams_th"))
+            if nparams_th and nparams_th > 0:
+                w_flops = self._safe_float(self.config.get("w_flops", 0.33)) or 0.33
+                # flops_module.optimiziation_function(): nparams / nparams_th - 1
+                opt_value += w_flops * ((nparams / nparams_th) - 1.0)
+                has_opt_term = True
+
+        if use_hw_module and hw_total_cost is not None:
+            w_hw = self._safe_float(self.config.get("w_HW", 0.33)) or 0.33
+            # hardware_module.optimiziation_function(): total_cost
+            opt_value += w_hw * hw_total_cost
+            has_opt_term = True
+
+        if has_opt_term:
+            return float(opt_value - (accuracy * acc_w))
+
+        return -accuracy
+
 def _calculate_flops(exp_dir: Path) -> Optional[float]:
     """Load the best model from exp_dir/Model/best-model.keras and compute FLOPs."""
     try:
@@ -367,13 +418,13 @@ def _calculate_flops(exp_dir: Path) -> Optional[float]:
         print(f"  Model file not found: {model_path}")
         return None
 
-    try:
-        model = keras.models.load_model(model_path, compile=False)
-        flops, _ = analyze_model(model)
-        return flops.total_float_ops
-    except Exception as e:
-        print(f"  Error calculating FLOPS from model: {e}")
-        return None
+    # try:
+    model = keras.models.load_model(model_path, compile=False)
+    flops, _ = analyze_model(model)
+    return flops.total_float_ops
+    # except Exception as e:
+    #     print(f"  Error calculating FLOPS from model: {e}")
+    #     return None
 
 def _extract_shape(shape_obj: Any) -> Optional[List[int]]:
     """Normalize keras/tensor shapes to a plain list of ints."""
@@ -473,81 +524,26 @@ def _calculate_hardware(exp_dir: Path) -> Optional[Tuple[float, float, float, st
         print("  Hardware estimate skipped: no supported Conv2D/Dense layers found")
         return None
 
-    specs_dir = Path(__file__).resolve().parent / "nvdla" / "specs"
-    nvdla_list = [
-        {"name": "nv_small", "path": "nv_small64_fp32.yaml", "area": 2.824},
-        {"name": "nv_small256", "path": "nv_small256_fp32.yaml", "area": 3.091},
-        {"name": "nv_large", "path": "nv_large2048_fp32.yaml", "area": 3.809},
-    ]
-
-    cost_par = 10000.0
-    weight_cost = 0.7
-    max_latency = 0.008
-    max_cost = 30000.0
-    log_file = "profiler_logs.txt"
-
     best_hw: Optional[Tuple[float, float, float, str]] = None
-    for cfg in nvdla_list:
-        cfg_path = specs_dir / cfg["path"]
-        if not cfg_path.exists():
-            continue
 
-        try:
-            nvdla_profiler = profiler.nvdla(cfg_path)
-            total_latency_ns = 0.0
-            for layer_spec in model_specs.values():
-                if layer_spec.type == LayerTypes.Conv2D:
-                    out_size = [
-                        1,
-                        layer_spec.get(Params.OUT_CHANNELS),
-                        layer_spec.get(Params.OUT_HEIGHT),
-                        layer_spec.get(Params.OUT_WIDTH),
-                    ]
-                    padding = 0 if layer_spec.get(Params.PADDING) == "valid" else int(layer_spec.get(Params.KERNEL_SIZE)[0] - 1) / 2
-                    input_size = [
-                        1,
-                        layer_spec.get(Params.IN_CHANNELS),
-                        layer_spec.get(Params.IN_HEIGHT),
-                        layer_spec.get(Params.IN_WIDTH),
-                    ]
-                    conv_obj = profiler.Conv2d(
-                        nvdla_profiler,
-                        log_file,
-                        layer_spec.name,
-                        out_size,
-                        input_size[1],
-                        out_size[1],
-                        layer_spec.get(Params.KERNEL_SIZE)[0],
-                        layer_spec.get(Params.STRIDE)[0],
-                        padding,
-                        1,
-                        layer_spec.get(Params.BIAS),
-                    )
-                    total_latency_ns += conv_obj.forward(input_size)
-                elif layer_spec.type == LayerTypes.Dense:
-                    out_size = [1, layer_spec.get(Params.OUT_FEATURES)]
-                    dense_obj = profiler.Linear(
-                        nvdla_profiler,
-                        log_file,
-                        layer_spec.name,
-                        out_size,
-                        layer_spec.get(Params.IN_FEATURES),
-                        layer_spec.get(Params.OUT_FEATURES),
-                        layer_spec.get(Params.BIAS),
-                    )
-                    total_latency_ns += dense_obj.forward([1, layer_spec.get(Params.IN_FEATURES)])
+    try:
+        from modules.loss.hardware_module import hardware_module
 
-            latency = total_latency_ns / (10 ** 9)
-            cost = round(cost_par * cfg["area"], 2)
-            latency_temp = latency / max_latency
-            cost_temp = cost / max_cost
-            total_cost = round((cost_temp * weight_cost) + (latency_temp * (1 - weight_cost)), 4)
+        class _ModelSpecContainer:
+            def __init__(self, layers: Dict[str, LayerSpec]):
+                self.layers = layers
 
-            current_hw = (latency, cost, total_cost, cfg["name"])
-            if best_hw is None or current_hw[2] < best_hw[2]:
-                best_hw = current_hw
-        except Exception as e:
-            print(f"  Error profiling hardware config {cfg['name']}: {e}")
+        hw_module = hardware_module(weight_cost=0.7)
+        hw_module.update_state(_ModelSpecContainer(model_specs))
+
+        latency = hw_module.latency
+        cost = hw_module.cost
+        total_cost = hw_module.total_cost
+
+        best_hw = (latency, cost, total_cost, hw_module.current_config)
+
+    except Exception as e:
+        print(f"  Error profiling hardware config: {e}")
 
     if best_hw is None:
         print("  Hardware estimate unavailable: no valid NVDLA configuration")
@@ -628,6 +624,7 @@ def analyze_all_experiments(parent_dir: Path, output_dir: Optional[Path] = None)
         if best_result:
             if best_result.flops is None:
                 recalculated_flops = _calculate_flops(exp_dir)
+                print(f"  FLOPS recalculated from model: {recalculated_flops if recalculated_flops is not None else 'N/A'}")
                 if recalculated_flops is not None:
                     best_result.flops = recalculated_flops
 

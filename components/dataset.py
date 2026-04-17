@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import os
 import numpy as np
-from datasets import load_dataset
 
 def get_balanced_subset(x, y, n_per_class=500):
     """
@@ -66,8 +66,41 @@ class TunerDataset:
         print(self.X_train.shape[0], 'train samples')
         print(self.X_test.shape[0], 'test samples')
 
+    def _load_hf_dataset_offline(self, name: str):
+        os.environ["HF_DATASETS_OFFLINE"] = "1"
+        os.environ["HF_HUB_OFFLINE"] = "1"
+
+        from datasets import config as datasets_config
+        from datasets import load_dataset
+
+        datasets_config.HF_DATASETS_OFFLINE = True
+
+        try:
+            from huggingface_hub import constants as hub_constants
+
+            hub_constants.HF_HUB_OFFLINE = True
+        except Exception:
+            pass
+
+        cache_dir = os.getenv("HF_DATASETS_CACHE")
+        # NOTE: local_files_only must NOT be passed as a kwarg: with some versions of
+        # datasets it gets appended to the cache config name (e.g. 'default-local_files_only=True')
+        # causing a cache miss. Offline mode is already enforced via HF_DATASETS_OFFLINE=1.
+        kwargs = {}
+        if cache_dir:
+            kwargs["cache_dir"] = cache_dir
+
+        try:
+            return load_dataset(name, **kwargs)
+        except Exception as exc:
+            raise RuntimeError(
+                f"Hugging Face dataset '{name}' not found in {cache_dir}. "
+                "Make sure it is available in the local cache (HF_DATASETS_CACHE) "
+                "or pre-downloaded on a node with Internet access."
+            ) from exc
+
     def load_hf_dataset(self, name: str, image_key: str, label_key: str):
-        dataset = load_dataset(name)
+        dataset = self._load_hf_dataset_offline(name)
         train = dataset["train"].with_format("numpy")
         test = dataset["test"].with_format("numpy")
 
@@ -81,12 +114,31 @@ class TunerDataset:
 
     def load_cifar_10(self):
         self.n_classes = 10
+        # from tensorflow.keras.datasets import cifar10
+        # (x_train, y_train), (x_test, y_test) = cifar10.load_data()
+        # self.X_train = x_train
+        # self.Y_train = y_train.reshape(-1)
+        # self.X_test = x_test
+        # self.Y_test = y_test.reshape(-1)
+        
+        # print(self.X_train.shape[0], 'train samples')
+        # print(self.X_test.shape[0], 'test samples')
         self.load_hf_dataset("cifar10", image_key="img", label_key="label")
         self.normalize_data()
 
     def load_cifar_100(self):
         self.n_classes = 100
-        self.load_hf_dataset("cifar100", image_key="img", label_key="label")
+        # from tensorflow.keras.datasets import cifar100
+        # (x_train, y_train), (x_test, y_test) = cifar100.load_data()
+        # self.X_train = x_train
+        # self.Y_train = y_train.reshape(-1)
+        # self.X_test = x_test
+        # self.Y_test = y_test.reshape(-1)
+        
+        # print(self.X_train.shape[0], 'train samples')
+        # print(self.X_test.shape[0], 'test samples')
+
+        self.load_hf_dataset("cifar100", image_key="img", label_key="fine_label")
         self.normalize_data()
 
     def load_mnist(self):
@@ -96,60 +148,56 @@ class TunerDataset:
             image_key="image",
             label_key="label",
         )
-        self.normalize_data()
+        # self.normalize_data()
         
     def load_tiny_imagenet(self):
-        import pandas as pd
         from PIL import Image
         from io import BytesIO
-        
-        splits = {
-            'train': 'data/train-00000-of-00001-1359597a978bc4fa.parquet',
-            'valid': 'data/valid-00000-of-00001-70d52db3c749a935.parquet'
-        }
 
-        # Carica i parquet dal dataset Hugging Face
-        df_train = pd.read_parquet("hf://datasets/zh-plus/tiny-imagenet/" + splits["train"])
-        df_test = pd.read_parquet("hf://datasets/zh-plus/tiny-imagenet/" + splits["valid"])
+        dataset = self._load_hf_dataset_offline("zh-plus/tiny-imagenet")
+        train = dataset["train"]
+        test_split = "valid" if "valid" in dataset else "test"
+        test = dataset[test_split]
 
-        # Helper per estrarre l'immagine indipendentemente dal formato della colonna
+        # Helper to extract the image regardless of the column format
         def open_image_from_row(img_field):
-            # img_field può essere bytes/bytearray o un dict con chiave "bytes"
+            # img_field can be bytes/bytearray or a dict with key "bytes"
             if isinstance(img_field, (bytes, bytearray)):
                 data = img_field
             elif isinstance(img_field, dict) and "bytes" in img_field:
                 data = img_field["bytes"]
             else:
-                # In alcuni dataset l'immagine è già un oggetto PIL (raro con parquet)
-                # oppure un path (non nel tuo caso). Gestiamo anche questi.
+                # In some datasets the image is already a PIL object (rare with parquet)
+                # or a path. Handle these cases as well.
                 if isinstance(img_field, Image.Image):
                     return img_field.convert("RGB")
-                raise TypeError(f"Formato immagine non riconosciuto: {type(img_field)}")
+                raise TypeError(f"Unrecognized image format: {type(img_field)}")
             img = Image.open(BytesIO(data)).convert("RGB")
-            # Tiny-ImageNet è 64x64; assicuriamolo nel caso sia necessario
+            # Tiny-ImageNet is 64x64; ensure it in case resizing is needed
             if img.size != (64, 64):
                 img = img.resize((64, 64))
             return img
 
-        # Carica in liste (più veloce di np.concatenate in loop)
+        # Load into lists (faster than np.concatenate in a loop)
         x_train_list, y_train_list = [], []
-        for _, row in df_train.iterrows():
-            img = open_image_from_row(row["image"])
+        for img_field, label in zip(train["image"], train["label"]):
+            img = open_image_from_row(img_field)
             x_train_list.append(np.array(img))  # (64, 64, 3), dtype uint8
-            y_train_list.append(int(row["label"]))
+            y_train_list.append(int(label))
 
         x_test_list, y_test_list = [], []
-        for _, row in df_test.iterrows():
-            img = open_image_from_row(row["image"])
+        for img_field, label in zip(test["image"], test["label"]):
+            img = open_image_from_row(img_field)
             x_test_list.append(np.array(img))
-            y_test_list.append(int(row["label"]))
+            y_test_list.append(int(label))
 
-        # Converte in array; opzionale: normalizzazione in [0,1]
+        # Convert to array; optional: normalization in [0,1]
         x_train = np.stack(x_train_list)
         x_test = np.stack(x_test_list)
         y_train = np.array(y_train_list, dtype=np.int64)
         y_test = np.array(y_test_list, dtype=np.int64)
-
+        
+        self.n_classes = len(np.unique(y_train))
         self.X_train = x_train
         self.X_test = x_test
         self.Y_train = y_train
