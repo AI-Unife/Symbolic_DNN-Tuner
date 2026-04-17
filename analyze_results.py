@@ -30,7 +30,9 @@ try:
 except ImportError:
     TKINTER_AVAILABLE = False
 
-
+from tensorflow_implementation.flops.flops_calculator import analyze_model
+import nvdla.profiler as profiler
+from components.model_interface import LayerSpec, LayerTypes, Params
 _EXCLUDED_CONFIG_KEYS = ["name", "verbose", "polarity", "created_at"]
 
 @dataclass
@@ -87,11 +89,12 @@ class ResultsAnalyzer:
             return False
         
         scores = self._load_scores()
-        if scores:
+        has_score_file = bool(scores)
+        if has_score_file:
             print(f"  score_report.txt file found, will use scores calculated during training")
         else:
-            print(f"  No score_report.txt file found, will use -accuracy as approximation")
-        
+            print("  No score_report.txt file found, score will be recomputed from module logs when possible")
+
         # Load hyperparameters
         # hyperparams_list = self._load_hyperparams()
         
@@ -129,11 +132,8 @@ class ResultsAnalyzer:
             
             # Calculate score: -accuracy if no modules are present
             if result.score is None:
-                if result.accuracy is not None:
-                    result.score = -result.accuracy
-                else:
-                    result.score = None
-            
+                result.score = self._recompute_score(result)
+
             self.results.append(result)
         
         return True
@@ -275,7 +275,7 @@ class ResultsAnalyzer:
         except Exception as e:
             print(f"  Error reading config.yaml: {e}")
             self.config = {}
-    
+
     def get_best_result(self) -> Optional[ExperimentResult]:
         """Return the best result (lowest score)"""
         valid_results = [r for r in self.results if r.score is not None]
@@ -352,6 +352,203 @@ class ResultsAnalyzer:
             print(f"  Error saving CSV: {e}")
             return False
 
+    def _safe_float(self, value: Any) -> Optional[float]:
+        """Convert values coming from config/logs to float when possible."""
+        if value is None:
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    def _recompute_score(self, result: ExperimentResult) -> Optional[float]:
+        """Recompute score when score_report is missing, following controller training logic."""
+        PENALTY_SCORE = 1e10
+        acc_w = 0.7
+
+        accuracy = self._safe_float(result.accuracy)
+        nparams = self._safe_float(result.nparams)
+        hw_total_cost = self._safe_float(result.hw_total_cost)
+
+        mod_list = self.config.get("mod_list", [])
+        if isinstance(mod_list, str):
+            mod_list = [mod_list]
+        if not isinstance(mod_list, list):
+            mod_list = []
+
+        use_flops_module = ("flops_module" in mod_list) if mod_list else (nparams is not None)
+        use_hw_module = ("hardware_module" in mod_list) if mod_list else (hw_total_cost is not None)
+
+        has_module_data = (use_flops_module and nparams is not None) or (use_hw_module and hw_total_cost is not None)
+        if accuracy is None:
+            return PENALTY_SCORE if has_module_data else None
+
+        opt_value = 0.0
+        has_opt_term = False
+
+        if use_flops_module and nparams is not None:
+            nparams_th = self._safe_float(self.config.get("nparams_th"))
+            if nparams_th and nparams_th > 0:
+                w_flops = self._safe_float(self.config.get("w_flops", 0.33)) or 0.33
+                # flops_module.optimiziation_function(): nparams / nparams_th - 1
+                opt_value += w_flops * ((nparams / nparams_th) - 1.0)
+                has_opt_term = True
+
+        if use_hw_module and hw_total_cost is not None:
+            w_hw = self._safe_float(self.config.get("w_HW", 0.33)) or 0.33
+            # hardware_module.optimiziation_function(): total_cost
+            opt_value += w_hw * hw_total_cost
+            has_opt_term = True
+
+        if has_opt_term:
+            return float(opt_value - (accuracy * acc_w))
+
+        return -accuracy
+
+def _calculate_flops(exp_dir: Path) -> Optional[float]:
+    """Load the best model from exp_dir/Model/best-model.keras and compute FLOPs."""
+    try:
+        from tensorflow import keras
+    except Exception as e:
+        print(f"  TensorFlow not available, cannot calculate FLOPS: {e}")
+        return None
+
+    model_path = exp_dir / "Model" / "best-model.keras"
+    if not model_path.exists():
+        print(f"  Model file not found: {model_path}")
+        return None
+
+    # try:
+    model = keras.models.load_model(model_path, compile=False)
+    flops, _ = analyze_model(model)
+    return flops.total_float_ops
+    # except Exception as e:
+    #     print(f"  Error calculating FLOPS from model: {e}")
+    #     return None
+
+def _extract_shape(shape_obj: Any) -> Optional[List[int]]:
+    """Normalize keras/tensor shapes to a plain list of ints."""
+    if shape_obj is None:
+        return None
+
+    shape = shape_obj
+    if hasattr(shape_obj, "shape"):
+        shape = shape_obj.shape
+
+    if isinstance(shape, (list, tuple)) and shape and isinstance(shape[0], (list, tuple)):
+        shape = shape[0]
+
+    try:
+        normalized = [int(dim) if dim is not None else None for dim in shape]
+    except Exception:
+        return None
+
+    return normalized
+
+
+def _build_model_specs(model: Any) -> Dict[str, LayerSpec]:
+    """Build minimal LayerSpec map required by the NVDLA profiler."""
+    try:
+        from tensorflow.keras.layers import Conv2D, Dense
+    except Exception:
+        return {}
+
+    specs: Dict[str, LayerSpec] = {}
+    for layer in model.layers:
+        if isinstance(layer, Conv2D):
+            in_shape = _extract_shape(layer.input)
+            out_shape = _extract_shape(layer.output)
+            if not in_shape or not out_shape or len(in_shape) < 4 or len(out_shape) < 4:
+                continue
+            if any(v is None for v in (in_shape[1], in_shape[2], in_shape[3], out_shape[1], out_shape[2], out_shape[3])):
+                continue
+            specs[layer.name] = LayerSpec(
+                name=layer.name,
+                type=LayerTypes.Conv2D,
+                module=layer,
+                params={
+                    Params.IN_CHANNELS: in_shape[3],
+                    Params.IN_HEIGHT: in_shape[1],
+                    Params.IN_WIDTH: in_shape[2],
+                    Params.OUT_CHANNELS: out_shape[3],
+                    Params.OUT_HEIGHT: out_shape[1],
+                    Params.OUT_WIDTH: out_shape[2],
+                    Params.KERNEL_SIZE: layer.kernel_size,
+                    Params.STRIDE: layer.strides,
+                    Params.PADDING: layer.padding,
+                    Params.BIAS: layer.use_bias,
+                }
+            )
+        elif isinstance(layer, Dense):
+            in_shape = _extract_shape(layer.input)
+            out_shape = _extract_shape(layer.output)
+            if not in_shape or not out_shape or len(in_shape) < 2 or len(out_shape) < 2:
+                continue
+            if any(v is None for v in (in_shape[-1], out_shape[-1])):
+                continue
+            specs[layer.name] = LayerSpec(
+                name=layer.name,
+                type=LayerTypes.Dense,
+                module=layer,
+                params={
+                    Params.IN_FEATURES: in_shape[-1],
+                    Params.OUT_FEATURES: out_shape[-1],
+                    Params.BIAS: layer.use_bias,
+                }
+            )
+
+    return specs
+
+
+def _calculate_hardware(exp_dir: Path) -> Optional[Tuple[float, float, float, str]]:
+    """Estimate latency/cost/total_cost/config for exp_dir/Model/best-model.keras."""
+    try:
+        from tensorflow import keras
+    except Exception as e:
+        print(f"  TensorFlow not available, cannot calculate hardware metrics: {e}")
+        return None
+
+    model_path = exp_dir / "Model" / "best-model.keras"
+    if not model_path.exists():
+        print(f"  Model file not found for hardware estimate: {model_path}")
+        return None
+
+    try:
+        model = keras.models.load_model(model_path, compile=False)
+    except Exception as e:
+        print(f"  Error loading model for hardware estimate: {e}")
+        return None
+
+    model_specs = _build_model_specs(model)
+    if not model_specs:
+        print("  Hardware estimate skipped: no supported Conv2D/Dense layers found")
+        return None
+
+    best_hw: Optional[Tuple[float, float, float, str]] = None
+
+    try:
+        from modules.loss.hardware_module import hardware_module
+
+        class _ModelSpecContainer:
+            def __init__(self, layers: Dict[str, LayerSpec]):
+                self.layers = layers
+
+        hw_module = hardware_module(weight_cost=0.7)
+        hw_module.update_state(_ModelSpecContainer(model_specs))
+
+        latency = hw_module.latency
+        cost = hw_module.cost
+        total_cost = hw_module.total_cost
+
+        best_hw = (latency, cost, total_cost, hw_module.current_config)
+
+    except Exception as e:
+        print(f"  Error profiling hardware config: {e}")
+
+    if best_hw is None:
+        print("  Hardware estimate unavailable: no valid NVDLA configuration")
+
+    return best_hw
 
 def select_parent_directory() -> Optional[Path]:
     """
@@ -425,6 +622,16 @@ def analyze_all_experiments(parent_dir: Path, output_dir: Optional[Path] = None)
         # Collect info for total CSV
         best_result = analyzer.get_best_result()
         if best_result:
+            if best_result.flops is None:
+                recalculated_flops = _calculate_flops(exp_dir)
+                print(f"  FLOPS recalculated from model: {recalculated_flops if recalculated_flops is not None else 'N/A'}")
+                if recalculated_flops is not None:
+                    best_result.flops = recalculated_flops
+
+            if any(value is None for value in [best_result.latency, best_result.hw_cost, best_result.hw_total_cost, best_result.hw_config]):
+                hw_metrics = _calculate_hardware(exp_dir)
+                if hw_metrics is not None:
+                    best_result.latency, best_result.hw_cost, best_result.hw_total_cost, best_result.hw_config = hw_metrics
             summary_row = {
                 'experiment': exp_dir.name,
                 'best_iteration': best_result.iteration,
@@ -454,7 +661,17 @@ def analyze_all_experiments(parent_dir: Path, output_dir: Optional[Path] = None)
         summary_csv = output_dir / "summary_best_results.csv"
         try:
             with open(summary_csv, 'w', newline='') as f:
-                fieldnames = [col for col in summary_data[0].keys()]
+                base_columns = [
+                    'experiment', 'best_iteration', 'best_accuracy', 'best_score',
+                    'best_nparams', 'best_flops',
+                    'best_latency', 'best_hw_cost', 'best_hw_total_cost', 'best_hw_config',
+                ]
+                all_columns = set()
+                for row in summary_data:
+                    all_columns.update(row.keys())
+                extra_columns = sorted(col for col in all_columns if col not in base_columns)
+                fieldnames = [col for col in base_columns if col in all_columns] + extra_columns
+
                 writer = csv.DictWriter(f, fieldnames=fieldnames)
                 writer.writeheader()
                 

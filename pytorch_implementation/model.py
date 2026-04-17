@@ -19,29 +19,29 @@ class ConvBlock(nn.Module):
         self.activation = activation_fn
         self.batch = batch
         
-        # 1. Costruiamo i primi N-1 layer (Conv -> Act -> BN)
-        # Nota: In PyTorch è comune l'ordine Conv -> BN -> Act, ma qui replico 
-        # la logica Keras Conv -> Act -> BN o simile a seconda delle preferenze.
-        # Standard moderno: Conv -> BN -> Act.
+        # 1. Build the first N-1 layers (Conv -> Act -> BN)
+        # Note: In PyTorch the common order is Conv -> BN -> Act, but here we replicate
+        # the Keras Conv -> Act -> BN logic or similar depending on preferences.
+        # Modern standard: Conv -> BN -> Act.
         
         current_in = in_channels
         
-        # Aggiungiamo (num_repeats - 1) blocchi standard
+        # Add (num_repeats - 1) standard blocks
         for _ in range(num_repeats - 1):
             self.layers.append(nn.Sequential(
                 nn.Conv2d(current_in, out_channels, kernel_size=3, padding=1, bias=False),
                 nn.BatchNorm2d(out_channels) if batch else nn.Identity(),
                 activation_fn
             ))
-            current_in = out_channels # Dopo il primo, l'input è out_channels
+            current_in = out_channels # After the first one, input is out_channels
 
-        # 2. L'ultimo layer del blocco (prima della somma residua)
+        # 2. The last layer of the block (before the residual sum)
         self.last_conv = nn.Conv2d(current_in, out_channels, kernel_size=3, padding=1, bias=False)
         self.last_bn = nn.BatchNorm2d(out_channels)
 
-        # 3. Gestione Skip Connection (Shortcut)
-        # Se i canali di input sono diversi da quelli di output (es. passaggio da blocco 1 a 2),
-        # serve una conv 1x1 per adattare le dimensioni (Projection Shortcut).
+        # 3. Skip Connection (Shortcut) handling
+        # If input channels differ from output channels (e.g., transition from block 1 to 2),
+        # a 1x1 conv is needed to adapt dimensions (Projection Shortcut).
         if use_residual:
             self.shortcut = nn.Identity()
             if (in_channels != out_channels):
@@ -53,25 +53,25 @@ class ConvBlock(nn.Module):
     def forward(self, x):
         out = x
         
-        # Passaggio attraverso i primi N-1 layer
+        # Forward pass through the first N-1 layers
         for layer in self.layers:
             out = layer(out)
             
-        # Ultimo layer convoluzionale (senza attivazione ancora)
+        # Last convolutional layer (no activation yet)
         out = self.last_conv(out)
         out = self.last_bn(out) if self.batch else out
         
-        # Applicazione Residuale
+        # Residual application
         if self.use_residual:
             # x + F(x)
             out = out + self.shortcut(x)
         
-        # Attivazione finale dopo la somma (ResNet standard)
+        # Final activation after the sum (standard ResNet)
         out = self.activation(out)
         return out
 
 
-class TorchModel(TunerModel, nn.Module):
+class TorchModel(nn.Module, TunerModel):
     """
     PyTorch implementation of a TunerModel that extends nn.Module.
     Provides bidirectional mapping between layer types and PyTorch modules,
@@ -115,20 +115,20 @@ class TorchModel(TunerModel, nn.Module):
         self.batch = batch
         self.layer_x_block = layer_x_block
         
-            # Parsing parametri
+            # Parameter parsing
         self.use_residual = params.get('skip_connection', False)
-        # Istanza dell'attivazione (es. ReLU) da riusare
+        # Activation instance (e.g., ReLU) to reuse
         act_fn = self._get_activation(params['activation'])
         self.batch = batch
         
-        # Calcolo numero canali
+        # Compute number of channels
         # unit_c * num_neurons
         c1_channels = int(params['unit_c1'] * params['num_neurons'])
         c2_channels = int(params['unit_c2'] * params['num_neurons'])
         
-        # --- COSTRUZIONE DELLA RETE ---
+        # --- NETWORK CONSTRUCTION ---
         self.features = nn.Sequential()
-        in_c = input_shape[0] # (Canali, H, W)
+        in_c = input_shape[0] # (Channels, H, W)
         
         # 1. Blocco C1
         self.features.add_module("block_c1", ConvBlock(
@@ -173,17 +173,17 @@ class TorchModel(TunerModel, nn.Module):
             dummy = torch.zeros(1, *input_shape)
             out_feat = self.features(dummy)
             
-            # SE nel forward fai pooling, devi farlo anche qui!
+            # If pooling is done in forward, it must be done here too!
             if self.batch:
                 out_feat = F.adaptive_avg_pool2d(out_feat, (1, 1))
             
-            # Ora il flatten darà la dimensione corretta (es. 16 invece di 1024)
+            # Now flatten will give the correct dimension (e.g., 16 instead of 1024)
             self.flat_dim = out_feat.view(1, -1).size(1)
             
         self.classifier = nn.Sequential()
         current_dim = self.flat_dim
         
-        # Aggiunta dinamica layer FC (new_fc_1, new_fc_2, ecc.)
+        # Dynamically add FC layers (new_fc_1, new_fc_2, etc.)
         fc_keys = sorted([k for k in params.keys() if re.match(r'new_fc_\d+', k)], 
                          key=lambda x: int(x.split('_')[-1]))
         
@@ -196,7 +196,7 @@ class TorchModel(TunerModel, nn.Module):
                 self.classifier.add_module(f"drop_{i}", nn.Dropout(params['dr_f']))
                 current_dim = out_dim
                 
-        # Layer Output Finale
+        # Final Output Layer
         self.classifier.add_module("fc_out", nn.Linear(current_dim, self.n_classes))
         
         self.modules_list = nn.ModuleList()

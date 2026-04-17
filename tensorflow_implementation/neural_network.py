@@ -16,20 +16,7 @@ from tensorflow.keras import Model
 from tensorflow import keras
 from tensorflow.keras.callbacks import TensorBoard, EarlyStopping
 from tensorflow.keras.optimizers import Optimizer
-from tensorflow.keras import backend as K
-from tensorflow.keras import regularizers as reg
-from tensorflow.keras.layers import (
-    Activation,
-    Conv2D,
-    Dense,
-    GlobalAveragePooling2D,
-    BatchNormalization,
-    Flatten,
-    MaxPooling2D,
-    Dropout,
-    Input,
-    Add
-)
+
 
 # ----------------------------- Utilities -------------------------------------
 
@@ -120,13 +107,13 @@ class LayerWiseLR(Optimizer):
             self._optimizer._create_slots(var_list)
 
     def get_config(self):
-        # Config del parent (include clipnorm/clipvalue, ecc.)
+        # Parent config (includes clipnorm/clipvalue, etc.)
         cfg = super().get_config()
 
-        # serializza l'optimizer interno in modo Keras-friendly
+        # serialize the inner optimizer in a Keras-friendly way
         base_opt_cfg = keras.optimizers.serialize(self._optimizer)
 
-        # multiplier deve essere JSON-serializzabile
+        # multiplier must be JSON-serializable
         mult_cfg = {str(k): float(v) if hasattr(v, "__float__") else v
                     for k, v in self._multiplier.items()}
 
@@ -139,7 +126,7 @@ class LayerWiseLR(Optimizer):
 
     @classmethod
     def from_config(cls, config):
-        # Estrai ciò che serve alla __init__
+        # Extract what is needed for __init__
         name = config.pop("name", "LWLR")
 
         opt_cfg = config.pop("optimizer", None)
@@ -170,17 +157,6 @@ class NeuralNetwork(BaseNeuralNetwork):
 
 
     # --------------------------- Build the model -----------------------------
-
-    def _add_residual(self, shortcut, x, output_channels, activation, reg_layer):
-        # If input and output channel dimensions differ, align them via 1x1 conv
-        if shortcut.shape[-1] != output_channels:
-            shortcut = Conv2D(output_channels, (1, 1), padding="same", kernel_regularizer=reg_layer)(shortcut)
-        # Add skip connection
-        x = Add()([shortcut, x])
-        # Apply activation after addition (ResNet-style)
-    
-        x = Activation(activation)(x)
-        return x
 
 
     def build_network(self, params, layer_x_block=2):
@@ -234,7 +210,7 @@ class NeuralNetwork(BaseNeuralNetwork):
         if "hardware_module" in self.exp_cfg.mod_list:
             # Compute total latency cost
             from modules.loss.hardware_module import hardware_module
-            HW_module = hardware_module(weight_cost=0.3)
+            HW_module = hardware_module(weight_cost=0.7)
             HW_module.update_state(self.model)
             self.tot_latency_cost = HW_module.total_cost
 
@@ -256,6 +232,8 @@ class NeuralNetwork(BaseNeuralNetwork):
         if self.model.model is None:
             print("Error: Model is not built.")
             exit(1)
+        
+        
         # Unique id for artifacts of this run
         model_name_id = datetime.now().strftime("%y_%m_%d_%H_%M_%S_%f")
 
@@ -312,26 +290,58 @@ class NeuralNetwork(BaseNeuralNetwork):
             X_test = self.dataset.X_test
 
         # --- Train ---
-        if (self.exp_cfg.mode in ("fwdPass", "hybrid")) and "gesture" in self.exp_cfg.dataset :
-        
-            history = train_model(
-                self.model.model, opt,
-                X_train, self.dataset.Y_train,
-                X_test, self.dataset.Y_test,
-                self.epochs, params,
-                [tensorboard, es]
-            )
-        else:
-            history = self.model.model.fit(
-                X_train, self.dataset.Y_train,
-                epochs=self.epochs,
-                batch_size=int(params["batch_size"]),
-                verbose=2,
-                validation_data=(X_test, self.dataset.Y_test),
-                callbacks=[tensorboard, es],
-            ).history
-        # --- Evaluate ---
-        score = self.eval_model()
+        # Check if "debug" is in the experiment name
+        if 'debug' in self.exp_cfg.name.lower():
+            # Generate random history
+            history = {'loss': [], 'val_loss': [], 'accuracy': [], 'val_accuracy': []}
+            
+            for epoch in range(self.epochs):
+                # Generate random values
+                train_loss = float(np.random.uniform(0.5, 2.0))
+                val_loss = float(np.random.uniform(0.5, 2.0))
+                train_acc = float(np.random.uniform(0.4, 0.95))
+                val_acc = float(np.random.uniform(0.4, 0.95))
+                
+                # Update history
+                history['loss'].append(train_loss)
+                history['val_loss'].append(val_loss)
+                history['accuracy'].append(train_acc)
+                history['val_accuracy'].append(val_acc)
+                
+                # Generate random batch and timing info
+                num_batches = 17
+                epoch_time_ms = int(np.random.uniform(150, 200))
+                step_time_ms = epoch_time_ms // num_batches
+                
+                print(f"Epoch {epoch+1}/{self.exp_cfg.epochs}")
+                print(f"{num_batches}/{num_batches} - 0s - loss: {train_loss:.4f} - accuracy: {train_acc:.4f} - val_loss: {val_loss:.4f} - val_accuracy: {val_acc:.4f} - {epoch_time_ms}ms/epoch - {step_time_ms}ms/step")
+            
+            # Return random final scores
+            final_loss = float(np.random.uniform(0.5, 2.0))
+            final_acc = float(np.random.uniform(0.4, 0.95))
+            score = [final_loss, final_acc]
+            
+        else: 
+            if (self.exp_cfg.mode in ("fwdPass", "hybrid")) and "gesture" in self.exp_cfg.dataset :
+            
+                history = train_model(
+                    self.model.model, opt,
+                    X_train, self.dataset.Y_train,
+                    X_test, self.dataset.Y_test,
+                    self.epochs, params,
+                    [tensorboard, es]
+                )
+            else:
+                history = self.model.model.fit(
+                    X_train, self.dataset.Y_train,
+                    epochs=self.epochs,
+                    batch_size=int(params["batch_size"]),
+                    verbose=2,
+                    validation_data=(X_test, self.dataset.Y_test),
+                    callbacks=[tensorboard, es],
+                ).history
+            # --- Evaluate ---
+            score = self.eval_model()
 
         try:
             dash_model_path = f"{self.exp_cfg.name}/dashboard/model/model.keras"

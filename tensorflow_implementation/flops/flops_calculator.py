@@ -73,21 +73,26 @@ def analyze_model(initial_model, input_shapes=None):
     :param input_shapes: list of input shapes (optional, defaults to model.inputs)
     :return: number of total flops
     """
-    model = initial_model
+    if isinstance(initial_model, keras.Model):
+        model = initial_model
+    elif hasattr(initial_model, 'model'):
+        model = initial_model.model
+    else:
+        raise ValueError(f"Unsupported model type: {type(initial_model)}")
 
     # Use provided input_shapes if available, otherwise infer from model
     if input_shapes is None:
-        specs = [tf.TensorSpec([1, *inputs.shape[1:]]) for inputs in initial_model.model.inputs]
+        specs = [tf.TensorSpec([1, *inputs.shape[1:]]) for inputs in model.inputs]
     else:
         specs = [tf.TensorSpec([1, *shape]) for shape in input_shapes]
     
     # Create concrete function with correct number of inputs
     if len(specs) == 1:
-        concrete = tf.function(lambda x: model.model(x), autograph=False)
+        concrete = tf.function(lambda x: model(x), autograph=False)
     else:
         # For multiple inputs (e.g., dual ROI inputs), pass as a list
         def call_model(*inputs):
-            return model.model(list(inputs))
+            return model(list(inputs))
         concrete = tf.function(call_model, autograph=False)
     
     concrete_func = concrete.get_concrete_function(*specs)

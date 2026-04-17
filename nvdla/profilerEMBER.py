@@ -2,17 +2,17 @@ import os
 import sys
 import torch
 import yaml
-import glob  # --- MODIFICA: Aggiunto import ---
+import glob  # --- CHANGE: Added import ---
 import sys
 
-# Imposta le variabili d'ambiente
+# Set environment variables
 os.environ['TORCH_DATASETPATH'] = '/hpc/home/bzzlca/datasets'
 os.environ['TORCH_TRAINPATH'] = '/hpc/home/bzzlca/models'
 
-# Aggiungi il tuo percorso 'build' al sys.path
+# Add the 'build' path to sys.path
 nvdla_build_path = '/hpc/home/bzzlca/NVDLA-EMBER/build'
 
-# Aggiungilo solo se non è già presente (buona pratica)
+# Only add if not already present (best practice)
 if nvdla_build_path not in sys.path:
     sys.path.append(nvdla_build_path)
 
@@ -49,14 +49,14 @@ def profile_network(model, X, config, outdir):
     # Layers log
     exectime = 0
 
-    # --- INIZIO MODIFICA: Implementazione della ricerca file come da richiesta ---
+    # --- BEGIN CHANGE: File search implementation ---
     print(f'[INFO] Searching for layer logs in {outdir}...')
     workdir = outdir
-    # Trova tutti i file .yaml nella directory di output
+    # Find all .yaml files in the output directory
     search_pattern = os.path.join(workdir, "*.yaml")
     all_yaml_files = glob.glob(search_pattern)
     
-    # Definisci i nomi dei file da escludere
+    # Define filenames to exclude
     excluded_filenames = {
         "netcontent.yaml", 
         "layerlog.yaml", 
@@ -66,15 +66,15 @@ def profile_network(model, X, config, outdir):
     
     layerlogs = []
     for f_path in all_yaml_files:
-        # Aggiungi alla lista solo se è un file e il suo nome non è nell'elenco degli esclusi
+        # Add to the list only if it is a file and its name is not in the exclusion list
         if os.path.isfile(f_path) and os.path.basename(f_path) not in excluded_filenames:
             layerlogs.append(f_path)
     
     if not layerlogs:
         print(f'[WARNING] No layer log .yaml files found in {outdir}. Total time will be 0.')
-    # --- FINE MODIFICA ---
+    # --- END CHANGE ---
 
-    for layerlog in layerlogs: # Ora 'layerlogs' è definita
+    for layerlog in layerlogs: # Now 'layerlogs' is defined
         
         with open(layerlog, 'r') as f:
             layer = yaml.load(f, Loader=yaml.SafeLoader)
@@ -85,14 +85,14 @@ def profile_network(model, X, config, outdir):
             else:
                 print(f'[WARNING] Key "total-layertime" not found in {layerlog}.')
 
-    # --- INIZIO MODIFICA: Cancellazione dei file .yaml processati ---
+    # --- BEGIN CHANGE: Deletion of processed .yaml files ---
     # print(f'[INFO] Cleaning up {len(layerlogs)} processed layer log files...')
     # for layerlog_file in layerlogs:
     #     try:
     #         os.remove(layerlog_file)
     #     except OSError as e:
     #         print(f'[ERROR] Could not delete file {layerlog_file}: {e}')
-    # --- FINE MODIFICA ---
+    # --- END CHANGE ---
 
     print(f'Total Inference Time: {exectime} cycles of clock')
     if "int8" in config or "fp8" in config:
@@ -115,17 +115,17 @@ def profile_network(model, X, config, outdir):
     return time_in_ms
 
 if __name__ == '__main__':
-    # Imposta le variabili d'ambiente
+    # Set environment variables
     os.environ['TORCH_DATASETPATH'] = '/hpc/home/bzzlca/datasets'
     os.environ['TORCH_TRAINPATH'] = '/hpc/home/bzzlca/models'
 
-    # Aggiungi il tuo percorso 'build' al sys.path
+    # Add the 'build' path to sys.path
     nvdla_build_path = '/hpc/home/bzzlca/NVDLA-EMBER/build'
 
-    # Aggiungilo solo se non è già presente (buona pratica)
+    # Only add if not already present (best practice)
     if nvdla_build_path not in sys.path:
         sys.path.append(nvdla_build_path)
     model, testloader = models_factory('mnist', 'lenet', 1, False)
-    config = '/hpc/home/bzzlca/Symbolic_DNN-Tuner/hw_configs/nv_32x32_b1_dat-262144_wt-262144_fp16.yaml'
+    config = '/hpc/home/bzzlca/Symbolic_DNN-Tuner/nvdla/specs/nv_test.yaml'
     time = profile_network(model, testloader, config, './debug/')
     

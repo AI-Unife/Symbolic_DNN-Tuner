@@ -20,32 +20,32 @@ class quantizer_module(quantizer_interface):
 
     def binarize_weights_2(self, model):
         """
-        Binarizza i pesi di un modello Keras.
-        Sostituisce i valori <= 0 con -1 e i valori > 0 con 1.
+        Binarize the weights of a Keras model.
+        Replaces values <= 0 with -1 and values > 0 with 1.
         """
         weights = model.get_weights()
         modified_weights = []
         for weight_matrix in weights:
-            # tf.where funziona anche su array numpy perché viene convertito
+            # tf.where also works on numpy arrays as they get converted
             modified_matrix = tf.where(weight_matrix <= 0, -1.0, 1.0)
             modified_weights.append(modified_matrix.numpy())  # assicurati di restituire np
         return modified_weights
 
     def quantizer_function(self, model):
-        # binarizza i pesi del modello originale
+        # binarize the weights of the original model
         binarized_weights = self.binarize_weights_2(model)
 
-        # clona il modello
+        # clone the model
         self.quantized_model = tf.keras.models.clone_model(model)
 
-        # compila con la stessa loss del modello di partenza (nel tuo esempio: binary)
+        # compile with the same loss as the original model (e.g., binary)
         self.quantized_model.compile(
             optimizer=self.opt,
             loss="binary_crossentropy",
             metrics=['accuracy']
         )
 
-        # imposta i pesi binarizzati
+        # set the binarized weights
         self.quantized_model.set_weights(binarized_weights)
 
         return self.quantized_model

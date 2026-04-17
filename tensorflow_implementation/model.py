@@ -6,7 +6,19 @@ from typing import List, Dict, Any
 
 import tensorflow as tf
 from tensorflow.keras import layers, Model
-from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, Dense, Dropout, Flatten, BatchNormalization, GlobalAveragePooling2D, Activation, Concatenate
+from tensorflow.keras import regularizers as reg
+from tensorflow.keras.layers import (
+    Activation,
+    Conv2D,
+    Dense,
+    GlobalAveragePooling2D,
+    BatchNormalization,
+    Flatten,
+    MaxPooling2D,
+    Dropout,
+    Input,
+    Add
+)
 from keras.optimizers import *
 from components.colors import colors
 from components.neural_network import NeuralNetwork
@@ -25,6 +37,7 @@ class TFModel(TunerModel):
         LayerTypes.BatchNormalization: layers.BatchNormalization,
         LayerTypes.Flatten: layers.Flatten,
         LayerTypes.Concatenate: layers.Concatenate,
+        LayerTypes.Add: layers.Add,
         LayerTypes.ELU: "elu",
         LayerTypes.ReLU: "relu",
         LayerTypes.SeLU: "selu",
@@ -44,15 +57,15 @@ class TFModel(TunerModel):
         self.n_classes = n_classes
         self.is_roi = is_roi
         self.pos_input_shape = pos_input_shape
-        self.residual = params.get("residual_connections", False)
-        self.reg = params.get("l2_regularization", False)
+        self.residual = params.get("skip_connection", False)
+        self.reg = params.get("reg_l2", False)
         self.da = params.get("data_augmentation", False)
 
-        batch = self.reg.l2() if self.reg else None
+        batch = True if "tiny" in self.cfg.dataset.lower() else False  # self.reg if self.reg else None
         self.model = None
         # 2) Build a new CNN
 
-        reg_layer = self.reg.l2() if self.reg else None
+        reg_layer = reg.l2() if self.reg else None
 
         inputs = Input(self.input_shape)
         if self.da:
@@ -140,6 +153,18 @@ class TFModel(TunerModel):
         
         self.create_specs()
    
+   
+    def _add_residual(self, shortcut, x, output_channels, activation, reg_layer):
+        # If input and output channel dimensions differ, align them via 1x1 conv
+        if shortcut.shape[-1] != output_channels:
+            shortcut = Conv2D(output_channels, (1, 1), padding="same", kernel_regularizer=reg_layer)(shortcut)
+        # Add skip connection
+        x = Add()([shortcut, x])
+        # Apply activation after addition (ResNet-style)
+    
+        x = Activation(activation)(x)
+        return x
+    
     def create_specs(self):
         self.layers = {}
         for layer in self.model.layers:
@@ -255,6 +280,12 @@ class TFModel(TunerModel):
                 type=layer_type,
                 module=layer
             )
+        elif layer_type == LayerTypes.Add:
+            return LayerSpec(
+                name=layer.name,
+                type=layer_type,
+                module=layer
+            )
         else:
             raise Exception("Missing LayerSpec for layer of type " + layer.__class__.__name__)
 
@@ -307,6 +338,10 @@ class TFModel(TunerModel):
             )
         elif layer_spec.type == LayerTypes.Concatenate:
             return layers.Concatenate(
+                name=layer_spec.name,
+            )
+        elif layer_spec.type == LayerTypes.Add:
+            return layers.Add(
                 name=layer_spec.name,
             )
         else:

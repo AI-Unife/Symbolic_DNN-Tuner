@@ -57,7 +57,6 @@ class BothPolarity:
 class DVSGestureROI(DVSGesture):
     """A modified version of the DVSGesture eventset that returns regions-of-interest (ROIs) and their coordinates."""
 
-    sensor_size = (32, 32, 2)
     dtype = np.dtype(
         [("x", np.int16), ("y", np.int16), ("p", bool), ("t", np.int64)]
     )
@@ -75,6 +74,7 @@ class DVSGestureROI(DVSGesture):
     def __init__(
         self,
         save_to: str,
+        output_size: Tuple,
         train: bool = True,
         transform: Optional[Callable] = None,
         target_transform: Optional[Callable] = None,
@@ -87,6 +87,11 @@ class DVSGestureROI(DVSGesture):
             transform=transform,
             target_transform=target_transform,
             transforms=transforms,
+        )
+        
+        self.output_size = output_size
+        self.location_on_system = (
+            self.location_on_system + f"_fs{self.output_size[0]}"
         )
         self.position_transform = position_transform
         self.train = train
@@ -245,9 +250,9 @@ def reshape_x_pos(arr: np.ndarray, pos: Optional[np.ndarray], cfg) -> Tuple[np.n
         elif arr.ndim == 3 and arr.shape[0] not in (1, 2, 3, 4):  # likely [T, H, W]
             arr = np.transpose(arr, (1, 2, 0))
         # print(f"Reshaping for depth mode: pos shape {pos.shape}")
-        if pos.ndim == 4 and pos.shape[1] == 1:
-            pos = pos.sum(axis=1)  # collapse polarity if still present
         if pos is not None and hasattr(pos, "ndim"):
+            if pos.ndim == 4 and pos.shape[1] == 2:
+                pos = pos.sum(axis=1)  # collapse polarity if still present
             if pos.ndim == 2:
                 pos = pos[..., None]  # [H, W, 1]
             elif pos.ndim == 3 and pos.shape[0] not in (1, 2, 3, 4):  # likely [T, H, W]
@@ -289,9 +294,13 @@ def dataset_to_numpy(dataset, cfg) -> Tuple[np.ndarray, np.ndarray]:
                     
                     if cfg.mode == "depth":
                         # Single frame case: squeeze to [H, W] and compute one center of mass
-                        A = np.squeeze(pos)  # [H, W]
+                        A = np.squeeze(pos)  # Can be [H, W] or [H, W, C]
+                        # print(f"[DEBUG] Depth mode pos shape after squeeze: {A.shape}")
                         if A.ndim == 1:  # Edge case: if becomes 1D, reshape back
                             A = np.expand_dims(A, 0)
+                        # If 3D (H, W, C), sum over channels to get [H, W]
+                        if A.ndim == 3:
+                            A = A.sum(axis=2)  # Sum across all channels
                         if A.ndim == 2:
                             H, W = A.shape
                             yy, xx = np.indices((H, W))
@@ -302,6 +311,7 @@ def dataset_to_numpy(dataset, cfg) -> Tuple[np.ndarray, np.ndarray]:
                                 pos_mean = np.array([mean_y, mean_x])  # (2,)
                             else:
                                 pos_mean = np.array([0.0, 0.0])
+                        # print(f"[DEBUG] Depth mode pos_mean: {pos_mean}")
                     else:
                         # Time-series case (fwdPass or hybrid): squeeze last dimension(s) to get [T, H, W]
                         # Remove any singleton dimensions except the batch/time dimension
@@ -440,18 +450,18 @@ def get_ROI_numpy(cfg):
     Returns:
         ((x_train, y_train), (x_test, y_test))
     """
-    dataset_path = "rois_and_coordinates/datasets"
-    cache_dir = f"./cache/DVS_ROI_{cfg.mode}_{cfg.frames}_{cfg.channels}/"
-    # cache_dir = f"cache/DVS_ROI_{cfg.mode}_{polarity}_{cfg.frames}_{cfg.channels}_{n_pol}/"
+    dataset_path = "rois_and_coordinates/datasets/"
+    frame_size = 16
+    cache_dir = f"./cache/DVS_ROI_reshaped_{frame_size}_{cfg.mode}_{cfg.frames}_{cfg.channels}/"
+    output_size = (frame_size, frame_size, 2)
     _ensure_cache_dir(cache_dir)
     print("cache_dir:", cache_dir)
 
     tfms: List = [
         transforms.Denoise(filter_time=10000),
-        # Reuse DVSGesture sensor size only as a (H,W) hint for downsampling,
-        # since we target a fixed (64, 64) output anyway.
-        # transforms.Downsample(sensor_size=tonic.datasets.DVSGesture.sensor_size, target_size=(64, 64)),
-        transforms.ToFrame(sensor_size=(32, 32, 2), n_time_bins=cfg.frames),
+        # Downsample and ToFrame expect 2D spatial sizes (H, W) only, not including polarity
+        transforms.Downsample(sensor_size=(32, 32), target_size=(frame_size, frame_size)),
+        transforms.ToFrame(sensor_size=(frame_size, frame_size, 2), n_time_bins=cfg.frames),
     ]
 
     if cfg.mode == "fwdPass":
@@ -463,21 +473,24 @@ def get_ROI_numpy(cfg):
         target_transform = None
 
     transform = transforms.Compose(tfms)
+    
 
     train =  DVSGestureROI(
         dataset_path,
+        output_size=output_size,
         train=True,
         transform=transform,
         target_transform=target_transform,
-        position_transform=ROIMapTransform(n_time_bins=cfg.frames),
+        position_transform=ROIMapTransform(n_time_bins=cfg.frames, output_size=output_size),
     )
     print("Loaded ROI training dataset with", len(train), "samples.")
     test = DVSGestureROI(
         dataset_path,
+        output_size=output_size,
         train=False,
         transform=transform,
         target_transform=target_transform,
-        position_transform=ROIMapTransform(n_time_bins=cfg.frames),
+        position_transform=ROIMapTransform(n_time_bins=cfg.frames, output_size=output_size),
     )
 
     cached_train = tonic.DiskCachedDataset(train, cache_path=os.path.join(cache_dir, "train"))
@@ -485,16 +498,6 @@ def get_ROI_numpy(cfg):
 
     x_train, y_train = dataset_to_numpy(cached_train, cfg) 
     x_test, y_test = dataset_to_numpy(cached_test, cfg)
-    # Handle multi-dimensional y (e.g., [B, T, C] one-hot): use first time step to determine class
-    # if y_train.ndim > 1:
-    #     y_for_split = np.argmax(y_train[:, 0, :], axis=1) if y_train.ndim == 3 else np.argmax(y_train, axis=1)
-    # else:
-    #     y_for_split = y_train
-    # x_train, x_test, y_train, y_test = train_test_split(
-    #     x, y, test_size=0.2, random_state=42, stratify=y_for_split
-    # )
-    # x_train, y_train = dataset_to_numpy(cached_train, cfg)
-    # x_test, y_test = dataset_to_numpy(cached_test, cfg)
 
     return (x_train, y_train), (x_test, y_test)
 

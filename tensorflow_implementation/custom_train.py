@@ -134,7 +134,7 @@ def train_model(
         with tf.GradientTape() as tape:
             ta = tf.TensorArray(dtype=out_dtype, size=time_steps)
 
-            # Unroll temporale; usare tf.range dentro @tf.function crea un tf.while_loop ma con TensorArray è ok
+            # Temporal unroll; using tf.range inside @tf.function creates a tf.while_loop but with TensorArray it's ok
             for t in tf.range(time_steps):
                 # batch_x[:, t] : [B, ...]
                 if is_roi:
