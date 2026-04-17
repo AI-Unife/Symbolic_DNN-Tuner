@@ -1,7 +1,7 @@
 import subprocess
 from itertools import product
 
-datasets_cifar = ['cifar10', 'cifar100', 'tinyimagenet']
+datasets_cifar = ['tinyimagenet']
 optimizers = ['filtered', 'RS_ruled', 'basic', 'standard', 'RS']
 seeds = [42, 123, 96, 7, 84]
 
@@ -62,7 +62,7 @@ def generate_params_file(output_path: str = "params_gesture.txt"):
 
 def main():
     job_configs = generate_jobs()
-    save_job_configs_to_file(job_configs)
+    save_job_configs_to_file(job_configs, "params_tiny.txt")
     # generate_params_file()
 
 if __name__ == "__main__":
