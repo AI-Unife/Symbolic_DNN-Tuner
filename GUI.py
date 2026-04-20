@@ -7,7 +7,17 @@ from tkinter import filedialog
 def caricamento():
     return analyze_all_experiments(st.session_state.cartellaInput, st.session_state.cartellaOutput) #carico nome degli esperimenti e analizer corrispondenti alla cartella selezionata
 
-def fase_selezione_cartella(root):
+def fase_selezione_cartella():
+    root = tk.Tk()   # Creo una finestra di tkinter per poter utilizzare il filedialog: seleziona cartella 
+    # Trucco universale: portiamo la finestra sopra tutto e forziamo l'aggiornamento
+    root.attributes('-topmost', True)
+    root.lift()
+    # Su Linux/Mac, a volte withdraw() immediato "rompe" il dialogo. 
+    # Aspettiamo 100ms prima di nascondere la finestra principale.
+    root.after(100, root.withdraw)
+    # Forza il sistema a processare gli eventi grafici
+    root.update()
+
     st.empty()      # Pulisco il placeholder per rimuovere eventuali elementi di diverse fasi
     st.title("📈 - ANALYZER Symbolic DNN Tuner")
     
@@ -343,10 +353,7 @@ def fase_analisi():
                 
 
 def main():
-    root = tk.Tk()  # Creo una finestra di tkinter per poter utilizzare il filedialog: seleziona cartella 
-    root.withdraw() # Nascondo la finesstra
-    root.wm_attributes('-topmost', 1)       # Faccio in modo che una volta chiamato filedialog la finestra venga portata in primo piano
-
+   
     #imposto nome dell'applicazione icona e layout(su che spazio si sttruttura la pagina)
     st.set_page_config(page_title="ANALYZER Symbolic DNN Tuner", page_icon="📈", layout="wide")
     
@@ -358,7 +365,7 @@ def main():
         
         # Fase 1: Selezione cartelle
         if st.session_state.fase == 'selezione_cartella':
-            fase_selezione_cartella(root)
+            fase_selezione_cartella()
             
         # Fase 2: Caricamento dei dati
         elif st.session_state.fase == 'caricamento':

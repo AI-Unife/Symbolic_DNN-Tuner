@@ -32,10 +32,10 @@ class ResultsAnalyzer:
         Initialize the analyzer.
         
         Args:
-            experiment_dir: Experiment folder containing algorithm_logs/
+            experiment_dir: Experiment folder containing algorithm_logs
         """
         self.experiment_dir = Path(experiment_dir)
-        self.algorithm_logs_dir = self.experiment_dir / "algorithm_logs"
+        self.algorithm_logs_dir = os.path.join(self.experiment_dir, "algorithm_logs")
         self.results: List[ExperimentResult] = []
         self.has_flops_module = False
         self.has_hardware_module = False
@@ -51,7 +51,7 @@ class ResultsAnalyzer:
         # Load config.yaml file
         self._load_config_yaml()
         
-        if not self.algorithm_logs_dir.exists():
+        if not os.path.exists(self.algorithm_logs_dir):
             print(f"!  algorithm_logs folder not found in {self.experiment_dir}",file=sys.stderr)
             return False
         
@@ -125,8 +125,8 @@ class ResultsAnalyzer:
     
     def _load_config_yaml(self) -> None:
         """Load configuration from config.yaml file"""
-        config_file = self.experiment_dir / "config.yaml"
-        if not config_file.exists():
+        config_file = os.path.join(self.experiment_dir, "config.yaml")
+        if not os.path.exists(config_file):
             print(f"!  config.yaml file not found in {self.experiment_dir}",file=sys.stderr)
             self.config = {}
             return
@@ -139,8 +139,8 @@ class ResultsAnalyzer:
 
     def _load_accuracies(self) -> List[Optional[float]]:
         """Load accuracies from acc_report.txt file"""
-        acc_file = self.algorithm_logs_dir / "acc_report.txt"
-        if not acc_file.exists():
+        acc_file = os.path.join(self.algorithm_logs_dir, "acc_report.txt")
+        if not os.path.exists(acc_file):
             print(f"!  No acc_report.txt file found",file=sys.stderr)
             return []
         
@@ -161,8 +161,8 @@ class ResultsAnalyzer:
     
     def _load_scores(self) -> List[Optional[float]]:
         """Load scores from score_report.txt file"""
-        score_file = self.algorithm_logs_dir / "score_report.txt"
-        if not score_file.exists():
+        score_file = os.path.join(self.algorithm_logs_dir, "score_report.txt")
+        if not os.path.exists(score_file):
             print(f"!  No score_report.txt file found",file=sys.stderr)
             return []
         
@@ -183,12 +183,12 @@ class ResultsAnalyzer:
     
     def _load_flops_data(self) -> Optional[List[Tuple[float, float]]]:
         """Load FLOPS data from flops_report.txt file"""
-        flops_file = self.algorithm_logs_dir / "flops_report.txt"
-        if not flops_file.exists():
-            flops_file = self.algorithm_logs_dir / "params_report.txt"
-            if not flops_file.exists():
-                flops_file = self.experiment_dir / "flops_report.txt"
-                if not flops_file.exists():
+        flops_file = os.path.join(self.algorithm_logs_dir, "flops_report.txt")
+        if not os.path.exists(flops_file):
+            flops_file = os.path.join(self.algorithm_logs_dir, "params_report.txt")
+            if not os.path.exists(flops_file):
+                flops_file = os.path.join(self.experiment_dir, "flops_report.txt")
+                if not os.path.exists(flops_file):
                     return None
 
         flops_data = []
@@ -212,8 +212,8 @@ class ResultsAnalyzer:
     
     def _load_hardware_data(self) -> Optional[List[Tuple[float, float, float, str]]]:
         """Load hardware data from hardware_report.txt file"""
-        hw_file = self.algorithm_logs_dir / "hardware_report.txt"
-        if not hw_file.exists():
+        hw_file = os.path.join(self.algorithm_logs_dir, "hardware_report.txt")
+        if not os.path.exists(hw_file):
             print(f"!  No hardware_report.txt file found",file=sys.stderr)
             return None
         
@@ -241,8 +241,8 @@ class ResultsAnalyzer:
     # !!! NUOVA FUNZIONE PER CARICARE I DATI DI EVIDENCE
     def _load_evidence_data(self) -> Optional[List[Tuple[Tuple[str, str], bool]]]:
         """Load evidence data from evidence.txt file"""
-        evidence_file = self.algorithm_logs_dir / "evidence.txt"
-        if not evidence_file.exists():
+        evidence_file = os.path.join(self.algorithm_logs_dir, "evidence.txt")
+        if not os.path.exists(evidence_file):
             print(f"!  No evidence.txt file found",file=sys.stderr)
             return None
         
@@ -270,8 +270,8 @@ class ResultsAnalyzer:
     # !!! NUOVA FUNZIONE PER CARICARE I DATI DI DIAGNOSIS
     def _load_diagnosis_data(self) -> Optional[List[List[str]]]:
         """Load diagnosis data from diagnosis_symbolic_logs.txt file"""
-        diagnosis_file = self.algorithm_logs_dir / "diagnosis_symbolic_logs.txt"
-        if not diagnosis_file.exists():
+        diagnosis_file = os.path.join(self.algorithm_logs_dir, "diagnosis_symbolic_logs.txt")
+        if not os.path.exists(diagnosis_file):
             print(f"!  No diagnosis_symbolic_logs.txt file found",file=sys.stderr)
             return None
         
@@ -295,8 +295,8 @@ class ResultsAnalyzer:
     # !!! NUOVA FUNZIONE PER CARICARE I DATI DI TUNING
     def _load_tuning_data(self) -> Optional[List[List[str]]]:
         """Load tuning data from tuning_symbolic_logs.txt file"""
-        tuning_file = self.algorithm_logs_dir / "tuning_symbolic_logs.txt"
-        if not tuning_file.exists():
+        tuning_file = os.path.join(self.algorithm_logs_dir, "tuning_symbolic_logs.txt")
+        if not os.path.exists(tuning_file):
             print(f"!  No tuning_symbolic_logs.txt file found",file=sys.stderr)
             return None
         
@@ -406,7 +406,8 @@ def plotaccuracy_confronto(analyzers: list[ResultsAnalyzer], output_dir: Optiona
         plt.tight_layout()
         
         if output_dir:
-            output_path = Path(output_dir) / f"Group_accuracy_score_params.png"
+            output_path = Path(output_dir)
+            output_path=os.path.join(output_path, f"Comparison_Accuracy_Score_Params.png")
             plt.savefig(output_path, bbox_inches='tight')
         return fig
 
@@ -484,7 +485,8 @@ def plotaccuracy(analyzer: ResultsAnalyzer, exp: Path, output_dir: Optional[Path
 
         plt.tight_layout()
         if output_dir:
-            output_path = Path(output_dir) / f"{exp.name}_accuracy_score_params.png"
+            output_path = Path(output_dir) 
+            output_path=os.path.join(output_path, f"{exp.name}_accuracy_score_params.png")
             plt.savefig(output_path)
         return fig
 
@@ -547,7 +549,8 @@ def plotevidence_confronto(analyzers, output_dir: Optional[Path] = None):
         fig.tight_layout()
 
         if output_dir:
-            output_path = Path(output_dir) / f"Group_Evidence.png"
+            output_path = Path(output_dir) 
+            output_path = os.path.join(output_path, f"Group_Evidence.png")
             plt.savefig(output_path, bbox_inches='tight')
 
         return fig
@@ -576,7 +579,8 @@ def plotevidence(analyzer: ResultsAnalyzer, exp: Path, output_dir: Optional[Path
             ax.legend(['Failure', 'Success'])
             fig.tight_layout()
             if output_dir:
-                output_path = Path(output_dir) / f"{exp.name}_evidence.png"
+                output_path = Path(output_dir)
+                output_path = os.path.join(output_path, f"{exp.name}_evidence.png")
                 plt.savefig(output_path)
         return fig
 
@@ -617,7 +621,8 @@ def plottuning_confronto(analyzers: List[ResultsAnalyzer], output_dir: Optional[
 
     fig.tight_layout()
     if output_dir:
-        output_path = Path(output_dir) / f"Group_tuning.png"
+        output_path = Path(output_dir)
+        output_path = os.path.join(output_path, f"Comparison_Tuning.png")
         plt.savefig(output_path, bbox_inches='tight')
     return fig
 
@@ -671,7 +676,8 @@ def plottuning(analyzer: ResultsAnalyzer, exp: Path, output_dir: Optional[Path] 
 
         fig.tight_layout()
         if output_dir:
-            output_path = Path(output_dir) / f"{exp.name}_tuning.png"
+            output_path = Path(output_dir)
+            output_path = os.path.join(output_path, f"{exp.name}_tuning.png")
             plt.savefig(output_path)
         return fig
 
@@ -712,7 +718,8 @@ def plotdiagnosis_confronto(analyzers: List[ResultsAnalyzer], output_dir: Option
 
     fig.tight_layout()
     if output_dir:
-        output_path = Path(output_dir) / f"Group_diagnosis.png"
+        output_path = Path(output_dir)
+        output_path = os.path.join(output_path, f"Comparison_Diagnosis.png")
         plt.savefig(output_path, bbox_inches='tight')
     return fig
 
@@ -769,7 +776,8 @@ def plotdiagnosis(analyzer: ResultsAnalyzer, exp: Path, output_dir: Optional[Pat
 
         fig.tight_layout()
         if output_dir:
-            output_path = Path(output_dir) / f"{exp.name}_diagnosis.png"
+            output_path = Path(output_dir) 
+            output_path = os.path.join(output_path, f"{exp.name}_diagnosis.png")
             plt.savefig(output_path)
         return fig
 
@@ -824,7 +832,8 @@ def plottimeline_confronto(analyzers: List[ResultsAnalyzer], output_dir: Optiona
     fig.tight_layout()
     
     if output_dir:
-        output_path = Path(output_dir) / f"Group_timeline_heatmap.png"
+        output_path = Path(output_dir) 
+        output_path = os.path.join(output_path, f"Group_timeline_heatmap.png")
         plt.savefig(output_path, bbox_inches='tight')
     return fig
 
@@ -859,7 +868,8 @@ def plottimeline(analyzer: ResultsAnalyzer, exp: Path, output_dir: Optional[Path
         fig.tight_layout()
         
         if output_dir:
-            output_path = Path(output_dir) / f"{exp.name}_timeline.png"
+            output_path = Path(output_dir)
+            output_path=os.path.join(output_path, f"{exp.name}_timeline.png")
             plt.savefig(output_path)
         return fig
 
@@ -868,7 +878,7 @@ def analyze_all_experiments(parent_dir: Path, output_dir: Path = None):
     experiments = []
     parent_dir = Path(parent_dir)
     for item in parent_dir.iterdir():
-        if item.is_dir() and (item / "algorithm_logs").exists():
+        if item.is_dir() and os.path.exists(os.path.join(item, "algorithm_logs")):
             experiments.append(item)
     
     if not experiments:
