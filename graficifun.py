@@ -40,6 +40,7 @@ class ResultsAnalyzer:
         self.has_flops_module = False
         self.has_hardware_module = False
         self.config: Dict[str, Any] = {}  # Experiment configuration
+        self.exp_name = self.experiment_dir.name  # Nome dell'esperimento basato sul nome della cartella
 
     def load_results(self) -> bool:
         """
