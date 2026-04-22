@@ -1,8 +1,11 @@
+
+
 import torch
 import torch.nn as nn
 from torch.utils.flop_counter import FlopCounterMode
 
 from components.backend_interface import BackendInterface
+from components.colors import colors
 
 class ModuleBackend(BackendInterface):
 
@@ -61,3 +64,41 @@ class ModuleBackend(BackendInterface):
     def get_latency(self, model, input_shapes):
         """Latency measurement can be implemented here if needed."""
         return None
+
+
+def isConv2d(model):
+    """Check if the model contains at least one Conv2d layer."""
+    return isinstance(model, nn.Conv2d)
+
+def get_dummy_input(self)->torch.Tensor:
+    """Generate a dummy input tensor for profiling."""
+    return torch.randint(0, 256, (1, 3, 32, 32))
+
+
+def extract_conv_layers(self, model) -> list:
+    """
+    Extract Conv2D layer shapes by registering forward hooks.
+    Returns list of (input_shape, output_shape) tuples.
+    """
+    conv_layers = []
+
+    def hook_fn(module, input, output):
+        if isinstance(module, nn.Conv2d):
+            conv_layers.append((input[0].shape, output.shape))
+
+    hooks = [m.register_forward_hook(hook_fn) for m in model.modules()]
+
+    try:
+        B_eff = 1
+        C_in, H_in, W_in = self.input_shape
+        dummy_input = torch.randn(B_eff, C_in, H_in, W_in)
+        self.model.eval()
+        with torch.no_grad():
+            self.model(dummy_input)
+    except Exception as e:
+        print(colors.WARNING, f"\n[WARN] Failed to extract layer info: {e}", colors.ENDC)
+    finally:
+        for h in hooks:
+            h.remove()
+
+    return conv_layers
