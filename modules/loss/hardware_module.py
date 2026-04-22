@@ -1,16 +1,15 @@
 import os
 import sys
 import yaml
-import torch
 import tempfile
-import torch.nn as nn
 from pathlib import Path
 
 
-# path alla cartella NVDLA-EMBER
+# path alla cartella TUNER_ROOT
 TUNER_ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(TUNER_ROOT))
 
+# path alla cartella NVDLA-EMBER
 EMBER_PATH = TUNER_ROOT.parent / "NVDLA-EMBER"
 sys.path.append(str(EMBER_PATH))
 
@@ -23,6 +22,7 @@ TEMP_LOG_DIR = EMBER_PATH / "test_logs"
 from components.colors import colors
 from modules.common_interface import common_interface
 from components.model_interface import LayerTypes, Params, LayerSpec
+from pytorch_implementation.module_backend import isConv2d, get_dummy_input, extract_conv_layers
 
 import nvdla.profiler as profiler
 from exp_config import load_cfg
@@ -196,6 +196,10 @@ class hardware_module(common_interface):
             self.nvdla.pop(config_key_to_pop)
 
         # sort the configurations by cost
+        print(colors.OKBLUE, f"\n[INFO] Available hardware configurations after compatibility check:", colors.ENDC)
+        for config_key in self.nvdla:
+            print(f"  - {config_key}: latency={self.nvdla[config_key]['latency']:.6f} s, cost={self.nvdla[config_key]['cost']}$, total_cost={self.nvdla[config_key]['total_cost']}")
+        
         # this will be useful to determine the optimal configuration
         sorted_config = dict(sorted(self.nvdla.items(), key=lambda item: item[1]['total_cost']))
         self.nvdla = sorted_config
@@ -212,7 +216,7 @@ class hardware_module(common_interface):
 
 
     def printing_values(self):
-        print(f"LATENCY: {self.latency} s",)
+        print(f"\nLATENCY: {self.latency} s",)
         print(f"CURRENT HW: {self.current_config} [{self.cost}$]")
         print(f"TOTAL COST: {self.total_cost}")
 
@@ -277,7 +281,7 @@ class hardware_module(common_interface):
             print("[INFO] Using EMBER hardware backend")
 
             #model = SimpleCNN() 
-            dummy_input = torch.randint(0, 256, (1, 3, 32, 32)) 
+            dummy_input = get_dummy_input(self) 
         
             # esecuzione del profiler_ember
             total_latency = ember_profile_network(
@@ -299,23 +303,132 @@ class hardware_module(common_interface):
             raise ValueError(f"Unsupported hw_backend: {hw_backend}")
 
 
-    def suggest_optimization(self):
+    def suggest_optimization(self, model):
         """
-        Suggest hardware and network optimizations based 
-        on the current latency and cost values."""
-        if hw_module.suggest_hw_opt:
+        Suggest hardware optimization by creating a minimal configuration
+        file that meets the model requirements."""
+        if self.suggest_hw_opt:
+
             print("\n[INFO] Suggesting hardware optimization...")
-            print(f"Current configuration: {hw_module.current_config} with latency {hw_module.latency} s and cost {hw_module.cost}$")
-            # create a new config file with the suggested optimization 
-            optimized_config_path = hw_module.specs_dir / f"optimized_{hw_module.current_config}"
-            with open(hw_module.specs_dir / hw_module.nvdla[hw_module.current_config]['path'], 'r') as f:
-                config_data = f.read()
+            print(f"Current configuration: {self.current_config} with latency {self.latency} s and cost {self.cost}$")
+
+            min_ft_buf = 0
+            min_out_buf = 0
+            max_c = 0
+            max_k = 0
+            conv_layers = extract_conv_layers(self, model)
+
+            for input_shape, output_shape in conv_layers:
+                B, C, H, W = input_shape
+                min_ft_buf = max(min_ft_buf, H * W * B)
+                B, K, H_out, W_out = output_shape
+                min_out_buf = max(min_out_buf, H_out * W_out * B)
+                
+                max_c = max(max_c, C)
+                max_k = max(max_k, K)
+
+            bank_depth_ft = max(int(min_ft_buf), 1024)
+            bank_depth_out = max(int(min_out_buf), 1024)
             
-            # edit config data here
-            
-            with open(optimized_config_path, 'w') as f:
-                f.write(config_data)
-            print(f"Suggested optimized hardware configuration saved to: {optimized_config_path}")
+            # allineamento multipli di 16
+            def align(x, base=16):
+                return int(((x + base - 1) // base) * base)
+
+            atomic_c = max(16, align(max_c))
+            atomic_k = max(16, align(max_k))
+
+            dat_size = int(bank_depth_ft) * atomic_c
+            wt_size  = int(bank_depth_ft) * atomic_k
+
+
+            # datmem: feature maps (input + intermedi), double buffered
+            datmem_size = max(int(min_ft_buf) * atomic_c * 2, 1024 * 1024)
+
+            # outmem: output feature maps (final + intermedi), double buffered
+            outmem_size = max(int(min_out_buf) * atomic_k * 2, 1024 * 1024)
+
+            # wtmem: total model weights (int8 → 1B each) + safety margin
+            wtmem_size = 0
+            for layer in model.modules():
+                if hasattr(layer, 'weight') and layer.weight is not None:
+                    wtmem_size += layer.weight.numel()
+            wtmem_size = max(int(wtmem_size) * 2, 1024 * 1024)
+
+            # sdpmem: post-processing buffer (ReLU, BN, etc.), fraction of datmem
+            sdpmem_size = max(datmem_size // 4, 1024 * 1024)
+
+            minimal_config_name = \
+                f"minimal_nv_{atomic_c}x{atomic_k}_b1_dat-{dat_size}_wt-{wt_size}_int8.yaml"
+
+
+            minimal_config = {
+                'name': 'minimal_config',
+
+                'axi-dbb': {
+                    'latency': 1200,
+                    'wordsize': 512
+                },
+
+                'cmac': {
+                    'atomic-c': atomic_c,
+                    'atomic-k': atomic_k,
+                    'batch-size': 1,
+                    'mac-pipelined': False
+                },
+
+                'cbuf': {
+                    'datbuf': {
+                        'num-banks': 1,
+                        'bank-depth': int(bank_depth_ft), 
+                        'wordsize': 0
+                    },
+                    'wtbuf': {
+                        'num-banks': 1,
+                        'bank-depth': int(bank_depth_ft),
+                        'wordsize': 0
+                    }
+                },
+
+                'cacc': {
+                    'num-banks': 1,
+                    'bank-depth': int(bank_depth_out),
+                    'bitwidth': 31,
+                    'wordsize': 0 
+                },
+
+                'sdp': {
+                    'alu-pipelined': False,
+                    'num-stages': 1
+                },
+
+                'host-system': {
+                    'datmem-size': datmem_size,
+                    'outmem-size': outmem_size,
+                    'sdpmem-size': sdpmem_size,
+                    'wtmem-size': wtmem_size
+                },
+
+                'inject': {
+                    'ctrlpath': True,
+                    'datapath': True
+                },
+
+                'sim-timeout': 0,
+                'truncate': True,
+
+                'dat-type': 'int8',
+                'wt-type': 'int8'
+            }
+
+            minimal_config_path = self.specs_dir / minimal_config_name
+            try:
+                with open(minimal_config_path, 'w') as f:
+                    yaml.dump(minimal_config, f)
+
+                print(f"Minimal hardware configuration saved to: {minimal_config_path}")
+            except Exception as e:
+                print(colors.FAIL, f"\n[FAIL] Error saving minimal configuration: {e}", colors.ENDC)
+
 
         if hw_module.suggest_net_opt:
             print("\n[INFO] Suggesting network optimization...")
@@ -325,6 +438,7 @@ class hardware_module(common_interface):
                 # suggestions for network optimization here
             else:
                 print("Latency is within the acceptable range.")
+
 
 
     def hw_supports_net(self, model, dict_config):
@@ -338,47 +452,13 @@ class hardware_module(common_interface):
         out_buf_entries = dict_config.get("out_buf_entries", 0)
         compatible = True
 
-        conv_layers = []
-
-        # Hook function: salva input/output shape dei layer Conv2D
-        def hook_fn(module, input, output):
-            if isinstance(module, nn.Conv2d):
-                conv_layers.append((input[0].shape, output.shape))
-
-        # register hook on all modules
-        hooks = [m.register_forward_hook(hook_fn) for m in model.modules()]
-
-        #print("Hooks registered:", len(hooks))
-
-        # auto determine input shape from the first Conv2D layer
-        first_conv = next((m for m in model.modules() if isinstance(m, nn.Conv2d)), None)
+        first_conv = next((m for m in model.modules() if isConv2d(m)), None)
         if first_conv is None:
             print(colors.WARNING, f"\n[WARN] No Conv2d layer found in model", colors.ENDC)
-            for h in hooks: h.remove()
             return False
 
-        # batch=1
-        B_eff = 1
-        C_in, H_in, W_in = self.input_shape
-        dummy_input = torch.randn(1, C_in, H_in, W_in)
-        
-        try:
-            dummy_input = torch.randn(B_eff, C_in, H_in, W_in)
-            model.eval()
-            with torch.no_grad():
-                model(dummy_input)
-        except Exception as e:
-            print(colors.WARNING, f"\n[WARN] Failed to run dummy forward: {e}", colors.ENDC)
-            for h in hooks: h.remove()
-            return False
-        
-        #print("Conv layers captured:", len(conv_layers))
-                
-        # remove hook
-        for h in hooks:
-            h.remove()
+        conv_layers = extract_conv_layers(self, model)
 
-        # check buffer entries for each conv layer
         for idx, (input_shape, output_shape) in enumerate(conv_layers):
             B, C, H, W = input_shape
             entries_feat = H * W * min(B, max_batch)
@@ -394,10 +474,9 @@ class hardware_module(common_interface):
 
         return compatible
 
-
 if __name__ == "__main__":
     hw_module = hardware_module()
     model = SimpleCNN()
     hw_module.update_state(model, input_shape=(3, 32, 32))
     hw_module.printing_values()
-    hw_module.suggest_optimization()
+    hw_module.suggest_optimization(model)
