@@ -153,8 +153,7 @@ class hardware_module(common_interface):
         # flag to use or not hw cost
         self.use_hw_cost = self.cfg.get('use_hw_cost', True)
 
-        #flag to accept or not suggestion for net and hw optimization
-        self.suggest_net_opt = self.cfg.get('suggest_net_opt', True)
+        #flag to accept or not suggestion for hw optimization
         self.suggest_hw_opt = self.cfg.get('suggest_hw_opt', True)
 
     
@@ -307,62 +306,64 @@ class hardware_module(common_interface):
         """
         Suggest hardware optimization by creating a minimal configuration
         file that meets the model requirements."""
+
         if self.suggest_hw_opt:
 
             print("\n[INFO] Suggesting hardware optimization...")
             print(f"Current configuration: {self.current_config} with latency {self.latency} s and cost {self.cost}$")
 
-            min_ft_buf = 0
-            min_out_buf = 0
             max_c = 0
             max_k = 0
-            conv_layers = extract_conv_layers(self, model)
 
-            for input_shape, output_shape in conv_layers:
-                B, C, H, W = input_shape
-                min_ft_buf = max(min_ft_buf, H * W * B)
-                B, K, H_out, W_out = output_shape
-                min_out_buf = max(min_out_buf, H_out * W_out * B)
-                
-                max_c = max(max_c, C)
-                max_k = max(max_k, K)
-
-            bank_depth_ft = max(int(min_ft_buf), 1024)
-            bank_depth_out = max(int(min_out_buf), 1024)
-            
-            # allineamento multipli di 16
+            # Allineamento multipli di 16
             def align(x, base=16):
                 return int(((x + base - 1) // base) * base)
+
+            for layer in model.modules():
+                if isConv2d(layer):
+                    C = layer.in_channels
+                    K = layer.out_channels
+
+                    max_c = max(max_c, C)
+                    max_k = max(max_k, K)
 
             atomic_c = max(16, align(max_c))
             atomic_k = max(16, align(max_k))
 
-            dat_size = int(bank_depth_ft) * atomic_c
-            wt_size  = int(bank_depth_ft) * atomic_k
+            dtype = "int8"
+            bytes_per_elem = 1  # int8
 
+            max_dat_buf = 0
+            max_wt_buf = 0
 
-            # datmem: feature maps (input + intermedi), double buffered
-            datmem_size = max(int(min_ft_buf) * atomic_c * 2, 1024 * 1024)
-
-            # outmem: output feature maps (final + intermedi), double buffered
-            outmem_size = max(int(min_out_buf) * atomic_k * 2, 1024 * 1024)
-
-            # wtmem: total model weights (int8 → 1B each) + safety margin
-            wtmem_size = 0
             for layer in model.modules():
-                if hasattr(layer, 'weight') and layer.weight is not None:
-                    wtmem_size += layer.weight.numel()
-            wtmem_size = max(int(wtmem_size) * 2, 1024 * 1024)
+                if isConv2d(layer):
 
-            # sdpmem: post-processing buffer (ReLU, BN, etc.), fraction of datmem
+                    W, H = layer.kernel_size
+                    C = layer.in_channels
+                    K = layer.out_channels
+
+                    dat_buff_logico = (W * H * C) + (W * H * C * min(atomic_k, K))
+                    wt_buff_logico  = (W * H * K) // atomic_k
+
+                    max_dat_buf = max(max_dat_buf, dat_buff_logico)
+                    max_wt_buf  = max(max_wt_buf, wt_buff_logico)
+
+            datmem_size = max(max_dat_buf * bytes_per_elem, 1024 * 1024)
+            wtmem_size  = max(max_wt_buf * bytes_per_elem, 1024 * 1024)
+
+            outmem_size = max(wtmem_size, 1024 * 1024)
+
             sdpmem_size = max(datmem_size // 4, 1024 * 1024)
 
-            minimal_config_name = \
-                f"minimal_nv_{atomic_c}x{atomic_k}_b1_dat-{dat_size}_wt-{wt_size}_int8.yaml"
+            bank_depth_dat = max(max_dat_buf // atomic_c, 1024)
+            bank_depth_wt  = max(max_wt_buf // atomic_c, 1024)
+            bank_depth_out = max(max_wt_buf // atomic_k, 1024)
 
+            config_name = f"minimal_nv_{atomic_c}x{atomic_k}_b1_{dtype}.yaml"
 
             minimal_config = {
-                'name': 'minimal_config',
+                'name': config_name,
 
                 'axi-dbb': {
                     'latency': 1200,
@@ -379,12 +380,12 @@ class hardware_module(common_interface):
                 'cbuf': {
                     'datbuf': {
                         'num-banks': 1,
-                        'bank-depth': int(bank_depth_ft), 
+                        'bank-depth': int(bank_depth_dat),
                         'wordsize': 0
                     },
                     'wtbuf': {
                         'num-banks': 1,
-                        'bank-depth': int(bank_depth_ft),
+                        'bank-depth': int(bank_depth_wt),
                         'wordsize': 0
                     }
                 },
@@ -393,7 +394,7 @@ class hardware_module(common_interface):
                     'num-banks': 1,
                     'bank-depth': int(bank_depth_out),
                     'bitwidth': 31,
-                    'wordsize': 0 
+                    'wordsize': 0
                 },
 
                 'sdp': {
@@ -416,29 +417,20 @@ class hardware_module(common_interface):
                 'sim-timeout': 0,
                 'truncate': True,
 
-                'dat-type': 'int8',
-                'wt-type': 'int8'
+                'dat-type': dtype,
+                'wt-type': dtype
             }
 
-            minimal_config_path = self.specs_dir / minimal_config_name
+            minimal_config_path = self.specs_dir / config_name
+
             try:
                 with open(minimal_config_path, 'w') as f:
                     yaml.dump(minimal_config, f)
 
-                print(f"Minimal hardware configuration saved to: {minimal_config_path}")
+                print(f"[OK] Minimal hardware configuration saved to: {minimal_config_path}")
+
             except Exception as e:
-                print(colors.FAIL, f"\n[FAIL] Error saving minimal configuration: {e}", colors.ENDC)
-
-
-        if hw_module.suggest_net_opt:
-            print("\n[INFO] Suggesting network optimization...")
-            print(f"Current latency: {hw_module.latency} s")
-            if hw_module.latency > hw_module.max_latency:
-                print("Latency is above the maximum threshold. Consider optimizing the network architecture as follows:")
-                # suggestions for network optimization here
-            else:
-                print("Latency is within the acceptable range.")
-
+                print(f"[FAIL] Error saving minimal configuration: {e}")
 
 
     def hw_supports_net(self, model, dict_config):
