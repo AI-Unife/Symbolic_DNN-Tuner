@@ -66,9 +66,9 @@ class ModuleBackend(BackendInterface):
         return None
 
 
-def isConv2d(model):
-    """Check if the model contains at least one Conv2d layer."""
-    return isinstance(model, nn.Conv2d)
+def isConv2d(module) -> bool:
+    """Check if the module is a Conv2d layer."""
+    return isinstance(module, nn.Conv2d)
 
 def get_dummy_input(self)->torch.Tensor:
     """Generate a dummy input tensor for profiling."""
