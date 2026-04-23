@@ -19,7 +19,7 @@ TEMP_LOG_DIR = EMBER_PATH / "test_logs"
 
 
 from components.colors import colors
-from modules.loss.generate_minimal_cfg import generate_minimal_cfg
+from modules.loss.generate_cfg import generate_minimal_cfg
 from modules.common_interface import common_interface
 from components.model_interface import LayerTypes, Params
 from pytorch_implementation.module_backend import isConv2d, get_dummy_input, extract_conv_layers
