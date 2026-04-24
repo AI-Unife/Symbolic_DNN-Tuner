@@ -7,7 +7,7 @@ import pandas as pd
 import seaborn as sns
 import os
 
-class SpazioRicerca:
+class FileOUT:
     """Classe per determinare lo spazio di ricerca"""
 
     def __init__(self, exp_dir: Path):
@@ -17,6 +17,7 @@ class SpazioRicerca:
         self.exp_name=self.exp_dir.name
         #creo una lista di dizionari vuoti per memorizzare i risultati
         self.spazio_ricerca = []
+        self.trend = []
     
     def load_search_space(self) -> bool:
         """Carica lo spazio di ricerca da un file .out nella cartella dell'esperimento."""
@@ -64,11 +65,11 @@ class SpazioRicerca:
             print(f"⚠ Error loading search space: {e}")
             return False
         
-    def stampa_spazio_ricerca(self, spazio_ricerca: List[Dict[str, Any]]):
+    def stampa_spazio_ricerca(self):
         """Stampa lo spazio di ricerca in modo leggibile"""
         print("\n🔍 Search Space:")
 
-        for point in spazio_ricerca:
+        for point in self.spazio_ricerca:
             iteration = point.get("iteration", "N/A")
             print(f"Iteration {iteration}:")
             for key, value in point.items():
@@ -76,14 +77,14 @@ class SpazioRicerca:
                     print(f"  {key}: {value}")
             print("-" * 40)
     
-    def grafici(self, spazio_ricerca: List[Dict[str, Any]], output_path: Optional[Path] = None):
+    def grafici_spazio_ricerca(self, output_path: Optional[Path] = None):
         """Crea grafici per visualizzare lo spazio di ricerca"""
-        if not spazio_ricerca:
+        if not self.spazio_ricerca:
             print("⚠ No search space data to plot.")
             return
         
         # Converti la lista di dizionari in un DataFrame
-        df = pd.DataFrame(spazio_ricerca)
+        df = pd.DataFrame(self.spazio_ricerca)
 
         # devo creare un grafico per ogni parametro di ricerca che mi dica come quella quantità stia cambiano con l'avanzare delle iterazioni tutte nella stessa finestra
         grafici_da_fare = df.shape[1]-1
@@ -104,23 +105,152 @@ class SpazioRicerca:
             output_path = Path(output_path)
             output_path=os.path.join(output_path, f"{self.exp_dir.name}_search_space.png")
             plt.savefig(output_path)
+        #plt.show()
+        return fig
+    
+    def load_trend(self) -> bool:
+        """Carica l'andamento delle iterazioni da un file .out nella cartella dell'esperimento."""
+        # cerco nella cartella dell'esperimento un file che termina con .out
+        search_space_file = None
+
+        for i in self.exp_dir.iterdir():
+            if i.is_file() and i.suffix == ".out":
+                search_space_file = i
+                break
+
+        if not search_space_file:
+            return False
+        
+        try:
+            with open(search_space_file, "r") as f:
+                dict = {}
+                lines = f.readlines()
+                for line in lines:
+                    line = line.strip()
+                    if "--- ITERATION" in line:
+                        if dict:
+                            self.trend.append(dict)
+                        # Estraggo l'iterazione corrente
+                        line =line.split("--- ITERATION")[1].strip()
+                        line = line.split(" ")[0].strip() # Prendo solo la parte numerica prima di eventuali spazi
+                        iteration = int(line)
+                        dict={"iteration": iteration}
+
+                    elif "Epoch" in line and "Loss" in line and "Accuracy" in line:
+                        line=line.split()
+                        loss=float(line[4][:-1])
+                        accuracy=float(line[6][:-1])
+
+                        if "loss" in dict:
+                            dict["loss"].append(loss)
+                        else:
+                            dict["loss"] = [loss]
+                        if "accuracy" in dict:
+                            dict["accuracy"].append(accuracy)
+                        else:
+                            dict["accuracy"] = [accuracy]
+
+                    elif "Epoch" in line and "loss" in line and "acc" in line:
+                        # Rimpiazzo , e = con spazi
+                        line=line.replace("=", " ")
+                        line=line.split(" ")
+                        loss=float(line[3][:-1])
+                        accuracy=float(line[7][:-1])
+                        if "loss" in dict:
+                            dict["loss"].append(loss)
+                        else:
+                            dict["loss"] = [loss]
+                        if "accuracy" in dict:
+                            dict["accuracy"].append(accuracy)
+                        else:
+                            dict["accuracy"] = [accuracy]
+                    
+                    elif "loss" in line and "accuracy" in line:
+                        line=line.split(" ")
+                        loss=float(line[5])
+                        accuracy=float(line[8])
+                        if "loss" in dict:
+                            dict["loss"].append(loss)
+                        else:
+                            dict["loss"] = [loss]
+                        if "accuracy" in dict:
+                            dict["accuracy"].append(accuracy)
+                        else:
+                            dict["accuracy"] = [accuracy]
+
+                if dict:
+                    self.trend.append(dict)
+                
+            return True
+        except Exception as e:
+            print(f"⚠ Error loading trend: {e}")
+            return False
+        
+    def stampa_trend(self ):
+        """Stampa il trend in modo leggibile"""
+        print("\n🔍 Trend:")
+
+        for point in self.trend:
+            iteration = point.get("iteration", "N/A")
+            print(f"Iteration {iteration}:")
+            for key, value in point.items():
+                if key != "iteration":
+                    print(f"  {key}: {value}")
+            print("-" * 40)
+    
+    def grafici_trend(self, i: int, output_path: Optional[Path] = None):
+        """Specificata un'iterazione, crea grafici per visualizzare l'andamento di accuracy e loss in quella iterazione"""
+
+        if not self.trend:
+            print(f"⚠ No trend data to plot for {self.exp_name}.")
+            return
+        
+        if i >= len(self.trend):
+            print(f"⚠ Iteration index {i} out of range. Available iterations: 0 to {len(self.trend)-1} in {self.exp_name}.")
+            return
+        
+        if "loss" not in self.trend[i] or "accuracy" not in self.trend[i]:
+            print(f"⚠ Trend data for iteration {i} is incomplete. Missing 'loss' or 'accuracy' in {self.exp_name}.")
+            return
+        
+        fig, ax = plt.subplots(1, 2, figsize=(14, 7))
+        sns.lineplot(x=range(len(self.trend[i]["loss"])), y=self.trend[i]["loss"], ax=ax[0])
+        ax[0].set_title(f"Loss Trend - Iteration {self.trend[i]['iteration']}")
+        sns.lineplot( x=range(len(self.trend[i]["accuracy"])), y=self.trend[i]["accuracy"], ax=ax[1])
+        ax[1].set_title(f"Accuracy Trend - Iteration {self.trend[i]['iteration']}")
+
+        plt.tight_layout()
+        if output_path:
+            output_path = Path(output_path)
+            output_path=os.path.join(output_path, f"{self.exp_dir.name}_trend_{i}.png")
+            plt.savefig(output_path)
+        #plt.show()
         return fig
 
-def find_search_space(exp_dir: Path):
-    """Trova lo spazio di ricerca in un esperimento"""
-    spazi_ricerca = []
+def find_out(exp_dir: Path):
+    """Trova file .out"""
+    list_of_out_files = []
     exp_dir = Path(exp_dir)
     for i in exp_dir.iterdir():
         if i.is_dir():
             print(f"🔍 Searching for search space in: {i}")
-            search_space = SpazioRicerca(i)
-            if search_space.load_search_space():
+            esperimento = FileOUT(i)
+
+            if esperimento.load_trend ():
+                print(f"✅ Trend found in: {i}")
+            else:
+                print(f"⚠ No trend found in: {i}")
+                continue
+
+            if esperimento.load_search_space():
                 print(f"✅ Search space found in: {i}")
-                spazi_ricerca.append(search_space)
             else:
                 print(f"⚠ No search space found in: {i}")
-                spazi_ricerca.append(None)
-    return spazi_ricerca 
+                continue
+
+            list_of_out_files.append(esperimento)
+
+    return list_of_out_files
 
 def main():
     """Main function"""
@@ -150,12 +280,14 @@ def main():
         print(f"\nSelected folder: {exp_dir}\n")
     
     # Analyze experiments
-    spazi_ricerca = find_search_space(exp_dir)
+    list_of_out_files = find_out(exp_dir)
 
-    for search_space in spazi_ricerca:
-        if search_space:
-            search_space.stampa_spazio_ricerca(search_space.spazio_ricerca)
-            search_space.grafici(search_space.spazio_ricerca)
+    for esperimento in list_of_out_files:
+        print(f"\nAnalyzing experiment: {esperimento.exp_name}")
+        esperimento.stampa_trend()
+        esperimento.stampa_spazio_ricerca()
+        esperimento.grafici_trend(0, output_path=exp_dir)
+        esperimento.grafici_spazio_ricerca(output_path=exp_dir)
 
     print("\n" + "="*70)
     print("  Analysis completed!")

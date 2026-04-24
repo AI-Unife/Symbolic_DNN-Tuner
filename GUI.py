@@ -10,19 +10,13 @@ def caricamento():
 
 @st.cache_data          # Cache dei dati in modo tale che a ogni iterazione con la pagina non venga ricaricato tutto da zero
 def caricamento2():
-    return find_search_space(st.session_state.cartellaInput) #carico nome degli esperimenti e analizer corrispondenti alla cartella selezionata
+    return find_out(st.session_state.cartellaInput) #carico nome degli esperimenti e analizer corrispondenti alla cartella selezionata
 
 
 def fase_selezione_cartella():
     root = tk.Tk()   # Creo una finestra di tkinter per poter utilizzare il filedialog: seleziona cartella 
-    # Trucco universale: portiamo la finestra sopra tutto e forziamo l'aggiornamento
+    root.withdraw()
     root.attributes('-topmost', True)
-    root.lift()
-    # Su Linux/Mac, a volte withdraw() immediato "rompe" il dialogo. 
-    # Aspettiamo 100ms prima di nascondere la finestra principale.
-    root.after(100, root.withdraw)
-    # Forza il sistema a processare gli eventi grafici
-    root.update()
 
     st.empty()      # Pulisco il placeholder per rimuovere eventuali elementi di diverse fasi
     st.title("📈 - ANALYZER Symbolic DNN Tuner")
@@ -32,6 +26,8 @@ def fase_selezione_cartella():
     cola, colb = st.columns([2,5])         #creo due colonne e adatto il bottone alla prima colonna per farlo uguale a quello sottostante
     with cola:
         if st.button('Seleziona cartella da analizzare ->',use_container_width=True):   #quando viene premuto il bottone
+            # Forza il sistema a processare gli eventi grafici
+            root.update()
             cartella_scelta = filedialog.askdirectory(master=root)  #si apre il filedialog per selezionare la cartella da analizzare
             if cartella_scelta:
                 st.session_state.cartellaInput = cartella_scelta    #la salvo in una variabile di stato per poterla usare nelle fasi successive
@@ -45,6 +41,8 @@ def fase_selezione_cartella():
     col1, col2, col_vuota1 = st.columns([2, 1, 4]) 
     with col1:
         if st.button('Seleziona cartella di salvataggio ->',use_container_width=True):
+            # Forza il sistema a processare gli eventi grafici
+            root.update()
             cartella_scelta = filedialog.askdirectory(master=root)
             if cartella_scelta:
                 st.session_state.cartellaOutput = cartella_scelta
@@ -66,6 +64,7 @@ def fase_selezione_cartella():
                     st.session_state.cartellaOutput = None  # Se non è stata selezionata una cartella di output, la imposto a None
 
                 st.session_state.fase = 'caricamento'
+                root.destroy()
                 st.rerun()  # Ricarica la pagina per passare alla fase successiva
             else:
                 st.error("Per favore, seleziona una cartella da analizzare prima di continuare.", icon="❌")
@@ -80,6 +79,8 @@ def fase_caricamento():
         st.session_state.stato_bottone_confronto = False
     if 'stato_bottone_spazio_ricerca' not in st.session_state:
         st.session_state.stato_bottone_spazio_ricerca = False
+    if 'stato_bottone_trend' not in st.session_state:
+        st.session_state.stato_bottone_trend = False
 
     with st.spinner('Caricando i vari esperimenti...'):     # Mostro uno spinner mentre vengono caricati i dati, in modo da far capire all'utente che l'applicazione sta lavorando e non è bloccata
         lista_esperimenti, lista_analizer = caricamento ()  # Carico i dati degli esperimenti e gli analizer corrispondenti alla cartella selezionata, usando la funzione caricamento che è stata decorata con st.cache_data per evitare di ricaricare tutto da zero a ogni iterazione con la pagina
@@ -87,9 +88,9 @@ def fase_caricamento():
             st.session_state.lista_esperimenti = lista_esperimenti
             st.session_state.lista_analizer = lista_analizer
 
-        lista_spazi_ricerca = caricamento2()     #restituise una lista di Spazi di ricerca che sono composti a loro volta di unalista di dizionari e il nome dell'esperimento
-        if lista_spazi_ricerca:
-            st.session_state.lista_spazi_ricerca = lista_spazi_ricerca
+        lista_out_files = caricamento2()     #restituise una lista di Spazi di ricerca che sono composti a loro volta di unalista di dizionari e il nome dell'esperimento
+        if lista_out_files:
+            st.session_state.lista_out_files = lista_out_files
 
     if not lista_esperimenti:       #mostro un messaggio di warning se non sono ststi trovati esperimenti
         st.warning("❌ - Non sono stati trovati esperimenti nella cartella selezionata. Per favore, verifica che la cartella contenga i dati corretti e riprova.")
@@ -98,13 +99,15 @@ def fase_caricamento():
         st.session_state.lista_grafici_singoli = None   #creo una variabile di stato per tenere traccia dei grafici da fare per ogni esperimento, in modo tale che se dovessi tornare indietro e poi tornare a questa fase non perdo l'informazione sui grafici da fare
     if 'lista_grafici_confronto' not in st.session_state:
         st.session_state.lista_grafici_confronto = None   #creo una variabile di stato per tenere traccia dei grafici di confronto da fare, in modo tale che se dovessi tornare indietro e poi tornare a questa fase non perdo l'informazione sui grafici di confronto da fare
+    if 'lista_grafici_trend' not in st.session_state:
+        st.session_state.lista_grafici_trend = []
 
     if lista_esperimenti:
         st.write(f"Trovati {len(lista_esperimenti)} esperimenti nella cartella selezionata: ")      #mostro cosa ho trovato
         st.write("Seleziona esperimenti da analizzare:")
         esp_analizzare=st.multiselect("Esperimenti da analizzare:", [exp.name for exp in lista_esperimenti])        #chiedo quali esperimenti analizzare 
 
-        col1,col2,col3= st.columns([2, 2, 2]) 
+        col1,col2,col3,col4= st.columns([2, 2, 2, 2]) 
         with col1:
             if esp_analizzare and st.button('Crea grafici per singoli esperimenti'):
                 st.session_state.stato_bottone_singoli = True
@@ -116,6 +119,10 @@ def fase_caricamento():
         with col3:
             if esp_analizzare and st.button('Spazio di Ricerca'):
                 st.session_state.stato_bottone_spazio_ricerca = True
+                st.rerun()
+        with col4:
+            if esp_analizzare and st.button('Trend'):
+                st.session_state.stato_bottone_trend = True
                 st.rerun()
 
         if esp_analizzare and st.session_state.stato_bottone_singoli:
@@ -154,7 +161,6 @@ def fase_caricamento():
                 grafici_da_fare_singoli.append(grafici)     # tengo traccia per ogni esperimento (indice) quali grafici fare 
             
             st.session_state.lista_grafici_singoli = grafici_da_fare_singoli   #me lo devo salvare in una variabile di stato sennò nella fase di creazione dei grafici non riesco più a reperire l'informazione
-            st.session_state.lista_esperimenti=[exp for exp in lista_esperimenti if exp.name in esp_analizzare]   #filtro la lista degli esperimenti in modo tale che nella fase di creazione dei grafici mi rimangano solo quelli che voglio analizzare
 
         if esp_analizzare and st.session_state.stato_bottone_confronto:
             st.subheader("Hai selezionato di visualizzare i grafici di confronto.")
@@ -169,14 +175,32 @@ def fase_caricamento():
             grafici = st.multiselect(f"Quali grafici devo generare?", opzioni_grafici)       # Apro un menu di selezione multipla
             
             st.session_state.lista_grafici_confronto = grafici
-            st.session_state.lista_esperimenti=[exp for exp in lista_esperimenti if exp.name in esp_analizzare]   #filtro la lista degli esperimenti in modo tale che nella fase di creazione dei grafici mi rimangano solo quelli che voglio analizzare
 
         if st.session_state.stato_bottone_spazio_ricerca:
             st.subheader("Hai selezionato di visualizzare i grafici di Spazio di Ricerca.")
 
+        if st.session_state.stato_bottone_trend:
+            st.subheader("Hai selezionato di visualizzare i grafici di Trend.")
+            
+            graficitrend= []        # mi devo tenere traccia per ogni esperimento cosa graficare
+            for i, exp in enumerate(esp_analizzare):
+                iterazioni_graficabili=[]
+                for it in range(len(st.session_state.lista_out_files[i].trend)):
+                    if "accuracy" in st.session_state.lista_out_files[i].trend[int(it)]:  #se ho la lista di accuracy per quel'iterazione vuol dire che posso graficare quell'iterazione
+                        iterazioni_graficabili.append(int(it))
+
+                # Altrimenti chiediamo all'utente
+                grafici = st.multiselect(f"Quale iterazione vuoi visualizzare il trend per {exp}?", [f"Iterazione {iterazione}" for iterazione in iterazioni_graficabili], key=f"ig_{exp}" )
+                graficitrend.append((exp, grafici))     # tengo traccia per ogni esperimento (indice) quali grafici fare 
+            
+            st.session_state.lista_grafici_trend = graficitrend   #me lo devo salvare in una variabile di stato sennò nella fase di creazione dei grafici non riesco più a reperire l'informazione
+
     colno,colok= st.columns([6, 2]) 
     with colok:
-        if (st.session_state.lista_grafici_singoli or st.session_state.lista_grafici_confronto or st.session_state.stato_bottone_spazio_ricerca) and st.button('Crea grafici'):  # se ho dei grafici da creare mostro il bottone per andare alla fase successiva 
+        if (st.session_state.lista_grafici_singoli or st.session_state.lista_grafici_confronto or st.session_state.stato_bottone_spazio_ricerca or st.session_state.lista_grafici_trend) and st.button('Crea grafici'):  # se ho dei grafici da creare mostro il bottone per andare alla fase successiva
+
+            st.session_state.lista_esperimenti=[exp for exp in lista_esperimenti if exp.name in esp_analizzare]   #filtro la lista degli esperimenti in modo tale che nella fase di creazione dei grafici mi rimangano solo quelli che voglio analizzare
+
             st.session_state.fase = 'analisi'
             st.rerun() 
     with colno:
@@ -248,10 +272,19 @@ def fase_analisi():
         st.success("✅ - Tutti i grafici di confronto sono stati salvati con successo nella cartella di output selezionata!")
 
     if st.session_state.stato_bottone_spazio_ricerca and st.session_state.salvato_tutto:     # se sono nella modalità spazio di ricerca, salvo tutti i grafici di spazio di ricerca degli esperimenti selezionati.
-        for spazio_ricerca in st.session_state.lista_spazi_ricerca:
+        for spazio_ricerca in st.session_state.lista_out_files:
             if spazio_ricerca and spazio_ricerca.exp_name in [exp.name for exp in st.session_state.lista_esperimenti]:   # se sono nella modalità spazio di ricerca, salvo tutti i grafici di spazio di ricerca degli esperimenti selezionati.
-                spazio_ricerca.grafici(spazio_ricerca.spazio_ricerca, st.session_state.cartellaOutput)
+                spazio_ricerca.grafici(st.session_state.cartellaOutput)
         st.success("✅ - Tutti i grafici di Spazio di Ricerca sono stati salvati con successo nella cartella di output selezionata!")
+
+    if st.session_state.stato_bottone_trend and st.session_state.salvato_tutto:
+        for trend in st.session_state.lista_out_files:
+            if trend and trend.exp_name in [exp.name for exp in st.session_state.lista_esperimenti]:   # se sono nella modalità spazio di ricerca, salvo tutti i grafici di spazio di ricerca degli esperimenti selezionati.
+                for esperimento, iterazioni in st.session_state.lista_grafici_trend:
+                    if esperimento == trend.exp_name:
+                        for iterazione in iterazioni:
+                            trend.grafici_trend(int(iterazione.split()[1]), st.session_state.cartellaOutput)      
+        st.success("✅ - Tutti i grafici di Trend sono stati salvati con successo nella cartella di output selezionata!")
 
     if st.session_state.stato_bottone_singoli and not st.session_state.salvato_tutto:     # se sono nella modalità singoli grafici, mostro i grafici uno alla volta con i relativi bottoni di salvataggio    
         st.subheader("Grafici per singoli esperimenti")
@@ -387,15 +420,39 @@ def fase_analisi():
     if st.session_state.stato_bottone_spazio_ricerca and not st.session_state.salvato_tutto:     # se sono nella modalità spazio di ricerca, mostro i grafici di spazio di ricerca per tutti gli esperimenti selezionati
         st.subheader("Grafici Spazio di Ricerca")
         with st.spinner('Generando i grafici di Spazio di Ricerca...'):
-            for esperimento in st.session_state.lista_spazi_ricerca:
+            for esperimento in st.session_state.lista_out_files:
                 if esperimento and esperimento.exp_name in [exp.name for exp in st.session_state.lista_esperimenti] and st.session_state.ricarica_analisi=="Tutto":   # se sono nella modalità spazio di ricerca, salvo tutti i grafici di spazio di ricerca degli esperimenti selezionati.
                     st.write(f"Analizzo Spazio di Ricerca per {esperimento.exp_name}")
-                    fig=esperimento.grafici(esperimento.spazio_ricerca)
+                    fig=esperimento.grafici_spazio_ricerca()
                     st.pyplot(fig,clear_figure=True)
                     plt.close(fig)
                 if esperimento and esperimento.exp_name in [exp.name for exp in st.session_state.lista_esperimenti] and st.session_state.cartellaOutput and st.button(f"Salva grafici Spazio di Ricerca per {esperimento.exp_name}", key=f"salva_spazio_ricerca_{esperimento.exp_name}"):
-                    esperimento.grafici(esperimento.spazio_ricerca, st.session_state.cartellaOutput)
+                    esperimento.grafici_spazio_ricerca(st.session_state.cartellaOutput)
                     st.success(f"✅ - Grafici Spazio di Ricerca per {esperimento.exp_name} salvati con successo!")
+    
+    if st.session_state.stato_bottone_trend and not st.session_state.salvato_tutto:
+        st.subheader("Grafici Trend")
+        with st.spinner('Generando i grafici di Trend...'):
+            for trend in st.session_state.lista_out_files:
+                if trend and trend.exp_name in [exp.name for exp in st.session_state.lista_esperimenti] and st.session_state.ricarica_analisi=="Tutto":
+                    st.write(f"Analizzo Trend per {trend.exp_name}")
+                    # devo vedere quali iterazioni ho per quel esperimento da analizzare 
+                    for esperimento, grafici in st.session_state.lista_grafici_trend:
+                        if esperimento == trend.exp_name:
+                            for grafico in grafici:
+                                col1, col2, col3 = st.columns([1, 6, 1])
+                                with col2:
+                                    fig=trend.grafici_trend(int(grafico.split()[1]))
+                                    st.pyplot(fig,clear_figure=True)
+                                    plt.close(fig)
+
+                if trend and trend.exp_name in [exp.name for exp in st.session_state.lista_esperimenti] and st.session_state.cartellaOutput and st.button(f"Salva grafici Trend per {trend.exp_name}", key=f"salva_trend_{trend.exp_name}"):
+                    for esperimento, grafici in st.session_state.lista_grafici_trend:
+                        if esperimento == trend.exp_name:
+                            for grafico in grafici:
+                                trend.grafici_trend(int(grafico.split()[1]), st.session_state.cartellaOutput)
+                    st.success(f"✅ - Grafici di Trend per {trend.exp_name} salvati con successo!")
+                    st.session_state.salva_trend = False  
 
     st.session_state.ricarica_analisi = "Nulla"   # una volta che ho caricato i grafici  non ho più bisogno di ricaricarli di continuo   
 
@@ -428,8 +485,8 @@ def main():
             st.write("L'analisi dei risultati è stata completata con successo. ")
             st.balloons()
 
-            col_vuota2, col3= st.columns([5, 2]) 
-            with col3:                      # se voglio una nuova analisi posso tornare alla fase iniziale e viene cancellato tutto lo stato
+            col_vuota, col= st.columns([5, 2]) 
+            with col:                      # se voglio una nuova analisi posso tornare alla fase iniziale e viene cancellato tutto lo stato
                 if st.button('Torna alla fase iniziale',use_container_width=True):
                     st.session_state.fase = 'selezione_cartella'
                     st.cache_data.clear()
