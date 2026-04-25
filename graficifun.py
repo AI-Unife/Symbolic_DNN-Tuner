@@ -4,8 +4,11 @@ import yaml
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Any
 from dataclasses import dataclass, field
-import matplotlib.pyplot as plt
 import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+
 
 @dataclass
 class ExperimentResult:
@@ -319,177 +322,167 @@ class ResultsAnalyzer:
         return tuning_data if tuning_data else None
     
 def plotaccuracy_confronto(analyzers: list[ResultsAnalyzer], output_dir: Optional[Path] = None):
-        # creo 3 grafici di confronto nella stessa figura: accuracy, score e nparams (se disponibili)
-        # prima di tutto controllo quali dati sono disponibili per decidere quanti grafici creare 
-        num_plots = 0
-        plotAccuracy = False
-        plotScore = False
-        plotParams = False
+    # creo 3 grafici di confronto nella stessa figura: accuracy, score e nparams (se disponibili)
+    # prima di tutto controllo quali dati sono disponibili per decidere quanti grafici creare 
+    num_plots = 0
+    plotAccuracy = False
+    plotScore = False
+    plotParams = False
 
-        for analyzer in analyzers:
-            for i in range(len(analyzer.results)):  # controllo se c'è almeno un dato di accuratezza valido per decidere se creare il grafico dell'accuratezza
-                if analyzer.results[i].accuracy is not None:
-                    num_plots += 1
-                    plotAccuracy = True
-                    break
-            if plotAccuracy:
-                break
-
-        for analyzer in analyzers:
-            for i in range(len(analyzer.results)):
-                if analyzer.results[i].score is not None and analyzer.results[i].score < 0:
-                    num_plots += 1
-                    plotScore = True
-                    break
-            if plotScore:
-                break
-
-        for analyzer in analyzers:
-            for i in range(len(analyzer.results)):
-                if analyzer.results[i].nparams is not None:
-                    num_plots += 1
-                    plotParams = True
-                    break
-            if plotParams:
-                break
-        
-        if num_plots == 0:
-            return None  # Se non ci sono dati da graficare, esco dalla funzione senza creare alcun grafico
-
-        fig, axes = plt.subplots(1,num_plots, figsize=(10 * num_plots, 6),dpi=200)      # adatto la dimensione della figura al numero di grafici da creare
-
-        cmap = plt.get_cmap('gist_rainbow') 
-        num_lines = len(analyzers)
-
-        # Grafici linea per l'accuratezza
-        idx = 0
-        if plotAccuracy:
-            for i, analyzer in enumerate(analyzers):
-                axes[idx].plot(
-                    [r.iteration for r in analyzer.results if r.accuracy is not None],  #asse x sono le iterazioni
-                    [r.accuracy for r in analyzer.results if r.accuracy is not None],   #asse y sono le accuratezze, filtro solo quelle non None
-                    label=analyzer.experiment_dir.name, color=cmap(i/num_lines),linewidth=2)  
-                axes[idx].set_title(f"Accuracy", fontsize=20)
-                axes[idx].set_xlabel("Iteration", fontsize=16)
-                axes[idx].set_ylabel("Accuracy", fontsize=16)
-                axes[idx].grid()
-                axes[idx].plot()
-            idx += 1
-
-        # Grafici linea per lo score
-        if plotScore:
-            for i, analyzer in enumerate(analyzers):
-                axes[idx].plot(
-                    [r.iteration for r in analyzer.results if r.score is not None and r.score<0],   #asse x sono le iterazioni
-                    [r.score for r in analyzer.results if r.score is not None and r.score<0],       #asse y sono gli score, filtro solo quelli non None e negativi 
-                    label=analyzer.experiment_dir.name, color=cmap(i/num_lines),linewidth=2)
-                axes[idx].set_title(f"Score", fontsize=20)
-                axes[idx].set_xlabel("Iteration", fontsize=16)
-                axes[idx].set_ylabel("Score", fontsize=16)
-                axes[idx].grid()
-                axes[idx].plot()
-            idx += 1
-
-        # Grafici linea per il numero di parametri
-        if plotParams:
-            for i, analyzer in enumerate(analyzers):
-                axes[idx].plot(
-                    [r.iteration for r in analyzer.results if r.nparams is not None],       #asse x sono le iterazioni
-                    [r.nparams for r in analyzer.results if r.nparams is not None],         #asse y sono il numero di parametri, filtro solo quelli non None
-                    label=analyzer.experiment_dir.name, color=cmap(i/num_lines),linewidth=2)
-                axes[idx].set_title(f"Number of Parameters", fontsize=20)
-                axes[idx].set_xlabel("Iteration", fontsize=16)
-                axes[idx].set_ylabel("Number of Parameters", fontsize=16)
-                axes[idx].grid()
-                axes[idx].plot()
-
-        plt.legend(title="Experiments", bbox_to_anchor=(1, 1.1), loc='lower right',fontsize=14, title_fontsize=16)
-        plt.tight_layout()
-        
-        if output_dir:
-            output_path = Path(output_dir)
-            output_path=os.path.join(output_path, f"Comparison_Accuracy_Score_Params.png")
-            plt.savefig(output_path, bbox_inches='tight')
-        return fig
-
-def plotaccuracy(analyzer: ResultsAnalyzer, exp: Path, output_dir: Optional[Path] = None):
-        # creo 3 grafici per ogni esperimento nella stessa figura: accuracy, score e nparams (se disponibili)
-        # prima di tutto controllo quali dati sono disponibili per decidere quanti grafici creare 
-        num_plots = 0
-        plotAccuracy = False
-        plotScore = False
-        plotParams = False
-
+    for analyzer in analyzers:
         for i in range(len(analyzer.results)):  # controllo se c'è almeno un dato di accuratezza valido per decidere se creare il grafico dell'accuratezza
             if analyzer.results[i].accuracy is not None:
                 num_plots += 1
                 plotAccuracy = True
                 break
+        if plotAccuracy:
+            break
 
+    for analyzer in analyzers:
         for i in range(len(analyzer.results)):
             if analyzer.results[i].score is not None and analyzer.results[i].score < 0:
                 num_plots += 1
                 plotScore = True
                 break
+        if plotScore:
+            break
 
+    for analyzer in analyzers:
         for i in range(len(analyzer.results)):
             if analyzer.results[i].nparams is not None:
                 num_plots += 1
                 plotParams = True
                 break
-        
-        if num_plots == 0:
-            return None  # Se non ci sono dati da graficare, esco dalla funzione senza creare alcun grafico
-
-        fig, axes = plt.subplots(1,num_plots, figsize=(10 * num_plots, 6),dpi=200)      # adatto la dimensione della figura al numero di grafici da creare
-        # Grafici linea per l'accuratezza
-        idx = 0
-        if plotAccuracy:
-            axes[idx].plot(
-                [r.iteration for r in analyzer.results if r.accuracy is not None],  #asse x sono le iterazioni
-                [r.accuracy for r in analyzer.results if r.accuracy is not None],   #asse y sono le accuratezze, filtro solo quelle non None
-                label=exp.name, color='red'
-            )
-            axes[idx].set_title(f"Accuracy - {exp.name}", fontsize=20)
-            axes[idx].set_xlabel("Iteration", fontsize=16)
-            axes[idx].set_ylabel("Accuracy", fontsize=16)
-            axes[idx].grid()
-            axes[idx].plot()
-            idx += 1
-
-        # Grafici linea per lo score
-        if plotScore:
-            axes[idx].plot(
-                [r.iteration for r in analyzer.results if r.score is not None and r.score<0],   #asse x sono le iterazioni
-                [r.score for r in analyzer.results if r.score is not None and r.score<0],       #asse y sono gli score, filtro solo quelli non None e negativi 
-                label=exp.name, color='blue'
-            )
-            axes[idx].set_title(f"Score - {exp.name}", fontsize=20)
-            axes[idx].set_xlabel("Iteration", fontsize=16)
-            axes[idx].set_ylabel("Score", fontsize=16)
-            axes[idx].grid()
-            axes[idx].plot()
-            idx += 1
-
-        # Grafici linea per il numero di parametri
         if plotParams:
-            axes[idx].plot(
-                [r.iteration for r in analyzer.results if r.nparams is not None],       #asse x sono le iterazioni
-                [r.nparams for r in analyzer.results if r.nparams is not None],         #asse y sono il numero di parametri, filtro solo quelli non None
-                label=exp.name, color='green'
-            )
-            axes[idx].set_title(f"Number of Parameters - {exp.name}", fontsize=20)
-            axes[idx].set_xlabel("Iteration", fontsize=16)
-            axes[idx].set_ylabel("Number of Parameters", fontsize=16)
-            axes[idx].grid()
-            axes[idx].plot()
+            break
+    
+    if num_plots == 0:
+        return None  # Se non ci sono dati da graficare, esco dalla funzione senza creare alcun grafico
 
-        plt.tight_layout()
-        if output_dir:
-            output_path = Path(output_dir) 
-            output_path=os.path.join(output_path, f"{exp.name}_accuracy_score_params.png")
-            plt.savefig(output_path)
-        return fig
+    #Determinare i titoli dei grafici da creare in base ai dati disponibili
+    cols = sum([plotAccuracy, plotScore, plotParams])
+    titles = []
+    if plotAccuracy: titles.append("Accuracy")
+    if plotScore: titles.append("Score")
+    if plotParams: titles.append("Number of Parameters")
+
+    # Creo la figura con subplot per i grafici di confronto usando Plotly
+    fig = make_subplots(rows=1, cols=cols, subplot_titles=titles)
+    colors = px.colors.qualitative.Plotly  # Palette standard (10 colori distinti)
+    
+    for i, analyzer in enumerate(analyzers):
+        exp_name = analyzer.experiment_dir.name
+        exp_color = colors[i % len(colors)] 
+        idx = 1 
+        # --- LOGICA ACCURACY ---
+        if plotAccuracy:
+            x_acc = [r.iteration for r in analyzer.results if r.accuracy is not None]
+            y_acc = [r.accuracy for r in analyzer.results if r.accuracy is not None]
+            fig.add_trace(go.Scatter(x=x_acc, y=y_acc, name=exp_name, mode='lines',line=dict(color=exp_color),
+                                     legendgroup=exp_name, showlegend=True), row=1, col=idx)
+            idx = idx +1  # Incremento l'indice solo se ho aggiunto il grafico dell'accuratezza
+
+        # --- LOGICA SCORE  ---
+        if plotScore:
+            x_score = [r.iteration for r in analyzer.results if r.score is not None and r.score<0]
+            y_score = [r.score for r in analyzer.results if r.score is not None and r.score<0]
+            fig.add_trace(go.Scatter(x=x_score, y=y_score, name=exp_name, mode='lines',line=dict(color=exp_color),
+                                     legendgroup=exp_name, showlegend=False), row=1, col=idx)
+            idx += 1  # Incremento l'indice solo se ho aggiunto il grafico dell'accuratezza
+
+        # --- LOGICA NUMBER OF PARAMETERS  ---
+        if plotParams:
+            x_par = [r.iteration for r in analyzer.results if r.nparams is not None]
+            y_par = [r.nparams for r in analyzer.results if r.nparams is not None]
+            fig.add_trace(go.Scatter(x=x_par, y=y_par, name=exp_name, mode='lines',line=dict(color=exp_color),
+                                     legendgroup=exp_name, showlegend=False), row=1, col=idx)
+
+    # Personalizzazione interattiva
+    fig.update_layout(
+        height=400, 
+        width= 600 * cols,
+        hovermode="x unified", # Mostra tutti i dati vicini al mouse sulla stessa X
+        template="plotly_white",
+        autosize=False
+    )
+    if output_dir:
+        output_path = Path(output_dir) 
+        output_path=os.path.join(output_path, f"Comparison_Accuracy_Score_Params.png")
+        fig.write_image(output_path)
+    return fig
+
+def plotaccuracy(analyzer: ResultsAnalyzer, exp: Path, output_dir: Optional[Path] = None):
+    # creo 3 grafici per ogni esperimento nella stessa figura: accuracy, score e nparams (se disponibili)
+    # prima di tutto controllo quali dati sono disponibili per decidere quanti grafici creare 
+    num_plots = 0
+    plotAccuracy = False
+    plotScore = False
+    plotParams = False
+
+    for i in range(len(analyzer.results)):  # controllo se c'è almeno un dato di accuratezza valido per decidere se creare il grafico dell'accuratezza
+        if analyzer.results[i].accuracy is not None:
+            num_plots += 1
+            plotAccuracy = True
+            break
+
+    for i in range(len(analyzer.results)):
+        if analyzer.results[i].score is not None and analyzer.results[i].score < 0:
+            num_plots += 1
+            plotScore = True
+            break
+
+    for i in range(len(analyzer.results)):
+        if analyzer.results[i].nparams is not None:
+            num_plots += 1
+            plotParams = True
+            break
+    
+    if num_plots == 0:
+        return None  # Se non ci sono dati da graficare, esco dalla funzione senza creare alcun grafico
+    
+    cols = sum([plotAccuracy, plotScore, plotParams])   # Calcolo il numero di grafici da creare in base ai dati disponibili
+    titles = []                                         #Determinare i titoli dei grafici da creare in base ai dati disponibili
+    if plotAccuracy: titles.append("Accuracy")
+    if plotScore: titles.append("Score")
+    if plotParams: titles.append("Number of Parameters")
+
+    # Creo la figura con subplot per i grafici di confronto usando Plotly
+    fig = make_subplots(rows=1, cols=cols, subplot_titles=titles)
+    
+    idx = 1 
+    # --- LOGICA ACCURACY ---
+    if plotAccuracy:
+        x_acc = [r.iteration for r in analyzer.results if r.accuracy is not None]
+        y_acc = [r.accuracy for r in analyzer.results if r.accuracy is not None]
+        fig.add_trace(go.Scatter(x=x_acc, y=y_acc,name="accuracy", mode='lines',line=dict(color='red'),showlegend=False), row=1, col=idx)
+        idx = idx +1  # Incremento l'indice solo se ho aggiunto il grafico dell'accuratezza
+
+    # --- LOGICA SCORE  ---
+    if plotScore:
+        x_score = [r.iteration for r in analyzer.results if r.score is not None and r.score<0]
+        y_score = [r.score for r in analyzer.results if r.score is not None and r.score<0]
+        fig.add_trace(go.Scatter(x=x_score, y=y_score,name="score", mode='lines',line=dict(color='blue'),showlegend=False), row=1, col=idx)
+        idx += 1  # Incremento l'indice solo se ho aggiunto il grafico dell'accuratezza
+
+    # --- LOGICA NUMBER OF PARAMETERS  ---
+    if plotParams:
+        x_par = [r.iteration for r in analyzer.results if r.nparams is not None]
+        y_par = [r.nparams for r in analyzer.results if r.nparams is not None]
+        fig.add_trace(go.Scatter(x=x_par, y=y_par,name="nparam", mode='lines',line=dict(color='green'),showlegend=False), row=1, col=idx)
+
+    # Personalizzazione interattiva
+    fig.update_layout(
+        height=400, 
+        width=600 * cols,
+        hovermode="x unified", # Mostra tutti i dati vicini al mouse sulla stessa X
+        template="plotly_white",
+        autosize=False
+    )
+    if output_dir:
+        output_path = Path(output_dir) 
+        output_path=os.path.join(output_path, f"{exp.name}_Accuracy_Score_Params.png")
+        fig.write_image(output_path)
+    return fig
 
 def plotevidence_confronto(analyzers, output_dir: Optional[Path] = None):
     dati_evidence = []    
@@ -514,48 +507,65 @@ def plotevidence_confronto(analyzers, output_dir: Optional[Path] = None):
         nuovo_indice = pd.MultiIndex.from_product([tutte_azioni, [False, True]], names=['Azione', 'Esito'])     #creo prodotto cartesiano: per ogni azione deve esserci sia True che false 
         pivot_df = pivot_df.reindex(nuovo_indice, fill_value=0)
 
-        fig, ax = plt.subplots(figsize=(16, 8))
-        
-        # Disegniamo il grafico stacked, un bar plot ma su cui posso mettere una colonna sopra l'altra. 
-        # Poiché l'indice è (Azione, Esito), Pandas metterà le barre di Fail e Success una accanto all'altra per ogni azione.
-        pivot_df.plot(kind='bar', ax=ax, stacked=True, colormap='gist_rainbow')
+        fig = go.Figure()
 
-        # Creo le etichette che andranno messe sull'asse x
-        labels = []
+        # X sarà un indice numerico per posizionare bene le barre
+        x_indices = list(range(len(pivot_df)))
+
+        # Aggiungiamo una traccia per ogni esperimento (Colonna del pivot)
+        for esperimento in pivot_df.columns:
+            fig.add_trace(go.Bar(
+                name=esperimento,
+                x=x_indices,
+                y=pivot_df[esperimento].values,
+                hovertext=[f"Azione: {a}<br>Esito: {'S' if e else 'F'}" for a, e in pivot_df.index]
+            ))
+
+        # Creiamo le etichette per le azioni (una ogni due barre)
+        tick_vals = [i * 2 + 0.5 for i in range(len(tutte_azioni))]
+        tick_text = tutte_azioni
+
+        # Configurazione Layout
+        fig.update_layout(
+            barmode='stack',  # Mantiene gli esperimenti uno sopra l'altro
+            title='Evidence Distribution: Failures (F) vs Successes (S)',
+            xaxis=dict(
+                tickvals=tick_vals,
+                ticktext=tick_text,
+                tickangle=-45,  # Etichette AZIONI in obliquo
+                title="Actions",
+                automargin=True
+            ),
+            yaxis=dict(title='Frequency'),
+            legend_title="Experiments",
+            template="plotly_white",
+            height=700,
+            width=1800,
+            margin=dict(l=100, r=50, b=150, t=80),
+            autosize=False 
+        )
+
         for i, (azione, esito) in enumerate(pivot_df.index):
-            if  not esito: # Etichettiamo solo una delle due barre
-                labels.append(azione)
-            else:
-                labels.append("")
-        
-        ax.set_xticklabels(labels, rotation=45, ha='right', rotation_mode='anchor',fontsize=12) #metto le etichette sull'asse x, ruotate di 45 gradi e allineate a destra per evitare sovrapposizioni
-        ax.tick_params(axis='x', which='major', pad=15)             # abbasso un po' le etichette
-        
-        # Aggiungiamo una riga sottile per separare visivamente i gruppi di azioni
-        for i in range(2, len(pivot_df), 2):
-            ax.axvline(i - 0.5, color='gray', linestyle='--', alpha=0.2)
+            fig.add_annotation(
+                x=i,
+                y=0,
+                text="S" if esito else "F",
+                showarrow=False,
+                yshift=-15,      # Posiziona la lettera appena sotto l'asse
+                font=dict(size=10, color="gray")
+            )
 
-        ax.set_title('Evidence Distribution: Failures (F) vs Successes (S)', fontsize=18)
-        ax.set_xlabel('Action', fontsize=14)
-        ax.set_ylabel('Frequency', fontsize=14)
-        
-        # Legenda unica per gli esperimenti
-        ax.legend(title="Experiments", bbox_to_anchor=(1, 1), loc='upper left')
-        
-        # Annotazione manuale per Success/Fail sotto le barre. Per ogni barra capisco se si riferisce ad unsuccesso o ad un fallimento
-        sub_labels = [('F' if i%2==0 else 'S') for i in range(len(pivot_df))]
-        for i, txt in enumerate(sub_labels):
-            ax.text(i, -3, txt, ha='center', fontsize=12, alpha=0.7)
+        # Linee di separazione tra le azioni
+        for i in range(len(tutte_azioni)):
+            fig.add_vline(x=(i * 2) + 1.5, line_width=1, line_dash="dash", line_color="gray", opacity=0.2)
 
-        fig.tight_layout()
-
+        
         if output_dir:
-            output_path = Path(output_dir) 
-            output_path = os.path.join(output_path, f"Group_Evidence.png")
-            plt.savefig(output_path, bbox_inches='tight')
-
+            output_path = Path(output_dir)
+            output_path = os.path.join(output_path, f"Comparison_Evidence.png")
+            fig.write_image(output_path)
         return fig
-    
+        
 def plotevidence(analyzer: ResultsAnalyzer, exp: Path, output_dir: Optional[Path] = None):
         # Grafico a barre per i dati di evidence
         dati_evidence = []          # Lista per memorizzare i dati di evidence da graficare  
@@ -564,26 +574,65 @@ def plotevidence(analyzer: ResultsAnalyzer, exp: Path, output_dir: Optional[Path
                 dati_evidence.append(r.evidence)
 
         if dati_evidence:       # Se ci sono dati di evidence da graficare, genero il grafico a barre
-            fig, ax = plt.subplots(figsize=(15, 8))
-            df = pd.DataFrame(dati_evidence, columns=['Tupla', 'Condizione'])       # Creo un DataFrame con due colonne: una per la tupla (azione) e una per la condizione (successo o fallimento) per aiutarmi nel definire assi e nei calcoli
+            df = pd.DataFrame(dati_evidence, columns=['Tupla', 'Condizione'])       # Creo un DataFrame con due colonne: 'Tupla' per l'azione e 'Condizione' per il successo/fallimento
+            df['Etichetta'] = df['Tupla'].apply(lambda x: "-".join(map(str, x)) if isinstance(x, (list, tuple)) else str(x))    #Creo la colonna 'Etichetta' che contiene in stringa la tupla di azione
 
-            df['Etichetta'] = df['Tupla'].apply(lambda x: "-".join(map(str, x)))    # Creo una nuova colonna "Etichetta" unendo i valori della tupla in una stringa, in modo da poterla usare come etichetta sull'asse x del grafico a barre
+            conteggi = pd.crosstab(df['Etichetta'], df['Condizione'])   # Creo una tabella di contingenza che conta quante volte ogni combinazione di azione (Etichetta) e condizione (successo/fallimento) si è verificata
 
-            conteggi = pd.crosstab(df['Etichetta'], df['Condizione'])           # Utilizzo crosstab per contare quante volte ogni etichetta ha avuto successo (True) e fallimento (False), ottenendo una tabella con le etichette come righe e le condizioni come colonne, con i conteggi corrispondenti.
+            cols_mappa = {False: None, True: None} #creo un dizionario con vero e falso così posso graficare indipendentemente le condizioni
+            for c in conteggi.columns:
+                if c in [False, 0, "False", "0"]:   #se la colonna rappresenta i fallimenti, la mappo a False. Non ho idea di come sia stato interpretato il dato
+                    cols_mappa[False] = c
+                elif c in [True, 1, "True", "1"]:
+                    cols_mappa[True] = c
 
-            conteggi.plot(kind='bar', color=['red', 'green'], ax=ax) # Generiamo bar plot: Rosso per False, Verde per True
+            fig = go.Figure()
 
-            ax.set_title('Evidence Distribution: Failures (red) vs Successes (green)', fontsize=18)
-            ax.set_xlabel('Action', fontsize=14)
-            ax.set_ylabel('Frequency', fontsize=14)
-            ax.set_xticklabels(conteggi.index, rotation=45, ha='right', rotation_mode='anchor') # Ruoto e allineo le etichette sull'asse x
-            ax.legend(['Failure', 'Success'])
-            fig.tight_layout()
+            # Aggiunta traccia Fallimenti (Rosso) - solo se esistono dati
+            if cols_mappa[False] is not None:
+                fig.add_trace(go.Bar(
+                    x=conteggi.index.tolist(),
+                    y=conteggi[cols_mappa[False]].values,
+                    name='Failure',
+                    marker_color='red'
+                ))
+
+            # Aggiunta traccia Successi (Verde) - solo se esistono dati
+            if cols_mappa[True] is not None:
+                fig.add_trace(go.Bar(
+                    x=conteggi.index.tolist(),
+                    y=conteggi[cols_mappa[True]].values,
+                    name='Success',
+                    marker_color='green'
+                ))
+
+            # Configurazione Layout "Anti-Taglio"
+            fig.update_layout(
+                title=f'Evidence Distribution: Failures (red) vs Successes (green) - {exp.name if exp else ""}',
+                xaxis_title='Action',
+                yaxis_title='Frequency',
+                barmode='group',
+                template='plotly_white',
+                xaxis=dict(
+                    type='category',
+                    tickmode='array',
+                    tickvals=list(range(len(conteggi.index))),
+                    ticktext=conteggi.index.tolist(),
+                    tickangle=-45,          # Inclinazione per leggibilità
+                    automargin=True,       # Risolve il problema del testo tagliato
+                ),
+                # Margine sinistro (l) aumentato per evitare che la prima etichetta sparisca
+                margin=dict(l=120, r=50, b=150, t=80),
+                height=700,
+                width=1600,
+                autosize=False
+            )
+
             if output_dir:
                 output_path = Path(output_dir)
-                output_path = os.path.join(output_path, f"{exp.name}_evidence.png")
-                plt.savefig(output_path)
-        return fig
+                output_path = os.path.join(output_path, f"{exp.name}_Evidence.png")
+                fig.write_image(output_path)
+            return fig
 
 def plottuning_confronto(analyzers: List[ResultsAnalyzer], output_dir: Optional[Path] = None):
     crea_grafico= False
@@ -593,9 +642,6 @@ def plottuning_confronto(analyzers: List[ResultsAnalyzer], output_dir: Optional[
 
     if not crea_grafico:
         return None  # Se non ci sono dati di tuning da graficare, esco dalla funzione senza creare alcun grafico
-
-    # Grafico a barre per i dati di tuning
-    fig, ax= plt.subplots(figsize=(15, 8))
     
     tuning_data = []      # Lista per memorizzare le diagnosi trovate nei diagnosis_symbolic_logs
     for analyzer in analyzers:
@@ -609,78 +655,102 @@ def plottuning_confronto(analyzers: List[ResultsAnalyzer], output_dir: Optional[
                     })
 
     df = pd.DataFrame(tuning_data)
-
     df_tuning = df.groupby(['Tuning', 'Esperimento']).size().unstack(fill_value=0)
 
-    df_tuning.plot(kind='bar', ax=ax, stacked=True, colormap='gist_rainbow')
-    ax.set_title('Frequency of Tuning (tuning_symbolic_logs)', fontsize=18)
-    ax.set_xlabel('Action', fontsize=14)
-    ax.set_ylabel('Frequency', fontsize=14)
-    ax.set_xticklabels(df_tuning.index, rotation=45, ha='right', rotation_mode='anchor')
+    fig=go.Figure()
+    for esperimento in df_tuning.columns:
+        fig.add_trace(go.Bar(name=esperimento, x=df_tuning.index.tolist(), y=df_tuning[esperimento].values, hovertext=[f"Tuning: {t}" for t in df_tuning.index]))
 
-    ax.legend(title="Experiments", bbox_to_anchor=(1, 1), loc='upper left')
-
-    fig.tight_layout()
+    fig.update_layout(
+        title='Frequency of Tuning (tuning_symbolic_logs) by Experiment',
+        xaxis_title='Tuning',
+        yaxis_title='Frequency',
+        barmode='stack',
+        template='plotly_white',
+        xaxis=dict(
+            type='category',
+            tickmode='array',
+            tickvals=list(range(len(df_tuning.index))),     # Posizioni numeriche per le etichette
+            ticktext=df_tuning.index.tolist(),
+            tickangle=-45,          # Inclinazione per leggibilità
+            automargin=True,       # Risolve il problema del testo tagliato
+        ),
+        margin=dict(l=120, r=50, b=150, t=80),
+        height=700,
+        width=1800,
+        autosize=False
+    )
     if output_dir:
         output_path = Path(output_dir)
         output_path = os.path.join(output_path, f"Comparison_Tuning.png")
-        plt.savefig(output_path, bbox_inches='tight')
+        fig.write_image(output_path)
     return fig
 
-def plottuning(analyzer: ResultsAnalyzer, exp: Path, output_dir: Optional[Path] = None):
-    # Grafico la frequenza dei metodi intrapresi (indipendentemente dal successo) per capire qual è il più usato
-    grafici_tuning = 0
-    grafico_evidence = False
-    grafico_t=False
+def plottuning(analyzer, exp, output_dir=None):
+    # Prima di tutto controllo se ci sono dati di tuning da graficare, se non ci sono esco dalla funzione senza creare alcun grafico
+    grafico_t = any(r.tuning is not None for r in analyzer.results)
+    grafico_evidence = any(r.evidence is not None for r in analyzer.results)
+    num_subplot = sum([grafico_t, grafico_evidence])
 
-    if any(r.tuning is not None for r in analyzer.results):
-        grafici_tuning+=1
-        grafico_t=True
-    if any(r.evidence is not None for r in analyzer.results):
-        grafici_tuning+=1
-        grafico_evidence = True
+    if num_subplot == 0:
+        return None
 
-    dati_evidence = []          # Lista per memorizzare i dati di evidence da graficare  
-    for r in analyzer.results:
-        if r.evidence is not None:
-            dati_evidence.append(r.evidence)
+    # Creazione della figura con subplot
+    fig = make_subplots(
+        rows=1, cols=num_subplot, 
+        subplot_titles=((['Frequency of Tuning form file evidence'] if grafico_evidence else []) + (['Frequency of Tuning from file tuning'] if grafico_t else []))
+    )
 
-    df = pd.DataFrame(dati_evidence, columns=['Tupla', 'Condizione'])
+    idx = 1 # Parto a fare il primo grafico
 
-    if grafici_tuning >0:
-        fig, ax = plt.subplots(1,grafici_tuning, figsize=(10 * grafici_tuning, 6))
-        if grafici_tuning == 1:
-            ax = [ax]
-        idx=0
-        if grafico_evidence:
-            df['Metodo'] = df['Tupla'].apply(lambda x: x[0])   # Creo una nuova colonna "Metodo" estraendo solo la prima parte della tupla, che rappresenta l'azione intrapresa, in modo da poterla usare come categoria per il grafico a barre
-            frequenza_azioni = df['Metodo'].value_counts()     # Calcolo la frequenza di ogni metodo intrapresa utilizzando value_counts, ottenendo una serie con i metodi come indice e le frequenze come valori
-            frequenza_azioni.plot(kind='bar', color='blue', ax=ax[idx])  # Genero un bar plot con le frequenze dei metodi, usando il colore blu
-            ax[idx].set_title('Frequency of Actions Taken', fontsize=18)
-            ax[idx].set_xlabel('Applied Tuning', fontsize=14)
-            ax[idx].set_ylabel('Frequency', fontsize=14)
-            ax[idx].set_xticklabels(frequenza_azioni.index, rotation=45, ha='right', rotation_mode='anchor')
-            idx+=1
-        if grafico_t:
-            tuning_data = []      # Lista per memorizzare le diagnosi trovate nei diagnosis_symbolic_logs
-            for r in analyzer.results:
-                if r.tuning is not None:
-                    tuning_data.extend(r.tuning)   # Aggiungo tutte le diagnosi trovate in questa iterazione alla lista generale
+    # Logica da file EVIDENCE (Grafico Blu)
+    if grafico_evidence:
+        dati_evidence = [r.evidence for r in analyzer.results if r.evidence is not None]        #estraggo dati
+        df = pd.DataFrame(dati_evidence, columns=['Tupla', 'Condizione'])
+        # Estraiamo l'azione dalla tupla (primo elemento)
+        df['Metodo'] = df['Tupla'].apply(lambda x: x[0] if isinstance(x, (list, tuple)) else x)
+        frequenza_azioni = df['Metodo'].value_counts()
 
-            df_tuning = pd.DataFrame(tuning_data, columns=['Tuning'])   # Creo un DataFrame con una colonna "Tuning" per i dati di tuning_symbolic_logs
-            frequenza_tuning = df_tuning['Tuning'].value_counts()        # Calcolo la frequenza di ogni diagnosi utilizzando value_counts, ottenendo una serie con le diagnosi come indice e le frequenze come valori
-            frequenza_tuning.plot(kind='bar', color='orange', ax=ax[idx])       # Genero un bar plot con le frequenze delle diagnosi, usando il colore arancione
-            ax[idx].set_title('Frequency of Tuning (tuning_symbolic_logs)', fontsize=18)
-            ax[idx].set_xlabel('Applied Tuning', fontsize=14)
-            ax[idx].set_ylabel('Frequency', fontsize=14)
-            ax[idx].set_xticklabels(frequenza_tuning.index, rotation=45, ha='right', rotation_mode='anchor')
+        fig.add_trace(go.Bar( x=frequenza_azioni.index.tolist(),y=frequenza_azioni.values,marker_color='blue',name='Tuning',showlegend=False),row=1, col=idx)
+        idx += 1
 
-        fig.tight_layout()
-        if output_dir:
-            output_path = Path(output_dir)
-            output_path = os.path.join(output_path, f"{exp.name}_tuning.png")
-            plt.savefig(output_path)
-        return fig
+    # Logica del file TUNING (Grafico Arancione)
+    if grafico_t:
+        tuning_data = []                    #estraggo dati
+        for r in analyzer.results:
+            if r.tuning is not None:
+                tuning_data.extend(r.tuning)
+        
+        df_tuning = pd.DataFrame(tuning_data, columns=['Tuning'])
+        frequenza_tuning = df_tuning['Tuning'].value_counts()
+
+        fig.add_trace(go.Bar(x=frequenza_tuning.index.tolist(),y=frequenza_tuning.values,marker_color='orange',name='Tuning',showlegend=False),row=1, col=idx)
+
+    #Configurazione Layout e Rifiniture "Anti-Taglio"
+    fig.update_layout(
+        template='plotly_white',
+        height=700,
+        width=800 * num_subplot,
+        margin=dict(l=100, r=50, b=150, t=100), # Margini abbondanti per etichette oblique
+        autosize=False
+    )
+
+    # Applichiamo la rotazione e l'allineamento a tutti gli assi X
+    fig.update_xaxes(
+        tickangle=-45, 
+        automargin=True,
+        tickfont=dict(size=12)
+    )
+    
+    fig.update_yaxes(title_text="Frequency")
+
+    # Salvataggio
+    if output_dir:
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+        fig.write_image(str(output_path / f"{exp.name}_tuning.png"))
+    return fig
+
 
 def plotdiagnosis_confronto(analyzers: List[ResultsAnalyzer], output_dir: Optional[Path] = None):
     crea_grafico= False
@@ -690,9 +760,6 @@ def plotdiagnosis_confronto(analyzers: List[ResultsAnalyzer], output_dir: Option
 
     if not crea_grafico:
         return None  # Se non ci sono dati di tuning da graficare, esco dalla funzione senza creare alcun grafico
-
-    # Grafico a barre per i dati di tuning
-    fig, ax= plt.subplots(figsize=(15, 8))
     
     diagnosis_data = []      # Lista per memorizzare le diagnosi trovate nei diagnosis_symbolic_logs
     for analyzer in analyzers:
@@ -706,173 +773,239 @@ def plotdiagnosis_confronto(analyzers: List[ResultsAnalyzer], output_dir: Option
                     })
 
     df = pd.DataFrame(diagnosis_data)
-
     df_diagnosis = df.groupby(['Diagnosi', 'Esperimento']).size().unstack(fill_value=0)
-
-    df_diagnosis.plot(kind='bar', ax=ax, stacked=True, colormap='gist_rainbow')
-    ax.set_title('Frequency of Diagnoses', fontsize=18)
-    ax.set_xlabel('Diagnosis', fontsize=14)
-    ax.set_ylabel('Frequency', fontsize=14)
-    ax.set_xticklabels(df_diagnosis.index, rotation=45, ha='right', rotation_mode='anchor')
-
-    ax.legend(title="Experiments", bbox_to_anchor=(1, 1), loc='upper left')
-
-    fig.tight_layout()
+    fig=go.Figure()
+    for esperimento in df_diagnosis.columns:
+        fig.add_trace(go.Bar(
+            name=esperimento,
+            x=df_diagnosis.index.tolist(),
+            y=df_diagnosis[esperimento].values,
+            hovertext=[f"Diagnosis: {d}" for d in df_diagnosis.index]
+        ))
+    fig.update_layout(
+        title='Frequency of Diagnoses (diagnosis_symbolic_logs) by Experiment',
+        xaxis_title='Diagnosis',
+        yaxis_title='Frequency',
+        barmode='stack',
+        template='plotly_white',
+        xaxis=dict(
+            type='category',
+            tickmode='array',
+            tickvals=list(range(len(df_diagnosis.index))),
+            ticktext=df_diagnosis.index.tolist(),
+            tickangle=-45,          # Inclinazione per leggibilità
+            automargin=True,       # Risolve il problema del testo tagliato
+        ),
+        margin=dict(l=120, r=50, b=150, t=80),
+        height=700,
+        width=1800,
+        autosize=False
+    )
     if output_dir:
         output_path = Path(output_dir)
         output_path = os.path.join(output_path, f"Comparison_Diagnosis.png")
-        plt.savefig(output_path, bbox_inches='tight')
+        fig.write_image(output_path)
     return fig
 
-def plotdiagnosis(analyzer: ResultsAnalyzer, exp: Path, output_dir: Optional[Path] = None):
-    # Grafico le specifiche diagnosi sia da dati di evidence che da diagnosis_symbolic_logs
-    grafici_diagnosi = 0
-    grafico_evidence = False
-    grafico_d=False
+def plotdiagnosis(analyzer, exp, output_dir=None):
+    # Analisi preliminare dei dati
+    grafico_t = any(r.diagnosis is not None for r in analyzer.results)
+    grafico_evidence = any(r.evidence is not None for r in analyzer.results)
+    num_subplot = sum([grafico_t, grafico_evidence])
 
-    if any(r.diagnosis is not None for r in analyzer.results):
-        grafici_diagnosi+=1
-        grafico_d=True
-    if any(r.evidence is not None for r in analyzer.results):
-        grafici_diagnosi+=1
-        grafico_evidence = True
-        
-    if grafici_diagnosi >0:
+    if num_subplot == 0:
+        return None
 
-        dati_evidence = []          # Lista per memorizzare i dati di evidence da graficare  
-        for r in analyzer.results:
-            if r.evidence is not None:
-                dati_evidence.append(r.evidence)
+    # Creazione della figura con sottoplot
+    fig = make_subplots(
+        rows=1, cols=num_subplot, 
+        subplot_titles=((['Frequency of Diagnoses from file evidence'] if grafico_evidence else []) + (['Frequency of Diagnoses from file diagnosis'] if grafico_t else []))
+    )
 
+    idx = 1 # Indice colonna Plotly (parte da 1)
+
+    # Logica EVIDENCE (Grafico Blu)
+    if grafico_evidence:
+        dati_evidence = [r.evidence for r in analyzer.results if r.evidence is not None]
         df = pd.DataFrame(dati_evidence, columns=['Tupla', 'Condizione'])
+        # Estraiamo la diagnosi dalla tupla (secondo elemento)
+        df['Diagnosi'] = df['Tupla'].apply(lambda x: x[1] if isinstance(x, (list, tuple)) else x)
+        frequenza_azioni = df['Diagnosi'].value_counts()
+
+        fig.add_trace(go.Bar(x=frequenza_azioni.index.tolist(),y=frequenza_azioni.values,marker_color='blue',name='Diagnosis',showlegend=False),row=1, col=idx)
+        idx += 1
+
+    # Logica TUNING (Grafico Arancione)
+    if grafico_t:
+        diagnosis_data = []
+        for r in analyzer.results:
+            if r.diagnosis is not None:
+                diagnosis_data.extend(r.diagnosis)
         
-        fig, ax = plt.subplots(1,grafici_diagnosi, figsize=(10 * grafici_diagnosi, 6))
-        if grafici_diagnosi == 1:
-            ax = [ax]
-        idx=0
-        if grafico_evidence:
-            df['Diagnosi'] = df['Tupla'].apply(lambda x: x[1])   # Creo una nuova colonna "Diagnosi" estraendo solo la seconda parte della tupla, che rappresenta la diagnosi, in modo da poterla usare come categoria per il grafico a barre
-            frequenza_azioni = df['Diagnosi'].value_counts()     # Calcolo la frequenza di ogni diagnosi utilizzando value_counts, ottenendo una serie con le diagnosi come indice e le frequenze come valori
-            frequenza_azioni.plot(kind='bar', color='blue', ax=ax[0])  # Genero un bar plot con le frequenze delle diagnosi, usando il colore blu
-            ax[0].set_title('Frequency of Diagnoses', fontsize=18)
-            ax[0].set_xlabel('Diagnosis', fontsize=14)
-            ax[0].set_ylabel('Frequency', fontsize=14)
-            ax[0].set_xticklabels(frequenza_azioni.index, rotation=45, ha='right', rotation_mode='anchor')
-            idx=1
+        df_diagnosis = pd.DataFrame(diagnosis_data, columns=['Diagnosi'])
+        frequenza_diagnosi = df_diagnosis['Diagnosi'].value_counts()
 
-        # Se sono disponibili anche i dati di diagnosis_symbolic_logs, genero un secondo grafico a barre per mostrare la frequenza delle diagnosi trovate in questi log
-        if grafico_d:   # Controllo se ci sono dati di diagnosis_symbolic_logs disponibili in almeno un'iterazione
-            diagnosis_data = []      # Lista per memorizzare le diagnosi trovate nei diagnosis_symbolic_logs
-            for r in analyzer.results:
-                if r.diagnosis is not None:
-                    diagnosis_data.extend(r.diagnosis)   # Aggiungo tutte le diagnosi trovate in questa iterazione alla lista generale
+        fig.add_trace(go.Bar(x=frequenza_diagnosi.index.tolist(),y=frequenza_diagnosi.values,marker_color='orange',name='Diagnosis', showlegend=False),row=1, col=idx)
 
-            df_diagnosis = pd.DataFrame(diagnosis_data, columns=['Diagnosi'])   # Creo un DataFrame con una colonna "Diagnosi" per i dati di diagnosis_symbolic_logs
-            frequenza_diagnosi = df_diagnosis['Diagnosi'].value_counts()        # Calcolo la frequenza di ogni diagnosi utilizzando value_counts, ottenendo una serie con le diagnosi come indice e le frequenze come valori
-            frequenza_diagnosi.plot(kind='bar', color='orange', ax=ax[idx])       # Genero un bar plot con le frequenze delle diagnosi, usando il colore arancione
-            ax[idx].set_title('Frequency of Diagnoses (diagnosis_symbolic_logs)', fontsize=18)
-            ax[idx].set_xlabel('Diagnosis', fontsize=14)
-            ax[idx].set_ylabel('Frequency', fontsize=14)
-            ax[idx].set_xticklabels(frequenza_diagnosi.index, rotation=45, ha='right', rotation_mode='anchor')
+    #Configurazione Layout e Rifiniture "Anti-Taglio"
+    fig.update_layout(
+        template='plotly_white',
+        height=700,
+        width=800 * num_subplot,
+        margin=dict(l=100, r=50, b=150, t=100), # Margini abbondanti per etichette oblique
+        autosize=False
+    )
 
-        fig.tight_layout()
-        if output_dir:
-            output_path = Path(output_dir) 
-            output_path = os.path.join(output_path, f"{exp.name}_diagnosis.png")
-            plt.savefig(output_path)
-        return fig
+    # Applichiamo la rotazione e l'allineamento a tutti gli assi X
+    fig.update_xaxes(
+        tickangle=-45, 
+        automargin=True,
+        tickfont=dict(size=12)
+    )
+    
+    fig.update_yaxes(title_text="Frequency")
 
+    # Salvataggio
+    if output_dir:
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+        fig.write_image(str(output_path / f"{exp.name}_diagnosis.png"))
+    return fig
 
-def plottimeline_confronto(analyzers: List[ResultsAnalyzer], output_dir: Optional[Path] = None):
+def plottimeline_confronto(analyzers, output_dir=None):
     timeline_data = []
     
     for analyzer in analyzers:
+        # Recuperiamo il nome dell'esperimento se disponibile per il dettaglio al passaggio del mouse
+        exp_name = getattr(analyzer, 'name', 'Unknown')
         for r in analyzer.results:
-            # Raccogliamo Diagnosis
             if r.diagnosis is not None:
                 for diag in r.diagnosis:
-                    timeline_data.append({'Iteration': r.iteration, 'Evento': diag, 'Tipo': 'Diagnosis'})
-            
-            # Raccogliamo Tuning
+                    timeline_data.append({'Iteration': r.iteration, 'Evento': diag, 'Tipo': 'Diagnosis', 'Exp': exp_name})
             if r.tuning is not None:
                 for tune in r.tuning:
-                    timeline_data.append({'Iteration': r.iteration, 'Evento': tune, 'Tipo': 'Tuning'})
+                    timeline_data.append({'Iteration': r.iteration, 'Evento': tune, 'Tipo': 'Tuning', 'Exp': exp_name})
 
     if not timeline_data:
         return None
 
     df = pd.DataFrame(timeline_data)
-
-    # Calcolola frequenza così da poterla usare quando uso la mappa di colore
+    # Raggruppiamo per contare la frequenza (dimensione del punto)
     df_counts = df.groupby(['Iteration', 'Evento', 'Tipo']).size().reset_index(name='Frequenza')
 
-    fig, ax = plt.subplots(figsize=(20, 10))
+    fig = go.Figure()
 
-    # Dividiamo i dati per applicare due mappe di colore diverse
+    # Traccia per DIAGNOSIS (Scala di Blu)
     diag_df = df_counts[df_counts['Tipo'] == 'Diagnosis']
-    tune_df = df_counts[df_counts['Tipo'] == 'Tuning']
-
-    # Disegno i punti
     if not diag_df.empty:
-        sc_diag = ax.scatter(diag_df['Iteration'], diag_df['Evento'], 
-                             c=diag_df['Frequenza'], cmap='Blues', 
-                             s=150, edgecolors='black', linewidth=0.5, label='Diagnosis')
-        plt.colorbar(sc_diag, ax=ax, label='Diagnosis Frequency', pad=0.01)
+        fig.add_trace(go.Scatter(
+            x=diag_df['Iteration'],
+            y=diag_df['Evento'],
+            mode='markers',
+            name='Diagnosis',
+            marker=dict(
+                size= 10,
+                color=diag_df['Frequenza'],
+                colorscale='Blues',
+                showscale=True,
+                colorbar=dict(title="Diag Freq", x=1.0),
+                line=dict(width=1, color='black')
+            ),
+            hovertemplate="<b>%{y}</b><br>Iteration: %{x}<br>Frequency: %{marker.color}<extra></extra>",showlegend=False
+        ))
 
+    # Traccia per TUNING (Scala di Rossi)
+    tune_df = df_counts[df_counts['Tipo'] == 'Tuning']
     if not tune_df.empty:
-        sc_tune = ax.scatter(tune_df['Iteration'], tune_df['Evento'], 
-                             c=tune_df['Frequenza'], cmap='Reds', 
-                             s=150, edgecolors='black', linewidth=0.5, label='Tuning')
-        plt.colorbar(sc_tune, ax=ax, label='Tuning Frequency', pad=0.08)
+        fig.add_trace(go.Scatter(
+            x=tune_df['Iteration'],
+            y=tune_df['Evento'],
+            mode='markers',
+            name='Tuning',
+            marker=dict(
+                size= 10,
+                color=tune_df['Frequenza'],
+                colorscale='Reds',
+                showscale=True,
+                colorbar=dict(title="Tune Freq", x=1.15), # Spostata a destra per non sovrapporsi alla prima
+                line=dict(width=1, color='black')
+            ),
+            hovertemplate="<b>%{y}</b><br>Iteration: %{x}<br>Frequency: %{marker.color}<extra></extra>",showlegend=False
+        ))
 
-    ax.set_title('Timeline of Diagnoses and Tuning', fontsize=18)
-    ax.set_xlabel('Iteration', fontsize=14)
-    ax.set_ylabel('Event', fontsize=14)
-    ax.grid(True, linestyle='--', alpha=0.5)
+    # Layout e Rifiniture
+    fig.update_layout(
+        title='Timeline of Diagnoses and Tuning',
+        xaxis=dict(title='Iteration', gridcolor='lightgray'),
+        yaxis=dict(title='Event', gridcolor='lightgray', autorange="reversed"), # Reversed per leggere dall'alto
+        template='plotly_white',
+        height=700,
+        width=1800,
+        margin=dict(l=150, r=200, b=100, t=100), # Spazio per le colorbar a destra
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+        autosize=False
+    )
 
-    fig.tight_layout()
-    
+    # Salvataggio
     if output_dir:
-        output_path = Path(output_dir) 
-        output_path = os.path.join(output_path, f"Group_timeline_heatmap.png")
-        plt.savefig(output_path, bbox_inches='tight')
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+        fig.write_image(str(output_path / "Comparison_timeline.png"))
+
     return fig
 
-def plottimeline(analyzer: ResultsAnalyzer, exp: Path, output_dir: Optional[Path] = None):
-    # Per ogni iterazione, mostro quali diagnosi sono state trovate e quali soluzioni di tuning sono state applicate, creando un grafico con le iterazioni sull'asse x e le diagnosi/soluzioni sull'asse y
-    #grafico prima le diagnosi e poi le soluzioni di tuning, usando colori diversi per distinguerle visivamente
-    fig, ax = plt.subplots(figsize=(15, 8))
-    timeline_data_diagnosis = []   # Lista per memorizzare i dati da graficare nella timeline diagnosis
-    timeline_data_tuning = []   # Lista per memorizzare i dati da graficare nella timeline tuning
+def plottimeline(analyzer, exp, output_dir=None):
+    timeline_data_diagnosis = []
+    timeline_data_tuning = []
+
+    # Raccolta dati: distinguo tra diagnosi e tuning per poterli graficare con colori diversi
     for r in analyzer.results:
         if r.diagnosis is not None:
             for diag in r.diagnosis:
-                timeline_data_diagnosis.append((r.iteration, diag))   # Aggiungo una tupla con iterazione, diagnosi 
+                timeline_data_diagnosis.append({'Iteration': r.iteration, 'Evento': diag})
         if r.tuning is not None:
             for tune in r.tuning:
-                timeline_data_tuning.append((r.iteration, tune))     # Aggiungo una tupla con iterazione, soluzione di tuning 
-    if timeline_data_diagnosis or timeline_data_tuning:   # Controllo se ci sono dati da graficare nella timeline
-        df_diagnosis = pd.DataFrame(timeline_data_diagnosis, columns=['Iteration', 'Evento'])   # Creo un DataFrame con colonne per iterazione, evento diagnosi
-        df_tuning = pd.DataFrame(timeline_data_tuning, columns=['Iteration', 'Evento'])   # Creo un DataFrame con colonne per iterazione, evento tuning
-        df=df_diagnosis.copy()
-        df = pd.concat([df, df_tuning], ignore_index=True)   # Unisco i due DataFrame in uno solo, in modo da poter graficare diagnosi e tuning nello stesso grafico
-        df['Color'] = df['Evento'].apply(lambda x: 'blue' if x in [diag for r in analyzer.results for diag in (r.diagnosis or [])] else 'orange')  # Creo una colonna "Color" per distinguere visivamente diagnosi e tuning nel grafico
-        ax.scatter([], [], color='blue', label='Diagnosis')   # Aggiungo un punto fittizio per la legenda delle diagnosi
-        ax.scatter([], [], color='orange', label='Tuning')    # Aggiungo un punto fittizio per la legenda delle soluzioni di tuning
-        ax.legend()
-        for _, row in df.iterrows():
-            ax.scatter(row['Iteration'], row['Evento'], color=row['Color'])   # Aggiungo un punto al grafico per ogni evento, usando il colore corrispondente al tipo
-        ax.set_title('Timeline of Diagnoses and Tuning', fontsize=18)
-        ax.set_xlabel('Iteration', fontsize=14)
-        ax.set_ylabel('Event', fontsize=14)
-        ax.grid()
-        fig.tight_layout()
-        
-        if output_dir:
-            output_path = Path(output_dir)
-            output_path=os.path.join(output_path, f"{exp.name}_timeline.png")
-            plt.savefig(output_path)
-        return fig
+                timeline_data_tuning.append({'Iteration': r.iteration, 'Evento': tune})
+
+    if not timeline_data_diagnosis and not timeline_data_tuning:
+        return None
+
+    fig = go.Figure()
+
+    # Traccio prima DIAGNOSIS (Blu)
+    if timeline_data_diagnosis:
+        df_diag = pd.DataFrame(timeline_data_diagnosis)
+
+        fig.add_trace(go.Scatter(x=df_diag['Iteration'],y=df_diag['Evento'], mode='markers',name='Diagnosis',
+            marker=dict(color='blue', size=12),hovertemplate="<b>Diagnosis</b><br>Iteration: %{x}<br>Evento: %{y}" ))
+
+    # Traccio poi TUNING (Arancione)
+    if timeline_data_tuning:
+        df_tune = pd.DataFrame(timeline_data_tuning)
+
+        fig.add_trace(go.Scatter(x=df_tune['Iteration'],y=df_tune['Evento'],mode='markers', name='Tuning',
+            marker=dict(color='orange', size=10, symbol='diamond'),hovertemplate="<b>Tuning</b><br>Iteration: %{x}<br>Evento: %{y}" ))
+
+    #Configurazione Layout
+    fig.update_layout(
+        title=f'Timeline of Diagnoses and Tuning - {exp.name if exp else ""}',
+        xaxis=dict(title='Iteration', gridcolor='lightgray'), # Griglia leggera per facilitare la lettura
+        yaxis=dict(title='Event', gridcolor='lightgray', automargin=True), 
+        template='plotly_white',
+        height=700,
+        width=1600,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        margin=dict(l=150, r=50, b=80, t=100), # Ampio margine sinistro per i nomi degli eventi
+        autosize=False
+    )
+
+    # Salvataggio
+    if output_dir:
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+        fig.write_image(str(output_path / f"{exp.name}_timeline.png"))
+
+    return fig
 
 def analyze_all_experiments(parent_dir: Path, output_dir: Path = None):
     # Find all subfolders with algorithm_logs
