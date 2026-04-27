@@ -56,18 +56,14 @@ class ResultsAnalyzer:
         self._load_config_yaml()
         
         if not os.path.exists(self.algorithm_logs_dir):
-            print(f"!  algorithm_logs folder not found in {self.experiment_dir}",file=sys.stderr)
             return False
         
         # Load accuracies
         accuracies = self._load_accuracies()
         if not accuracies:
-            print(f"!  No acc_report.txt file found",file=sys.stderr)
             return False
         
         scores = self._load_scores()
-        if not scores:
-            print(f"!  No score_report.txt file found, will use -accuracy as approximation",file=sys.stderr)
         
         # Load hyperparameters
         # hyperparams_list = self._load_hyperparams()
@@ -131,21 +127,18 @@ class ResultsAnalyzer:
         """Load configuration from config.yaml file"""
         config_file = os.path.join(self.experiment_dir, "config.yaml")
         if not os.path.exists(config_file):
-            print(f"!  config.yaml file not found in {self.experiment_dir}",file=sys.stderr)
             self.config = {}
             return
         try:
             with open(config_file, 'r') as f:
                 self.config = yaml.safe_load(f) or {}
         except Exception as e:
-            print(f"!  Error reading config.yaml: {e}",file=sys.stderr)
             self.config = {}
 
     def _load_accuracies(self) -> List[Optional[float]]:
         """Load accuracies from acc_report.txt file"""
         acc_file = os.path.join(self.algorithm_logs_dir, "acc_report.txt")
         if not os.path.exists(acc_file):
-            print(f"!  No acc_report.txt file found",file=sys.stderr)
             return []
         
         accuracies = []
@@ -158,7 +151,6 @@ class ResultsAnalyzer:
                     else:
                         accuracies.append(float(line))
         except Exception as e:
-            print(f"!  Error reading {acc_file}: {e}",file=sys.stderr)
             return []
         
         return accuracies
@@ -167,7 +159,6 @@ class ResultsAnalyzer:
         """Load scores from score_report.txt file"""
         score_file = os.path.join(self.algorithm_logs_dir, "score_report.txt")
         if not os.path.exists(score_file):
-            print(f"!  No score_report.txt file found",file=sys.stderr)
             return []
         
         scores = []
@@ -180,7 +171,6 @@ class ResultsAnalyzer:
                     else:
                         scores.append(float(line))
         except Exception as e:
-            print(f"!  Error reading {score_file}: {e}",file=sys.stderr)
             return []
         
         return scores
@@ -209,7 +199,6 @@ class ResultsAnalyzer:
                         # If it's a file with only params, add None for FLOPS
                         flops_data.append((float(parts[0]), None))
         except Exception as e:
-            print(f"!  Error reading {flops_file}: {e}",file=sys.stderr)
             return None
         
         return flops_data if flops_data else None
@@ -218,7 +207,6 @@ class ResultsAnalyzer:
         """Load hardware data from hardware_report.txt file"""
         hw_file = os.path.join(self.algorithm_logs_dir, "hardware_report.txt")
         if not os.path.exists(hw_file):
-            print(f"!  No hardware_report.txt file found",file=sys.stderr)
             return None
         
         hw_data = []
@@ -237,7 +225,6 @@ class ResultsAnalyzer:
                             parts[3].strip()   # config
                         ))
         except Exception as e:
-            print(f"!  Error reading {hw_file}: {e}",file=sys.stderr)
             return None
         
         return hw_data if hw_data else None
@@ -247,7 +234,6 @@ class ResultsAnalyzer:
         """Load evidence data from evidence.txt file"""
         evidence_file = os.path.join(self.algorithm_logs_dir, "evidence.txt")
         if not os.path.exists(evidence_file):
-            print(f"!  No evidence.txt file found",file=sys.stderr)
             return None
         
         evidence_data = []
@@ -266,7 +252,6 @@ class ResultsAnalyzer:
                             evidence_data.append((action, success))
 
         except Exception as e:
-            print(f"!  Error reading {evidence_file}: {e}",file=sys.stderr)
             return None
         
         return evidence_data if evidence_data else None
@@ -276,7 +261,6 @@ class ResultsAnalyzer:
         """Load diagnosis data from diagnosis_symbolic_logs.txt file"""
         diagnosis_file = os.path.join(self.algorithm_logs_dir, "diagnosis_symbolic_logs.txt")
         if not os.path.exists(diagnosis_file):
-            print(f"!  No diagnosis_symbolic_logs.txt file found",file=sys.stderr)
             return None
         
         diagnosis_data = []
@@ -291,7 +275,6 @@ class ResultsAnalyzer:
                     diagnosis_data.append(diagnoses)
 
         except Exception as e:
-            print(f"!  Error reading {diagnosis_file}: {e}",file=sys.stderr)
             return None
         
         return diagnosis_data if diagnosis_data else None
@@ -301,7 +284,6 @@ class ResultsAnalyzer:
         """Load tuning data from tuning_symbolic_logs.txt file"""
         tuning_file = os.path.join(self.algorithm_logs_dir, "tuning_symbolic_logs.txt")
         if not os.path.exists(tuning_file):
-            print(f"!  No tuning_symbolic_logs.txt file found",file=sys.stderr)
             return None
         
         tuning_data = []
@@ -316,7 +298,6 @@ class ResultsAnalyzer:
                     tuning_data.append(tunings)
 
         except Exception as e:
-            print(f"!  Error reading {tuning_file}: {e}",file=sys.stderr)
             return None
         
         return tuning_data if tuning_data else None
@@ -452,29 +433,30 @@ def plotaccuracy(analyzer: ResultsAnalyzer, exp: Path, output_dir: Optional[Path
     idx = 1 
     # --- LOGICA ACCURACY ---
     if plotAccuracy:
-        x_acc = [r.iteration for r in analyzer.results if r.accuracy is not None]
-        y_acc = [r.accuracy for r in analyzer.results if r.accuracy is not None]
-        fig.add_trace(go.Scatter(x=x_acc, y=y_acc,name="accuracy", mode='lines',line=dict(color='red'),showlegend=False), row=1, col=idx)
+        data_acc = [(r.iteration, r.accuracy, i) for i, r in enumerate(analyzer.results) if r.accuracy is not None]
+        x_acc, y_acc, custom_acc = zip(*data_acc)
+        fig.add_trace(go.Scatter(x=x_acc, y=y_acc,customdata=custom_acc,name="accuracy", mode='lines+markers',line=dict(color='red'),showlegend=False), row=1, col=idx)
         idx = idx +1  # Incremento l'indice solo se ho aggiunto il grafico dell'accuratezza
 
     # --- LOGICA SCORE  ---
     if plotScore:
         x_score = [r.iteration for r in analyzer.results if r.score is not None and r.score<0]
         y_score = [r.score for r in analyzer.results if r.score is not None and r.score<0]
-        fig.add_trace(go.Scatter(x=x_score, y=y_score,name="score", mode='lines',line=dict(color='blue'),showlegend=False), row=1, col=idx)
+        fig.add_trace(go.Scatter(x=x_score, y=y_score,name="score", mode='lines+markers',line=dict(color='blue'),showlegend=False), row=1, col=idx)
         idx += 1  # Incremento l'indice solo se ho aggiunto il grafico dell'accuratezza
 
     # --- LOGICA NUMBER OF PARAMETERS  ---
     if plotParams:
         x_par = [r.iteration for r in analyzer.results if r.nparams is not None]
         y_par = [r.nparams for r in analyzer.results if r.nparams is not None]
-        fig.add_trace(go.Scatter(x=x_par, y=y_par,name="nparam", mode='lines',line=dict(color='green'),showlegend=False), row=1, col=idx)
+        fig.add_trace(go.Scatter(x=x_par, y=y_par,name="nparam", mode='lines+markers',line=dict(color='green'),showlegend=False), row=1, col=idx)
 
     # Personalizzazione interattiva
     fig.update_layout(
         height=400, 
         width=600 * cols,
-        hovermode="x unified", # Mostra tutti i dati vicini al mouse sulla stessa X
+        hovermode="closest", 
+        clickmode="event+select",  # Abilita la modalità di click per selezionare i punti dati
         template="plotly_white",
         autosize=False
     )
@@ -1016,7 +998,7 @@ def analyze_all_experiments(parent_dir: Path, output_dir: Path = None):
             experiments.append(item)
     
     if not experiments:
-        print(f"! No experiments found in {parent_dir}",file=sys.stderr)
+        return None, None
         
     # Analyze each experiment
     lista_analizer = []

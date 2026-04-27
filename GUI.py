@@ -188,6 +188,39 @@ def fase_caricamento():
             st.query_params.clear()
             st.rerun()
 
+@st.fragment
+def render_chart(exp, analizer):
+    fig = plotaccuracy(analizer, exp)
+    chart_key = f"chart_{exp.name}"
+    
+    # Render del grafico
+    event = st.plotly_chart(fig,on_select="rerun",selection_mode="points", key=chart_key)
+
+    # Verifica selezione
+    if event and event.get("selection", {}).get("points"):
+        points = event["selection"]["points"][0]
+        # Recupero sicuro dell'indice
+        custom_data = points.get("customdata")
+        iter_idx = custom_data[0] if isinstance(custom_data, list) else custom_data
+        
+        if iter_idx is not None:
+            mostra_dettaglio(exp, iter_idx, f"{chart_key}_{iter_idx}")
+
+@st.dialog("📈 Dettaglio Trend")
+def mostra_dettaglio(esperimento, iter_idx, chart_key):
+    st.write(f" Dettaglio per Iterazione {iter_idx} di {esperimento.name}")
+    
+    # Logica recupero dati
+    found = False
+    for esp in st.session_state.lista_out_files:
+        if esp.exp_name == esperimento.name:
+            st.plotly_chart(esp.grafici_trend(iter_idx))
+            found = True
+            break
+    
+    if not found:
+        st.error("Dati non trovati.")
+
 def fase_analisi():
     st.empty()
     st.title("🔍 - Analisi dei risultati")
@@ -248,8 +281,10 @@ def fase_analisi():
     if st.session_state.stato_bottone_spazio_ricerca and st.session_state.salvato_tutto:     # se sono nella modalità spazio di ricerca, salvo tutti i grafici di spazio di ricerca degli esperimenti selezionati.
         for spazio_ricerca in st.session_state.lista_out_files:
             if spazio_ricerca and spazio_ricerca.exp_name in [exp.name for exp in st.session_state.lista_esperimenti]:   # se sono nella modalità spazio di ricerca, salvo tutti i grafici di spazio di ricerca degli esperimenti selezionati.
-                spazio_ricerca.grafici(st.session_state.cartellaOutput)
+                spazio_ricerca.grafici_spazio_ricerca(st.session_state.cartellaOutput)
         st.success("✅ - Tutti i grafici di Spazio di Ricerca sono stati salvati con successo nella cartella di output selezionata!")
+    
+    st.session_state.salvato_tutto = False   # resetto la variabile di stato in modo tale che se dovessi tornare indietro e poi tornare a questa fase non mi rimane salvato tutto e non mi salva tutto senza volerlo
 
     if st.session_state.stato_bottone_singoli:     # se sono nella modalità singoli grafici, mostro i grafici uno alla volta con i relativi bottoni di salvataggio    
         st.subheader("Grafici per singoli esperimenti")
@@ -263,48 +298,52 @@ def fase_analisi():
                         analizer = st.session_state.lista_analizer[i]
 
                         if grafico == "LinePlot di Accuracy, Score e Params":       # serie di if-elif per capire quale grafico fare 
-                            st.write(f"- Genero {grafico} ")
-                            fig=plotaccuracy(analizer,exp, None)                    # creo il. grafico senza salvarlo
-                            st.plotly_chart(fig)
+                            st.write(f"- Genero {grafico}")
                             if st.session_state.cartellaOutput and st.button(f"Salva {grafico} per {exp.name}", key=f"salva_{i}_accuracy"):         # creo un bottone che mi possa salvare quel grafico specifico
                                 plotaccuracy(analizer,exp, st.session_state.cartellaOutput)     #ricreo il grafico salvandolo questa volta
                                 st.success(f"✅ - {grafico} per {exp.name} salvato con successo!")      # mostro un messaggio che mi indica che il grafico è stato salvato bene
+                            else:
+                                render_chart(exp, analizer)     # chiamo una funzione apposita per fare il render del grafico in modo tale da poter gestire meglio la selezione dei punti e la visualizzazione del dettaglio
 
                         elif grafico == "BarPlot efficacia azioni":
                             col1, col2, col3 = st.columns([1, 3, 1])
                             with col2:
                                 st.write(f"- Genero {grafico} ")
-                                fig=plotevidence(analizer,exp, None)
-                                st.plotly_chart(fig)
                                 if st.session_state.cartellaOutput and st.button(f"Salva {grafico} per {exp.name}", key=f"salva_{i}_evidence"):
                                     plotevidence(analizer,exp, st.session_state.cartellaOutput)
                                     st.success(f"✅ - {grafico} per {exp.name} salvato con successo!")
+                                else:
+                                    fig=plotevidence(analizer,exp, None)
+                                    st.plotly_chart(fig)
 
                         elif grafico == "BarPlot diagnosi":
                             st.write(f"- Genero {grafico} ")
-                            fig=plotdiagnosis(analizer,exp, None)
-                            st.plotly_chart(fig)
                             if st.session_state.cartellaOutput and st.button(f"Salva {grafico} per {exp.name}", key=f"salva_{i}_diagnosis"):
                                 plotdiagnosis(analizer,exp, st.session_state.cartellaOutput)
                                 st.success(f"✅ - {grafico} per {exp.name} salvato con successo!")
+                            else:
+                                fig=plotdiagnosis(analizer,exp, None)
+                                st.plotly_chart(fig)
 
                         elif grafico == "BarPlot tuning":
                             st.write(f"- Genero {grafico} ")
-                            fig=plottuning(analizer,exp,None)
-                            st.plotly_chart(fig)
                             if st.session_state.cartellaOutput and st.button(f"Salva {grafico} per {exp.name}", key=f"salva_{i}_tuning"):
                                 plottuning(analizer,exp, st.session_state.cartellaOutput)
                                 st.success(f"✅ - {grafico} per {exp.name} salvato con successo!")
+                            else:
+                                fig=plottuning(analizer,exp,None)
+                                st.plotly_chart(fig)
 
                         elif grafico == "ScatterPlot Timeline tuning":
                             col1, col2, col3 = st.columns([1, 3, 1])
                             with col2:
                                 st.write(f"- Genero {grafico} ")
-                                fig=plottimeline(analizer,exp, None)
-                                st.plotly_chart(fig)
                                 if st.session_state.cartellaOutput and st.button(f"Salva {grafico} per {exp.name}", key=f"salva_{i}_timeline"):
                                     plottimeline(analizer,exp, st.session_state.cartellaOutput)
                                     st.success(f"✅ - {grafico} per {exp.name} salvato con successo!")
+                                else:
+                                    fig=plottimeline(analizer,exp,None)
+                                    st.plotly_chart(fig)
                 else:
                     st.write(f"Nessun grafico selezionato per {exp.name}, salto l'analisi.")        # avviso che per un esperimento non è ststo selezionato nulla e proseguo
 
@@ -318,62 +357,65 @@ def fase_analisi():
             for grafico in st.session_state.lista_grafici_confronto:
                 if grafico == "LinePlot di Accuracy, Score e Params":
                     st.write(f"Genero {grafico}")
-                    fig=plotaccuracy_confronto(analizer_confronto)
-                    st.plotly_chart(fig)
                     if st.session_state.cartellaOutput and st.button(f"Salva {grafico}", key=f"salva_confronto_accuracy"):
                         plotaccuracy_confronto(analizer_confronto, st.session_state.cartellaOutput)
                         st.success(f"✅ - {grafico} di confronto salvato con successo!")
+                    fig=plotaccuracy_confronto(analizer_confronto)
+                    st.plotly_chart(fig)
 
                 elif grafico == "BarPlot efficacia azioni":
                     st.write(f"Genero {grafico}")
-                    fig=plotevidence_confronto(analizer_confronto)
-                    st.plotly_chart(fig)
                     if st.session_state.cartellaOutput and st.button(f"Salva {grafico}", key=f"salva_confronto_evidence"):
                         plotevidence_confronto(analizer_confronto, st.session_state.cartellaOutput)
                         st.success(f"✅ - {grafico} di confronto salvato con successo!")
+                    fig=plotevidence_confronto(analizer_confronto)
+                    st.plotly_chart(fig)
 
                 elif grafico == "BarPlot diagnosi":
                     cola,colb, colc = st.columns([1, 8, 1])
                     with colb:
                         st.write(f"Genero {grafico}")
-                        fig=plotdiagnosis_confronto(analizer_confronto)
-                        st.plotly_chart(fig)
                         if st.session_state.cartellaOutput and st.button(f"Salva {grafico}", key=f"salva_confronto_diagnosis"):
                             plotdiagnosis_confronto(analizer_confronto, st.session_state.cartellaOutput)
                             st.success(f"✅ - {grafico} di confronto salvato con successo!")
+                        fig=plotdiagnosis_confronto(analizer_confronto)
+                        st.plotly_chart(fig)
 
                 elif grafico == "BarPlot tuning":
                     cola,colb, colc = st.columns([1, 8, 1])
                     with colb:
                         st.write(f"Genero {grafico}")
-                        fig=plottuning_confronto(analizer_confronto)
-                        st.plotly_chart(fig)
                         if st.session_state.cartellaOutput and st.button(f"Salva {grafico}", key=f"salva_confronto_tuning"):
                             plottuning_confronto(analizer_confronto, st.session_state.cartellaOutput)
                             st.success(f"✅ - {grafico} di confronto salvato con successo!")
+                        else:
+                            fig=plottuning_confronto(analizer_confronto)
+                            st.plotly_chart(fig)
 
                 elif grafico == "ScatterPlot Timeline tuning":
                     col4, col2, col3 = st.columns([1, 8, 1])
                     with col2:
                         st.write(f"Genero {grafico}")
-                        fig=plottimeline_confronto(analizer_confronto)
-                        st.plotly_chart(fig)
                         if st.session_state.cartellaOutput and st.button(f"Salva {grafico}", key=f"salva_confronto_timeline"):
                             plottimeline_confronto(analizer_confronto, st.session_state.cartellaOutput)
                             st.success(f"✅ - {grafico} di confronto salvato con successo!")
+                        else:
+                            fig=plottimeline_confronto(analizer_confronto)
+                            st.plotly_chart(fig)
 
     if st.session_state.stato_bottone_spazio_ricerca:     # se sono nella modalità spazio di ricerca, mostro i grafici di spazio di ricerca per tutti gli esperimenti selezionati
         st.subheader("Grafici Spazio di Ricerca")
         with st.spinner('Generando i grafici di Spazio di Ricerca...'):
             for esperimento in st.session_state.lista_out_files:
-                if esperimento and esperimento.exp_name in [exp.name for exp in st.session_state.lista_esperimenti]:   # se sono nella modalità spazio di ricerca, salvo tutti i grafici di spazio di ricerca degli esperimenti selezionati.
-                    st.write(f"Analizzo Spazio di Ricerca per {esperimento.exp_name}")
-                    fig=esperimento.grafici_spazio_ricerca()
-                    st.pyplot(fig,clear_figure=True)
-                    plt.close(fig)
                 if esperimento and esperimento.exp_name in [exp.name for exp in st.session_state.lista_esperimenti] and st.session_state.cartellaOutput and st.button(f"Salva grafici Spazio di Ricerca per {esperimento.exp_name}", key=f"salva_spazio_ricerca_{esperimento.exp_name}"):
                     esperimento.grafici_spazio_ricerca(st.session_state.cartellaOutput)
                     st.success(f"✅ - Grafici Spazio di Ricerca per {esperimento.exp_name} salvati con successo!")
+                if esperimento and esperimento.exp_name in [exp.name for exp in st.session_state.lista_esperimenti]:   # se sono nella modalità spazio di ricerca, salvo tutti i grafici di spazio di ricerca degli esperimenti selezionati.
+                    st.write(f"Analizzo Spazio di Ricerca per {esperimento.exp_name}")
+                    fig=esperimento.grafici_spazio_ricerca()
+                    col1, col2, col3 = st.columns([1, 8, 1])
+                    with col2:
+                        st.plotly_chart(fig)
         
 
 def main():

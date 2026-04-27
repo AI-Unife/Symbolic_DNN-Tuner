@@ -2,7 +2,9 @@ from pathlib import Path
 import sys
 from typing import Dict, List, Tuple, Optional, Any
 from dataclasses import dataclass
-import matplotlib.pyplot as plt
+import plotly.express as px
+from plotly.subplots import make_subplots
+import plotly.graph_objects as go
 import pandas as pd
 import seaborn as sns
 import os
@@ -29,7 +31,6 @@ class FileOUT:
                 break
 
         if not search_space_file:
-            print(f"⚠ Search space file not found: {search_space_file}")
             return False
         
         try:
@@ -80,32 +81,30 @@ class FileOUT:
     def grafici_spazio_ricerca(self, output_path: Optional[Path] = None):
         """Crea grafici per visualizzare lo spazio di ricerca"""
         if not self.spazio_ricerca:
-            print("⚠ No search space data to plot.")
             return
         
         # Converti la lista di dizionari in un DataFrame
         df = pd.DataFrame(self.spazio_ricerca)
 
         # devo creare un grafico per ogni parametro di ricerca che mi dica come quella quantità stia cambiano con l'avanzare delle iterazioni tutte nella stessa finestra
-        grafici_da_fare = df.shape[1]-1
+        grafici=[c for c in df.columns if c != "iteration"]
+        grafici_da_fare = len(grafici)
         num_col=5
-        fig, ax= plt.subplots(grafici_da_fare//num_col + (grafici_da_fare % num_col > 0), num_col, figsize=(14,7))      #voglio i grafici in file da 5 grafici per riga
-        for column in df.columns:
-            if column != "iteration":
-                sns.lineplot(data=df, x="iteration", y=column, ax=ax[(df.columns.get_loc(column)-1)//num_col][(df.columns.get_loc(column)-1)%num_col])
-                
-        # Rimuovo eventuali assi vuoti
-        for i in range(grafici_da_fare, (grafici_da_fare//num_col + (grafici_da_fare % num_col > 0)) * num_col):
-            fig.delaxes(ax[i//num_col][i%num_col])
+        num_rig=grafici_da_fare//num_col + (1 if grafici_da_fare % num_col > 0 else 0)
 
-        plt.suptitle(f"Search Space Evolution Over Iterations - {self.exp_dir.name}")
+        fig = make_subplots(rows=num_rig, cols=num_col, subplot_titles=grafici) 
 
-        plt.tight_layout()
+        for i, grafico in enumerate(grafici):
+            row = i // num_col + 1
+            col = i % num_col + 1
+            fig.add_trace(go.Scatter(x=df["iteration"], y=df[grafico], mode='lines+markers', name=grafico,hovertemplate=f"<b>{col}</b><br>Iter: %{{x}}<br>Val: %{{y}}"), row=row, col=col)
+
+        fig.update_layout(height=150*num_rig, width=200*num_col, title_text=f"Search Space Trends - {self.exp_name}", showlegend=False,template="plotly_white")
+
         if output_path:
             output_path = Path(output_path)
             output_path=os.path.join(output_path, f"{self.exp_dir.name}_search_space.png")
-            plt.savefig(output_path)
-        #plt.show()
+            fig.write_image(output_path)
         return fig
     
     def load_trend(self) -> bool:
@@ -201,30 +200,12 @@ class FileOUT:
     def grafici_trend(self, i: int, output_path: Optional[Path] = None):
         """Specificata un'iterazione, crea grafici per visualizzare l'andamento di accuracy e loss in quella iterazione"""
 
-        if not self.trend:
-            print(f"⚠ No trend data to plot for {self.exp_name}.")
-            return
+        data=self.trend[i]
+        fig=make_subplots(rows=1, cols=2, subplot_titles=["Loss Trend", "Accuracy Trend"])
+        fig.add_trace(go.Scatter( y=data["loss"], mode='lines', name="Loss"), row=1, col=1)
+        fig.add_trace(go.Scatter( y=data["accuracy"], mode='lines', name="Accuracy"), row=1, col=2)
+        fig.update_layout(height=400, width=800, showlegend=False,template="plotly_white")
         
-        if i >= len(self.trend):
-            print(f"⚠ Iteration index {i} out of range. Available iterations: 0 to {len(self.trend)-1} in {self.exp_name}.")
-            return
-        
-        if "loss" not in self.trend[i] or "accuracy" not in self.trend[i]:
-            print(f"⚠ Trend data for iteration {i} is incomplete. Missing 'loss' or 'accuracy' in {self.exp_name}.")
-            return
-        
-        fig, ax = plt.subplots(1, 2, figsize=(14, 7))
-        sns.lineplot(x=range(len(self.trend[i]["loss"])), y=self.trend[i]["loss"], ax=ax[0])
-        ax[0].set_title(f"Loss Trend - Iteration {self.trend[i]['iteration']}")
-        sns.lineplot( x=range(len(self.trend[i]["accuracy"])), y=self.trend[i]["accuracy"], ax=ax[1])
-        ax[1].set_title(f"Accuracy Trend - Iteration {self.trend[i]['iteration']}")
-
-        plt.tight_layout()
-        if output_path:
-            output_path = Path(output_path)
-            output_path=os.path.join(output_path, f"{self.exp_dir.name}_trend_{i}.png")
-            plt.savefig(output_path)
-        #plt.show()
         return fig
 
 def find_out(exp_dir: Path):
@@ -233,19 +214,12 @@ def find_out(exp_dir: Path):
     exp_dir = Path(exp_dir)
     for i in exp_dir.iterdir():
         if i.is_dir():
-            print(f"🔍 Searching for search space in: {i}")
             esperimento = FileOUT(i)
 
-            if esperimento.load_trend ():
-                print(f"✅ Trend found in: {i}")
-            else:
-                print(f"⚠ No trend found in: {i}")
+            if not esperimento.load_trend () :
                 continue
 
-            if esperimento.load_search_space():
-                print(f"✅ Search space found in: {i}")
-            else:
-                print(f"⚠ No search space found in: {i}")
+            if not esperimento.load_search_space():
                 continue
 
             list_of_out_files.append(esperimento)
