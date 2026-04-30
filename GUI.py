@@ -1,6 +1,9 @@
 from graficifun import *
 from analisi_out import *
 import streamlit as st
+import os
+import platform
+import threading
 import tkinter as tk
 from tkinter import filedialog
 
@@ -13,25 +16,63 @@ def caricamento2():
     return find_out(st.session_state.cartellaInput) #carico nome degli esperimenti e analizer corrispondenti alla cartella selezionata
 
 
-def fase_selezione_cartella():
-    root = tk.Tk()   # Creo una finestra di tkinter per poter utilizzare il filedialog: seleziona cartella 
+def _is_ios_or_macos():
+    system_name = platform.system().lower()
+    return system_name in ("darwin", "ios")
+
+
+def _can_use_tk_dialog():
+    # Tk richiede il main thread per creare NSWindow su piattaforme Apple.
+    return not _is_ios_or_macos() and threading.current_thread() is threading.main_thread()
+
+
+def _ask_directory_safe():
+    if not _can_use_tk_dialog():
+        return None
+
+    root = tk.Tk()
     root.withdraw()
     root.attributes('-topmost', True)
 
+    try:
+        root.update()
+        return filedialog.askdirectory(master=root)
+    finally:
+        root.destroy()
+
+
+def fase_selezione_cartella():
     st.empty()      # Pulisco il placeholder per rimuovere eventuali elementi di diverse fasi
     st.title("📈 - ANALYZER Symbolic DNN Tuner")
+
+    if not _can_use_tk_dialog():
+        st.warning(
+            "Su macOS/iOS il selettore cartella nativo può causare crash fuori dal main thread. "
+            "Inserisci il percorso manualmente nei campi qui sotto.",
+            icon="⚠️"
+        )
     
     # Sezione per la cartella da analizzare
     st.subheader("📂 - Selettore cartella da analizzare")   #sottotitolo
     cola, colb = st.columns([2,5])         #creo due colonne e adatto il bottone alla prima colonna per farlo uguale a quello sottostante
     with cola:
         if st.button('Seleziona cartella da analizzare ->',use_container_width=True):   #quando viene premuto il bottone
-            # Forza il sistema a processare gli eventi grafici
-            root.update()
-            cartella_scelta = filedialog.askdirectory(master=root)  #si apre il filedialog per selezionare la cartella da analizzare
+            cartella_scelta = _ask_directory_safe()  # si apre il filedialog solo se supportato in modo sicuro
             if cartella_scelta:
                 st.session_state.cartellaInput = cartella_scelta    #la salvo in una variabile di stato per poterla usare nelle fasi successive
                 st.rerun()          # Ricarico la pagina
+    with colb:
+        percorso_input = st.text_input(
+            "Oppure inserisci manualmente il percorso cartella da analizzare",
+            value=st.session_state.get('cartellaInput', ''),
+            key="manual_cartella_input"
+        )
+        if st.button('Usa questo percorso (analisi)', use_container_width=True):
+            if percorso_input and os.path.isdir(percorso_input):
+                st.session_state.cartellaInput = percorso_input
+                st.rerun()
+            else:
+                st.error("Percorso non valido. Inserisci una cartella esistente.", icon="❌")
             
     if 'cartellaInput' in st.session_state:     #se esiste una cartella da analizzare, mostro un messaggio con il percorso della cartella selezionata
         st.info(f"Cartella selezionata: **{st.session_state.cartellaInput}**")
@@ -41,9 +82,7 @@ def fase_selezione_cartella():
     col1, col2, col_vuota1 = st.columns([2, 1, 4]) 
     with col1:
         if st.button('Seleziona cartella di salvataggio ->',use_container_width=True):
-            # Forza il sistema a processare gli eventi grafici
-            root.update()
-            cartella_scelta = filedialog.askdirectory(master=root)
+            cartella_scelta = _ask_directory_safe()
             if cartella_scelta:
                 st.session_state.cartellaOutput = cartella_scelta
                 st.rerun()
@@ -55,6 +94,20 @@ def fase_selezione_cartella():
     if 'cartellaOutput' in st.session_state:
         st.info(f"Cartella di salvataggio selezionata: **{st.session_state.cartellaOutput}**")
 
+    percorso_output = st.text_input(
+        "Oppure inserisci manualmente il percorso cartella di salvataggio",
+        value=st.session_state.get('cartellaOutput') or '',
+        key="manual_cartella_output"
+    )
+    colm1, colm2 = st.columns([2, 6])
+    with colm1:
+        if st.button('Usa questo percorso (output)', use_container_width=True):
+            if percorso_output and os.path.isdir(percorso_output):
+                st.session_state.cartellaOutput = percorso_output
+                st.rerun()
+            else:
+                st.error("Percorso non valido. Inserisci una cartella esistente.", icon="❌")
+
     #Bottone vai alla fase successiva
     col_vuota2, col3= st.columns([6, 1]) 
     with col3:
@@ -64,7 +117,6 @@ def fase_selezione_cartella():
                     st.session_state.cartellaOutput = None  # Se non è stata selezionata una cartella di output, la imposto a None
 
                 st.session_state.fase = 'caricamento'
-                root.destroy()
                 st.rerun()  # Ricarica la pagina per passare alla fase successiva
             else:
                 st.error("Per favore, seleziona una cartella da analizzare prima di continuare.", icon="❌")
