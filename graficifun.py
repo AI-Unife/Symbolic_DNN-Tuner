@@ -462,7 +462,7 @@ def plotaccuracy(analyzer: ResultsAnalyzer, exp: Path, output_dir: Optional[Path
     )
     if output_dir:
         output_path = Path(output_dir) 
-        output_path=os.path.join(output_path, f"{exp.name}_Accuracy_Score_Params.png")
+        output_path=os.path.join(output_path, f"{exp}_Accuracy_Score_Params.png")
         fig.write_image(output_path)
     return fig
 
@@ -590,7 +590,7 @@ def plotevidence(analyzer: ResultsAnalyzer, exp: Path, output_dir: Optional[Path
 
             # Configurazione Layout "Anti-Taglio"
             fig.update_layout(
-                title=f'Evidence Distribution: Failures (red) vs Successes (green) - {exp.name if exp else ""}',
+                title=f'Evidence Distribution: Failures (red) vs Successes (green) - {exp if exp else ""}',
                 xaxis_title='Action',
                 yaxis_title='Frequency',
                 barmode='group',
@@ -612,7 +612,7 @@ def plotevidence(analyzer: ResultsAnalyzer, exp: Path, output_dir: Optional[Path
 
             if output_dir:
                 output_path = Path(output_dir)
-                output_path = os.path.join(output_path, f"{exp.name}_Evidence.png")
+                output_path = os.path.join(output_path, f"{exp}_Evidence.png")
                 fig.write_image(output_path)
             return fig
 
@@ -730,7 +730,7 @@ def plottuning(analyzer, exp, output_dir=None):
     if output_dir:
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
-        fig.write_image(str(output_path / f"{exp.name}_tuning.png"))
+        fig.write_image(str(output_path / f"{exp}_tuning.png"))
     return fig
 
 
@@ -851,7 +851,7 @@ def plotdiagnosis(analyzer, exp, output_dir=None):
     if output_dir:
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
-        fig.write_image(str(output_path / f"{exp.name}_diagnosis.png"))
+        fig.write_image(str(output_path / f"{exp}_diagnosis.png"))
     return fig
 
 def plottimeline_confronto(analyzers, output_dir=None):
@@ -970,7 +970,7 @@ def plottimeline(analyzer, exp, output_dir=None):
 
     #Configurazione Layout
     fig.update_layout(
-        title=f'Timeline of Diagnoses and Tuning - {exp.name if exp else ""}',
+        title=f'Timeline of Diagnoses and Tuning - {exp if exp else ""}',
         xaxis=dict(title='Iteration', gridcolor='lightgray'), # Griglia leggera per facilitare la lettura
         yaxis=dict(title='Event', gridcolor='lightgray', automargin=True), 
         template='plotly_white',
@@ -985,7 +985,7 @@ def plottimeline(analyzer, exp, output_dir=None):
     if output_dir:
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
-        fig.write_image(str(output_path / f"{exp.name}_timeline.png"))
+        fig.write_image(str(output_path / f"{exp}_timeline.png"))
 
     return fig
 

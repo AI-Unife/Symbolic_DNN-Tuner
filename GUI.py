@@ -16,14 +16,15 @@ def caricamento2():
     return find_out(st.session_state.cartellaInput) #carico nome degli esperimenti e analizer corrispondenti alla cartella selezionata
 
 
-def _is_ios_or_macos():
-    system_name = platform.system().lower()
-    return system_name in ("darwin", "ios")
+def _is_macos():
+    return platform.system().lower() == "darwin"
 
 
 def _can_use_tk_dialog():
     # Tk richiede il main thread per creare NSWindow su piattaforme Apple.
-    return not _is_ios_or_macos() and threading.current_thread() is threading.main_thread()
+    if _is_macos():
+        return threading.current_thread() is threading.main_thread()
+    return True
 
 
 def _ask_directory_safe():
@@ -45,7 +46,9 @@ def fase_selezione_cartella():
     st.empty()      # Pulisco il placeholder per rimuovere eventuali elementi di diverse fasi
     st.title("📈 - ANALYZER Symbolic DNN Tuner")
 
-    if not _can_use_tk_dialog():
+    st.session_state.uso_tk_dialog = _can_use_tk_dialog()  # Verifico se posso usare il dialogo Tkinter in modo sicuro
+
+    if not st.session_state.uso_tk_dialog:
         st.warning(
             "Su macOS/iOS il selettore cartella nativo può causare crash fuori dal main thread. "
             "Inserisci il percorso manualmente nei campi qui sotto.",
@@ -61,13 +64,14 @@ def fase_selezione_cartella():
             if cartella_scelta:
                 st.session_state.cartellaInput = cartella_scelta    #la salvo in una variabile di stato per poterla usare nelle fasi successive
                 st.rerun()          # Ricarico la pagina
-    with colb:
+
+    if not st.session_state.uso_tk_dialog:
         percorso_input = st.text_input(
             "Oppure inserisci manualmente il percorso cartella da analizzare",
             value=st.session_state.get('cartellaInput', ''),
             key="manual_cartella_input"
         )
-        if st.button('Usa questo percorso (analisi)', use_container_width=True):
+        if st.button('Usa questo percorso (analisi)'):
             if percorso_input and os.path.isdir(percorso_input):
                 st.session_state.cartellaInput = percorso_input
                 st.rerun()
@@ -94,14 +98,13 @@ def fase_selezione_cartella():
     if 'cartellaOutput' in st.session_state:
         st.info(f"Cartella di salvataggio selezionata: **{st.session_state.cartellaOutput}**")
 
-    percorso_output = st.text_input(
-        "Oppure inserisci manualmente il percorso cartella di salvataggio",
-        value=st.session_state.get('cartellaOutput') or '',
-        key="manual_cartella_output"
-    )
-    colm1, colm2 = st.columns([2, 6])
-    with colm1:
-        if st.button('Usa questo percorso (output)', use_container_width=True):
+    if not st.session_state.uso_tk_dialog:
+        percorso_output = st.text_input(
+            "Oppure inserisci manualmente il percorso cartella di salvataggio",
+            value=st.session_state.get('cartellaOutput') or '',
+            key="manual_cartella_output"
+        )
+        if st.button('Usa questo percorso (output)'):
             if percorso_output and os.path.isdir(percorso_output):
                 st.session_state.cartellaOutput = percorso_output
                 st.rerun()
@@ -202,7 +205,7 @@ def fase_caricamento():
                             st.session_state.scelta_comune = grafici
                             st.rerun()
 
-                grafici_da_fare_singoli.append(grafici)     # tengo traccia per ogni esperimento (indice) quali grafici fare 
+                grafici_da_fare_singoli.append((exp, grafici))     # tengo traccia per ogni esperimento quali grafici fare 
             
             st.session_state.lista_grafici_singoli = grafici_da_fare_singoli   #me lo devo salvare in una variabile di stato sennò nella fase di creazione dei grafici non riesco più a reperire l'informazione
 
@@ -243,7 +246,7 @@ def fase_caricamento():
 @st.fragment
 def render_chart(exp, analizer):
     fig = plotaccuracy(analizer, exp)
-    chart_key = f"chart_{exp.name}"
+    chart_key = f"chart_{exp}"
     
     # Render del grafico
     event = st.plotly_chart(fig,on_select="rerun",selection_mode="points", key=chart_key)
@@ -260,12 +263,12 @@ def render_chart(exp, analizer):
 
 @st.dialog("📈 Dettaglio Trend")
 def mostra_dettaglio(esperimento, iter_idx, chart_key):
-    st.write(f" Dettaglio per Iterazione {iter_idx} di {esperimento.name}")
+    st.write(f" Dettaglio per Iterazione {iter_idx} di {esperimento}")
     
     # Logica recupero dati
     found = False
     for esp in st.session_state.lista_out_files:
-        if esp.exp_name == esperimento.name:
+        if esp.exp_name == esperimento:
             st.plotly_chart(esp.grafici_trend(iter_idx))
             found = True
             break
@@ -293,22 +296,22 @@ def fase_analisi():
 
     if st.session_state.stato_bottone_singoli and st.session_state.salvato_tutto:     # se sono nella modalità singoli grafici, salvo solo quelli selezionati per ogni esperimento
         for i in range(len(st.session_state.lista_grafici_singoli)):
-            grafici = st.session_state.lista_grafici_singoli[i]
-            exp = st.session_state.lista_esperimenti[i]
+            esperimento = st.session_state.lista_grafici_singoli[i] [0]    #prendo esperimento per esperimento
+            grafici = st.session_state.lista_grafici_singoli[i] [1]    #capisco cosa devo graficare
             if grafici:
                 for grafico in grafici:
                     analizer = st.session_state.lista_analizer[i]
 
                     if grafico == "LinePlot di Accuracy, Score e Params":
-                        plotaccuracy(analizer,exp, st.session_state.cartellaOutput)
+                        plotaccuracy(analizer,esperimento, st.session_state.cartellaOutput)
                     elif grafico == "BarPlot efficacia azioni":
-                        plotevidence(analizer,exp, st.session_state.cartellaOutput)
+                        plotevidence(analizer,esperimento, st.session_state.cartellaOutput)
                     elif grafico == "BarPlot diagnosi":
-                        plotdiagnosis(analizer,exp, st.session_state.cartellaOutput)
+                        plotdiagnosis(analizer,esperimento, st.session_state.cartellaOutput)
                     elif grafico == "BarPlot tuning":
-                        plottuning(analizer,exp, st.session_state.cartellaOutput)
+                        plottuning(analizer,esperimento, st.session_state.cartellaOutput)
                     elif grafico == "ScatterPlot Timeline tuning":
-                        plottimeline(analizer,exp, st.session_state.cartellaOutput)
+                        plottimeline(analizer,esperimento, st.session_state.cartellaOutput)
 
         st.success("✅ - Tutti i grafici singoli sono stati salvati con successo nella cartella di output selezionata!")
 
@@ -342,62 +345,66 @@ def fase_analisi():
         st.subheader("Grafici per singoli esperimenti")
         with st.spinner('Generando i grafici...'):      # generazione vera e propria dei grafici
             for i in range(len(st.session_state.lista_grafici_singoli)):    # corro con ciclo 
-                grafici = st.session_state.lista_grafici_singoli[i]     #capisco cosa devo graficare
-                exp = st.session_state.lista_esperimenti[i]     # per quale esperimento
+                esperimento = st.session_state.lista_grafici_singoli[i] [0]    #prendo esperimento per esperimento
+                grafici = st.session_state.lista_grafici_singoli[i] [1]    #capisco cosa devo graficare
                 if grafici:                                     # se ho grafici
-                    st.write(f"Analizzo {exp.name}")            #analizzo
+                    st.write(f"Analizzo {esperimento}")            #analizzo
                     for grafico in grafici:
-                        analizer = st.session_state.lista_analizer[i]
+                        analizer = None
+                        for a in st.session_state.lista_analizer:     #prendo l'analizer corrispondente a quell'esperimento per poterlo passare alle funzioni di generazione dei grafici
+                            if a.exp_name == esperimento:
+                                analizer = a
+                                break
 
                         if grafico == "LinePlot di Accuracy, Score e Params":       # serie di if-elif per capire quale grafico fare 
                             st.write(f"- Genero {grafico}")
-                            if st.session_state.cartellaOutput and st.button(f"Salva {grafico} per {exp.name}", key=f"salva_{i}_accuracy"):         # creo un bottone che mi possa salvare quel grafico specifico
-                                plotaccuracy(analizer,exp, st.session_state.cartellaOutput)     #ricreo il grafico salvandolo questa volta
-                                st.success(f"✅ - {grafico} per {exp.name} salvato con successo!")      # mostro un messaggio che mi indica che il grafico è stato salvato bene
+                            if st.session_state.cartellaOutput and st.button(f"Salva {grafico} per {esperimento}", key=f"salva_{i}_accuracy"):         # creo un bottone che mi possa salvare quel grafico specifico
+                                plotaccuracy(analizer,esperimento, st.session_state.cartellaOutput)     #ricreo il grafico salvandolo questa volta
+                                st.success(f"✅ - {grafico} per {esperimento} salvato con successo!")      # mostro un messaggio che mi indica che il grafico è stato salvato bene
                             else:
-                                render_chart(exp, analizer)     # chiamo una funzione apposita per fare il render del grafico in modo tale da poter gestire meglio la selezione dei punti e la visualizzazione del dettaglio
+                                render_chart(esperimento, analizer)     # chiamo una funzione apposita per fare il render del grafico in modo tale da poter gestire meglio la selezione dei punti e la visualizzazione del dettaglio
 
                         elif grafico == "BarPlot efficacia azioni":
                             col1, col2, col3 = st.columns([1, 3, 1])
                             with col2:
                                 st.write(f"- Genero {grafico} ")
-                                if st.session_state.cartellaOutput and st.button(f"Salva {grafico} per {exp.name}", key=f"salva_{i}_evidence"):
-                                    plotevidence(analizer,exp, st.session_state.cartellaOutput)
-                                    st.success(f"✅ - {grafico} per {exp.name} salvato con successo!")
+                                if st.session_state.cartellaOutput and st.button(f"Salva {grafico} per {esperimento}", key=f"salva_{i}_evidence"):
+                                    plotevidence(analizer,esperimento, st.session_state.cartellaOutput)
+                                    st.success(f"✅ - {grafico} per {esperimento} salvato con successo!")
                                 else:
-                                    fig=plotevidence(analizer,exp, None)
+                                    fig=plotevidence(analizer,esperimento, None)
                                     st.plotly_chart(fig)
 
                         elif grafico == "BarPlot diagnosi":
                             st.write(f"- Genero {grafico} ")
-                            if st.session_state.cartellaOutput and st.button(f"Salva {grafico} per {exp.name}", key=f"salva_{i}_diagnosis"):
-                                plotdiagnosis(analizer,exp, st.session_state.cartellaOutput)
-                                st.success(f"✅ - {grafico} per {exp.name} salvato con successo!")
+                            if st.session_state.cartellaOutput and st.button(f"Salva {grafico} per {esperimento}", key=f"salva_{i}_diagnosis"):
+                                plotdiagnosis(analizer,esperimento, st.session_state.cartellaOutput)
+                                st.success(f"✅ - {grafico} per {esperimento} salvato con successo!")
                             else:
-                                fig=plotdiagnosis(analizer,exp, None)
+                                fig=plotdiagnosis(analizer,esperimento, None)
                                 st.plotly_chart(fig)
 
                         elif grafico == "BarPlot tuning":
                             st.write(f"- Genero {grafico} ")
-                            if st.session_state.cartellaOutput and st.button(f"Salva {grafico} per {exp.name}", key=f"salva_{i}_tuning"):
-                                plottuning(analizer,exp, st.session_state.cartellaOutput)
-                                st.success(f"✅ - {grafico} per {exp.name} salvato con successo!")
+                            if st.session_state.cartellaOutput and st.button(f"Salva {grafico} per {esperimento}", key=f"salva_{i}_tuning"):
+                                plottuning(analizer,esperimento, st.session_state.cartellaOutput)
+                                st.success(f"✅ - {grafico} per {esperimento} salvato con successo!")
                             else:
-                                fig=plottuning(analizer,exp,None)
+                                fig=plottuning(analizer,esperimento,None)
                                 st.plotly_chart(fig)
 
                         elif grafico == "ScatterPlot Timeline tuning":
                             col1, col2, col3 = st.columns([1, 3, 1])
                             with col2:
                                 st.write(f"- Genero {grafico} ")
-                                if st.session_state.cartellaOutput and st.button(f"Salva {grafico} per {exp.name}", key=f"salva_{i}_timeline"):
-                                    plottimeline(analizer,exp, st.session_state.cartellaOutput)
-                                    st.success(f"✅ - {grafico} per {exp.name} salvato con successo!")
+                                if st.session_state.cartellaOutput and st.button(f"Salva {grafico} per {esperimento}", key=f"salva_{i}_timeline"):
+                                    plottimeline(analizer,esperimento, st.session_state.cartellaOutput)
+                                    st.success(f"✅ - {grafico} per {esperimento} salvato con successo!")
                                 else:
-                                    fig=plottimeline(analizer,exp,None)
+                                    fig=plottimeline(analizer,esperimento,None)
                                     st.plotly_chart(fig)
                 else:
-                    st.write(f"Nessun grafico selezionato per {exp.name}, salto l'analisi.")        # avviso che per un esperimento non è ststo selezionato nulla e proseguo
+                    st.write(f"Nessun grafico selezionato per {esperimento}, salto l'analisi.")        # avviso che per un esperimento non è ststo selezionato nulla e proseguo
 
     if st.session_state.stato_bottone_confronto:     # se sono nella modalità grafici di confronto, mostro i grafici di confronto per tutti gli esperimenti selezionati
         st.subheader("Grafici di confronto")
