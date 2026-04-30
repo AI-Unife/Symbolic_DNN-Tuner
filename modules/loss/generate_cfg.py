@@ -115,6 +115,7 @@ def generate_minimal_cfg(self, model):
 
     minimal_config_path = self.specs_dir / config_name
 
+    return minimal_config, minimal_config_path
     try:
         with open(minimal_config_path, 'w') as f:
             yaml.dump(minimal_config, f)

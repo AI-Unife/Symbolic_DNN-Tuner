@@ -312,7 +312,16 @@ class hardware_module(common_interface):
             print("\n[INFO] Suggesting hardware optimization...")
             print(f"Current configuration: {self.current_config} with latency {self.latency} s and cost {self.cost}$")
 
-            generate_minimal_cfg(self, model)
+            minimal_config, minimal_config_path = generate_minimal_cfg(self, model)
+
+            try:
+                with open(minimal_config_path, 'w') as f:
+                    yaml.dump(minimal_config, f)
+
+                print(f"[OK] Minimal hardware configuration saved to: {minimal_config_path}")
+
+            except Exception as e:
+                print(f"[FAIL] Error saving minimal configuration: {e}")
 
 
     def hw_supports_net(self, model, dict_config):
