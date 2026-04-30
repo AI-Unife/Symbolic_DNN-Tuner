@@ -300,7 +300,11 @@ def fase_analisi():
             grafici = st.session_state.lista_grafici_singoli[i] [1]    #capisco cosa devo graficare
             if grafici:
                 for grafico in grafici:
-                    analizer = st.session_state.lista_analizer[i]
+                    analizer = None
+                    for a in st.session_state.lista_analizer:     #prendo l'analizer corrispondente a quell'esperimento per poterlo passare alle funzioni di generazione dei grafici
+                        if a.exp_name == esperimento:
+                            analizer = a
+                            break
 
                     if grafico == "LinePlot di Accuracy, Score e Params":
                         plotaccuracy(analizer,esperimento, st.session_state.cartellaOutput)
