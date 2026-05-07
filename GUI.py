@@ -1,5 +1,5 @@
-from graficifun import *
-from analisi_out import *
+from graphfun import *
+from analyze_out import *
 import streamlit as st
 import os
 import platform
@@ -7,13 +7,13 @@ import threading
 import tkinter as tk
 from tkinter import filedialog
 
-@st.cache_data          # Cache dei dati in modo tale che a ogni iterazione con la pagina non venga ricaricato tutto da zero
-def caricamento():
-    return analyze_all_experiments(st.session_state.cartellaInput, st.session_state.cartellaOutput) #carico nome degli esperimenti e analizer corrispondenti alla cartella selezionata
+@st.cache_data          # Cache the data so each rerun does not reload everything from scratch
+def loading():
+    return analyze_all_experiments(st.session_state.cartellaInput, st.session_state.cartellaOutput) # Load the experiments and their analyzers for the selected folder
 
-@st.cache_data          # Cache dei dati in modo tale che a ogni iterazione con la pagina non venga ricaricato tutto da zero
-def caricamento2():
-    return find_out(st.session_state.cartellaInput) #carico nome degli esperimenti e analizer corrispondenti alla cartella selezionata
+@st.cache_data          # Cache the data so each rerun does not reload everything from scratch
+def loading2():
+    return find_out(st.session_state.cartellaInput) # Load the experiments and their analyzers for the selected folder
 
 
 def _is_macos():
@@ -21,7 +21,7 @@ def _is_macos():
 
 
 def _can_use_tk_dialog():
-    # Tk richiede il main thread per creare NSWindow su piattaforme Apple.
+    # Tk requires the main thread to create NSWindow on Apple platforms.
     if _is_macos():
         return threading.current_thread() is threading.main_thread()
     return True
@@ -42,200 +42,200 @@ def _ask_directory_safe():
         root.destroy()
 
 
-def fase_selezione_cartella():
-    st.empty()      # Pulisco il placeholder per rimuovere eventuali elementi di diverse fasi
+def folder_selection_phase():
+    st.empty()      # Clear the placeholder to remove any elements from previous phases
     st.title("📈 - ANALYZER Symbolic DNN Tuner")
 
-    st.session_state.uso_tk_dialog = _can_use_tk_dialog()  # Verifico se posso usare il dialogo Tkinter in modo sicuro
+    st.session_state.uso_tk_dialog = _can_use_tk_dialog()  # Check whether Tkinter dialogs can be used safely
 
     if not st.session_state.uso_tk_dialog:
         st.warning(
-            "Su macOS/iOS il selettore cartella nativo può causare crash fuori dal main thread. "
-            "Inserisci il percorso manualmente nei campi qui sotto.",
+            "On macOS/iOS, the native folder picker can crash outside the main thread. "
+            "Enter the path manually in the fields below.",
             icon="⚠️"
         )
     
-    # Sezione per la cartella da analizzare
-    st.subheader("📂 - Selettore cartella da analizzare")   #sottotitolo
-    cola, colb = st.columns([2,5])         #creo due colonne e adatto il bottone alla prima colonna per farlo uguale a quello sottostante
+    # Section for the folder to analyze
+    st.subheader("📂 - Folder selector for analysis")   # Subtitle
+    cola, colb = st.columns([2,5])         # Create two columns and place the button in the first one to match the layout below
     with cola:
-        if st.button('Seleziona cartella da analizzare ->',use_container_width=True):   #quando viene premuto il bottone
-            cartella_scelta = _ask_directory_safe()  # si apre il filedialog solo se supportato in modo sicuro
+        if st.button('Select folder to analyze ->',use_container_width=True):   # When the button is pressed
+            cartella_scelta = _ask_directory_safe()  # Open the file dialog only if it is safely supported
             if cartella_scelta:
-                st.session_state.cartellaInput = cartella_scelta    #la salvo in una variabile di stato per poterla usare nelle fasi successive
-                st.rerun()          # Ricarico la pagina
+                st.session_state.cartellaInput = cartella_scelta    # Save it in session state so it can be reused later
+                st.rerun()          # Reload the page
 
     if not st.session_state.uso_tk_dialog:
         percorso_input = st.text_input(
-            "Oppure inserisci manualmente il percorso cartella da analizzare",
+            "Or enter the analysis folder path manually",
             value=st.session_state.get('cartellaInput', ''),
             key="manual_cartella_input"
         )
-        if st.button('Usa questo percorso (analisi)'):
+        if st.button('Use this path (analysis)'):
             if percorso_input and os.path.isdir(percorso_input):
                 st.session_state.cartellaInput = percorso_input
                 st.rerun()
             else:
-                st.error("Percorso non valido. Inserisci una cartella esistente.", icon="❌")
+                st.error("Invalid path. Please enter an existing folder.", icon="❌")
             
-    if 'cartellaInput' in st.session_state:     #se esiste una cartella da analizzare, mostro un messaggio con il percorso della cartella selezionata
-        st.info(f"Cartella selezionata: **{st.session_state.cartellaInput}**")
+    if 'cartellaInput' in st.session_state:     # If a folder to analyze exists, show a message with the selected path
+        st.info(f"Selected folder: **{st.session_state.cartellaInput}**")
 
-    #selezione opzionale per la cartella di output
-    st.subheader("📂 - Selettore cartella di salvataggio [Opzionale]")
+    # Optional selection for the output folder
+    st.subheader("📂 - Save folder selector [Optional]")
     col1, col2, col_vuota1 = st.columns([2, 1, 4]) 
     with col1:
-        if st.button('Seleziona cartella di salvataggio ->',use_container_width=True):
+        if st.button('Select save folder ->',use_container_width=True):
             cartella_scelta = _ask_directory_safe()
             if cartella_scelta:
                 st.session_state.cartellaOutput = cartella_scelta
                 st.rerun()
     with col2:
-        if st.button('Nessuna selezione',use_container_width=True):
+        if st.button('No selection',use_container_width=True):
             st.session_state.cartellaOutput = None
             st.rerun()
 
     if 'cartellaOutput' in st.session_state:
-        st.info(f"Cartella di salvataggio selezionata: **{st.session_state.cartellaOutput}**")
+        st.info(f"Selected save folder: **{st.session_state.cartellaOutput}**")
 
     if not st.session_state.uso_tk_dialog:
         percorso_output = st.text_input(
-            "Oppure inserisci manualmente il percorso cartella di salvataggio",
+            "Or enter the save folder path manually",
             value=st.session_state.get('cartellaOutput') or '',
             key="manual_cartella_output"
         )
-        if st.button('Usa questo percorso (output)'):
+        if st.button('Use this path (output)'):
             if percorso_output and os.path.isdir(percorso_output):
                 st.session_state.cartellaOutput = percorso_output
                 st.rerun()
             else:
-                st.error("Percorso non valido. Inserisci una cartella esistente.", icon="❌")
+                st.error("Invalid path. Please enter an existing folder.", icon="❌")
 
-    #Bottone vai alla fase successiva
+    # Button to go to the next phase
     col_vuota2, col3= st.columns([6, 1]) 
     with col3:
-        if st.button('Continua',use_container_width=True):      #quando viene premuto il bottone continua si passa alla fase successiva a patto che sia stata selezionata la cartella di analisi
+        if st.button('Continue',use_container_width=True):      # When the Continue button is pressed, move to the next phase if an analysis folder was selected
             if 'cartellaInput' in st.session_state:
                 if 'cartellaOutput' not in st.session_state:
-                    st.session_state.cartellaOutput = None  # Se non è stata selezionata una cartella di output, la imposto a None
+                    st.session_state.cartellaOutput = None  # If no output folder was selected, set it to None
 
                 st.session_state.fase = 'caricamento'
-                st.rerun()  # Ricarica la pagina per passare alla fase successiva
+                st.rerun()  # Reload the page to move to the next phase
             else:
-                st.error("Per favore, seleziona una cartella da analizzare prima di continuare.", icon="❌")
+                st.error("Please select a folder to analyze before continuing.", icon="❌")
 
-def fase_caricamento():
+def loading_phase():
     st.empty()            
-    st.title("⚙️ - Caricamento dei dati")
+    st.title("⚙️ - Load data and select charts")
     
-    if 'stato_bottone_singoli' not in st.session_state:     #creo una variabile di stato per tenere traccia se è stato premuto il bottone per la selezione dei grafici, in modo tale che possa vedere sezione sotto bottone tutto il tempo
+    if 'stato_bottone_singoli' not in st.session_state:     # Create a state variable to track whether the single-plot button was pressed, so the section stays visible
         st.session_state.stato_bottone_singoli = False
     if 'stato_bottone_confronto' not in st.session_state:
         st.session_state.stato_bottone_confronto = False
     if 'stato_bottone_spazio_ricerca' not in st.session_state:
         st.session_state.stato_bottone_spazio_ricerca = False
 
-    with st.spinner('Caricando i vari esperimenti...'):     # Mostro uno spinner mentre vengono caricati i dati, in modo da far capire all'utente che l'applicazione sta lavorando e non è bloccata
-        lista_esperimenti, lista_analizer = caricamento ()  # Carico i dati degli esperimenti e gli analizer corrispondenti alla cartella selezionata, usando la funzione caricamento che è stata decorata con st.cache_data per evitare di ricaricare tutto da zero a ogni iterazione con la pagina
-        if lista_esperimenti and lista_analizer:            #ho bisogno di far diventare queste due liste variabili di stato per poterle usare nelle fasi successive
+    with st.spinner('Loading experiments...'):     # Show a spinner while data loads so the app feels responsive
+        lista_esperimenti, lista_analizer = loading ()  # Load experiment data and matching analyzers using the cached loader
+        if lista_esperimenti and lista_analizer:            # Store both lists in session state so they can be reused later
             st.session_state.lista_esperimenti = lista_esperimenti
             st.session_state.lista_analizer = lista_analizer
 
-        lista_out_files = caricamento2()     #restituise una lista di Spazi di ricerca che sono composti a loro volta di unalista di dizionari e il nome dell'esperimento
+        lista_out_files = loading2()     # Return a list of search spaces, each made of dictionaries plus the experiment name
         if lista_out_files:
             st.session_state.lista_out_files = lista_out_files
 
-    if not lista_esperimenti:       #mostro un messaggio di warning se non sono ststi trovati esperimenti
-        st.warning("❌ - Non sono stati trovati esperimenti nella cartella selezionata. Per favore, verifica che la cartella contenga i dati corretti e riprova.")
+    if not lista_esperimenti:       # Show a warning message if no experiments were found
+        st.warning("❌ - No experiments were found in the selected folder. Please verify that the folder contains the correct data and try again.")
         
     if 'lista_grafici_singoli' not in st.session_state:
-        st.session_state.lista_grafici_singoli = None   #creo una variabile di stato per tenere traccia dei grafici da fare per ogni esperimento, in modo tale che se dovessi tornare indietro e poi tornare a questa fase non perdo l'informazione sui grafici da fare
+        st.session_state.lista_grafici_singoli = None   # Create a state variable to track per-experiment charts so the selection is preserved
     if 'lista_grafici_confronto' not in st.session_state:
-        st.session_state.lista_grafici_confronto = None   #creo una variabile di stato per tenere traccia dei grafici di confronto da fare, in modo tale che se dovessi tornare indietro e poi tornare a questa fase non perdo l'informazione sui grafici di confronto da fare
+        st.session_state.lista_grafici_confronto = None   # Create a state variable to track comparison charts so the selection is preserved
 
     if lista_esperimenti:
-        st.write(f"Trovati {len(lista_esperimenti)} esperimenti nella cartella selezionata: ")      #mostro cosa ho trovato
-        st.write("Seleziona esperimenti da analizzare:")
-        esp_analizzare=st.multiselect("Esperimenti da analizzare:", [exp.name for exp in lista_esperimenti])        #chiedo quali esperimenti analizzare 
+        st.write(f"Found {len(lista_esperimenti)} experiments in the selected folder: ")      # Show what was found
+        st.write("Select experiments to analyze:")
+        esp_analizzare=st.multiselect("Experiments to analyze:", [exp.name for exp in lista_esperimenti])        # Ask which experiments to analyze
 
         col1,col2,col3= st.columns([2, 2, 2]) 
         with col1:
-            if esp_analizzare and st.button('Crea grafici per singoli esperimenti'):
+            if esp_analizzare and st.button('Individual charts'):
                 st.session_state.stato_bottone_singoli = True
                 st.rerun()
         with col2:
-            if esp_analizzare and st.button('Grafici di confronto'):
+            if esp_analizzare and st.button('Comparison charts'):
                 st.session_state.stato_bottone_confronto = True
                 st.rerun()
         with col3:
-            if esp_analizzare and st.button('Spazio di Ricerca'):
+            if esp_analizzare and st.button('Search space'):
                 st.session_state.stato_bottone_spazio_ricerca = True
                 st.rerun()
 
         if esp_analizzare and st.session_state.stato_bottone_singoli:
-            st.subheader("Hai selezionato di visualizzare i grafici per singoli esperimenti.")
+            st.subheader("You selected charts for individual experiments.")
 
-            if 'scelta_comune' not in st.session_state:     # Creo una variabile di stato per memorizzare una scelta comune in modo tale che se avessi molti esperimenti la scelta dei grafici da visulizzare possa essere più veloce 
+            if 'scelta_comune' not in st.session_state:     # Store a shared choice so many experiments can reuse the same chart selection
                 st.session_state.scelta_comune = None
 
-            grafici_da_fare_singoli = []        # mi devo tenere traccia per ogni esperimento cosa graficare
-            opzioni_grafici = [         #grafici possibili
-                "LinePlot di Accuracy, Score e Params", 
-                "BarPlot efficacia azioni", 
-                "BarPlot diagnosi", 
-                "BarPlot tuning", 
-                "ScatterPlot Timeline tuning"]
+            grafici_da_fare_singoli = []        # Track what to plot for each experiment
+            opzioni_grafici = [         # Available charts
+                "Line plot of Accuracy, Score, and Params", 
+                "Bar plot of action effectiveness", 
+                "Diagnosis bar plot", 
+                "Tuning bar plot", 
+                "Tuning timeline scatter plot"]
 
             for i, exp in enumerate(esp_analizzare):
-                # Se è stata impostata una scelta comune, la usiamo per tutti gli esperimenti senza chiedere
+                # If a shared choice exists, reuse it for all experiments without asking again
                 if st.session_state.scelta_comune is not None:
                     grafici = st.session_state.scelta_comune
-                    st.write(f"✅ {exp}: Applicata scelta comune: {', '.join(grafici)}")
+                    st.write(f"✅ {exp}: Applied shared selection: {', '.join(grafici)}")
                 else:
-                    # Altrimenti chiediamo all'utente
-                    grafici = st.multiselect(       # Apro un menu di selezione multipla
-                        f"Quali grafici devo generare per {exp}?",
+                    # Otherwise ask the user
+                    grafici = st.multiselect(       # Open a multiselect menu
+                        f"Which charts should I generate for {exp}?",
                         opzioni_grafici,
-                        key=f"ms_{exp}" #importante mettere una chiave diversa per ogni multiselect in modo tale che Streamlit riesca a distinguere i diversi menu
+                        key=f"ms_{exp}" # Important to use a different key for each multiselect so Streamlit can distinguish them
                     )
                     
-                    # Mostriamo il bottone applica a tutti solo se l'utente ha selezionato qualcosa nel primo esperimento. Gli altri non hanno bottone
+                    # Show the apply-to-all button only if the user selected something in the first experiment. The others do not have a button
                     if i == 0 and grafici:                    
-                        if st.button(f"Applica a tutti"):
+                        if st.button(f"Apply to all"):
                             st.session_state.scelta_comune = grafici
                             st.rerun()
 
-                grafici_da_fare_singoli.append((exp, grafici))     # tengo traccia per ogni esperimento quali grafici fare 
+                grafici_da_fare_singoli.append((exp, grafici))     # Keep track of which charts to make for each experiment
             
-            st.session_state.lista_grafici_singoli = grafici_da_fare_singoli   #me lo devo salvare in una variabile di stato sennò nella fase di creazione dei grafici non riesco più a reperire l'informazione
+            st.session_state.lista_grafici_singoli = grafici_da_fare_singoli   # Save it in state so the information is still available when creating charts
 
         if esp_analizzare and st.session_state.stato_bottone_confronto:
-            st.subheader("Hai selezionato di visualizzare i grafici di confronto.")
+            st.subheader("You selected comparison charts.")
 
-            opzioni_grafici = [         #grafici possibili
-                "LinePlot di Accuracy, Score e Params", 
-                "BarPlot efficacia azioni", 
-                "BarPlot diagnosi", 
-                "BarPlot tuning", 
-                "ScatterPlot Timeline tuning"]
+            opzioni_grafici = [         # Available charts
+                "Line plot of Accuracy, Score, and Params", 
+                "Bar plot of action effectiveness", 
+                "Diagnosis bar plot", 
+                "Tuning bar plot", 
+                "Tuning timeline scatter plot"]
     
-            grafici = st.multiselect(f"Quali grafici devo generare?", opzioni_grafici)       # Apro un menu di selezione multipla
+            grafici = st.multiselect(f"Which charts should I generate?", opzioni_grafici)       # Open a multiselect menu
             
             st.session_state.lista_grafici_confronto = grafici
 
         if st.session_state.stato_bottone_spazio_ricerca:
-            st.subheader("Hai selezionato di visualizzare i grafici di Spazio di Ricerca.")
+            st.subheader("You selected search space charts.")
 
     colno,colok= st.columns([6, 2]) 
     with colok:
-        if (st.session_state.lista_grafici_singoli or st.session_state.lista_grafici_confronto or st.session_state.stato_bottone_spazio_ricerca) and st.button('Crea grafici'):  # se ho dei grafici da creare mostro il bottone per andare alla fase successiva
+        if (st.session_state.lista_grafici_singoli or st.session_state.lista_grafici_confronto or st.session_state.stato_bottone_spazio_ricerca) and st.button('Create charts'):  # Show the button to move forward if there are charts to create
 
-            st.session_state.lista_esperimenti=[exp for exp in lista_esperimenti if exp.name in esp_analizzare]   #filtro la lista degli esperimenti in modo tale che nella fase di creazione dei grafici mi rimangano solo quelli che voglio analizzare
+            st.session_state.lista_esperimenti=[exp for exp in lista_esperimenti if exp.name in esp_analizzare]   # Filter the experiment list so only the selected ones remain
 
             st.session_state.fase = 'analisi'
             st.rerun() 
     with colno:
-        if st.button('Annulla'):        # se mi dovessi accorgere che ho fatto una scelta sbagliata posso tornare indietro e ripartire da zero (cancello tutta la cache e le variabili di stato)
+        if st.button('Cancel'):        # If I realize I made a wrong choice, I can go back and restart from scratch (clear cache and session state)
             st.session_state.fase = 'selezione_cartella'
             st.cache_data.clear()
             st.cache_resource.clear()
@@ -248,24 +248,24 @@ def render_chart(exp, analizer):
     fig = plotaccuracy(analizer, exp)
     chart_key = f"chart_{exp}"
     
-    # Render del grafico
+    # Render the chart
     event = st.plotly_chart(fig,on_select="rerun",selection_mode="points", key=chart_key)
 
-    # Verifica selezione
+    # Check selection
     if event and event.get("selection", {}).get("points"):
         points = event["selection"]["points"][0]
-        # Recupero sicuro dell'indice
+        # Safely retrieve the index
         custom_data = points.get("customdata")
         iter_idx = custom_data[0] if isinstance(custom_data, list) else custom_data
         
         if iter_idx is not None:
-            mostra_dettaglio(exp, iter_idx, f"{chart_key}_{iter_idx}")
+            show_detail(exp, iter_idx, f"{chart_key}_{iter_idx}")
 
-@st.dialog("📈 Dettaglio Trend")
-def mostra_dettaglio(esperimento, iter_idx, chart_key):
-    st.write(f" Dettaglio per Iterazione {iter_idx} di {esperimento}")
+@st.dialog("📈 Trend details")
+def show_detail(esperimento, iter_idx, chart_key):
+    st.write(f" Details for iteration {iter_idx} of {esperimento}")
     
-    # Logica recupero dati
+    # Data retrieval logic
     found = False
     for esp in st.session_state.lista_out_files:
         if esp.exp_name == esperimento:
@@ -274,207 +274,207 @@ def mostra_dettaglio(esperimento, iter_idx, chart_key):
             break
     
     if not found:
-        st.error("Dati non trovati.")
+        st.error("Data not found.")
 
-def fase_analisi():
+def analysis_phase():
     st.empty()
-    st.title("🔍 - Analisi dei risultati")
+    st.title("🔍 - Results analysis")
 
     if 'salvato_tutto' not in st.session_state:
         st.session_state.salvato_tutto = False
 
     col1,col2= st.columns([8, 2]) 
     with col1:
-        if st.session_state.cartellaOutput and st.button('Salva tutto'):    # se è stata selezionata una cartella di output mostro un bottone per salvare tutti i grafici in un colpo solo, altrimenti non mostro questo bottone
+        if st.session_state.cartellaOutput and st.button('Save all'):    # If an output folder was selected, show a button to save all charts at once; otherwise hide it
             st.session_state.salvato_tutto = True
-            st.rerun()  # Ricarico la pagina per passare alla fase successiva
+            st.rerun()  # Reload the page to move to the next phase
             
-    with col2:              # se una volta visti non voglio fare altre azioni ho la possibilità di andare alla fase successiva
-        if st.button('Fine'):
+    with col2:              # If I do not want to do anything else after reviewing them, I can move to the next phase
+        if st.button('Finish'):
             st.session_state.fase = 'fine'
-            st.rerun()  # Ricarica la pagina per passare alla fase successiva
+            st.rerun()  # Reload the page to move to the next phase
 
-    if st.session_state.stato_bottone_singoli and st.session_state.salvato_tutto:     # se sono nella modalità singoli grafici, salvo solo quelli selezionati per ogni esperimento
+    if st.session_state.stato_bottone_singoli and st.session_state.salvato_tutto:     # In single-chart mode, save only the selected charts for each experiment
         for i in range(len(st.session_state.lista_grafici_singoli)):
-            esperimento = st.session_state.lista_grafici_singoli[i] [0]    #prendo esperimento per esperimento
-            grafici = st.session_state.lista_grafici_singoli[i] [1]    #capisco cosa devo graficare
+            esperimento = st.session_state.lista_grafici_singoli[i] [0]    # Take each experiment in turn
+            grafici = st.session_state.lista_grafici_singoli[i] [1]    # Determine what to plot
             if grafici:
                 for grafico in grafici:
                     analizer = None
-                    for a in st.session_state.lista_analizer:     #prendo l'analizer corrispondente a quell'esperimento per poterlo passare alle funzioni di generazione dei grafici
+                    for a in st.session_state.lista_analizer:     # Get the analyzer for that experiment so it can be passed to the chart functions
                         if a.exp_name == esperimento:
                             analizer = a
                             break
 
-                    if grafico == "LinePlot di Accuracy, Score e Params":
+                    if grafico == "Line plot of Accuracy, Score, and Params":
                         plotaccuracy(analizer,esperimento, st.session_state.cartellaOutput)
-                    elif grafico == "BarPlot efficacia azioni":
+                    elif grafico == "Bar plot of action effectiveness":
                         plotevidence(analizer,esperimento, st.session_state.cartellaOutput)
-                    elif grafico == "BarPlot diagnosi":
+                    elif grafico == "Diagnosis bar plot":
                         plotdiagnosis(analizer,esperimento, st.session_state.cartellaOutput)
-                    elif grafico == "BarPlot tuning":
+                    elif grafico == "Tuning bar plot":
                         plottuning(analizer,esperimento, st.session_state.cartellaOutput)
-                    elif grafico == "ScatterPlot Timeline tuning":
+                    elif grafico == "Tuning timeline scatter plot":
                         plottimeline(analizer,esperimento, st.session_state.cartellaOutput)
 
-        st.success("✅ - Tutti i grafici singoli sono stati salvati con successo nella cartella di output selezionata!")
+        st.success("✅ - All individual charts were successfully saved in the selected output folder!")
 
-    if st.session_state.stato_bottone_confronto and st.session_state.salvato_tutto:     # se sono nella modalità grafici di confronto, salvo tutti i grafici di confronto.
-        #seleziono solo gli analizer degli esperimenti che voglio analizzare per poterli passare alle funzioni di confronto
+    if st.session_state.stato_bottone_confronto and st.session_state.salvato_tutto:     # In comparison mode, save all comparison charts.
+        # Select only the analyzers for the experiments I want to compare
         nomi=[exp.name for exp in st.session_state.lista_esperimenti]
         analizer_confronto = [analizer for analizer in st.session_state.lista_analizer if analizer.exp_name in nomi]
         for grafico in st.session_state.lista_grafici_confronto:
-            if grafico == "LinePlot di Accuracy, Score e Params":
+            if grafico == "Line plot of Accuracy, Score, and Params":
                 plotaccuracy_confronto(analizer_confronto, st.session_state.cartellaOutput)
-            elif grafico == "BarPlot efficacia azioni":
+            elif grafico == "Bar plot of action effectiveness":
                 plotevidence_confronto(analizer_confronto, st.session_state.cartellaOutput)
-            elif grafico == "BarPlot diagnosi":
+            elif grafico == "Diagnosis bar plot":
                 plotdiagnosis_confronto(analizer_confronto, st.session_state.cartellaOutput)
-            elif grafico == "BarPlot tuning":
+            elif grafico == "Tuning bar plot":
                 plottuning_confronto(analizer_confronto, st.session_state.cartellaOutput)
-            elif grafico == "ScatterPlot Timeline tuning":
+            elif grafico == "Tuning timeline scatter plot":
                 plottimeline_confronto(analizer_confronto, st.session_state.cartellaOutput)
 
-        st.success("✅ - Tutti i grafici di confronto sono stati salvati con successo nella cartella di output selezionata!")
+        st.success("✅ - All comparison charts were successfully saved in the selected output folder!")
 
-    if st.session_state.stato_bottone_spazio_ricerca and st.session_state.salvato_tutto:     # se sono nella modalità spazio di ricerca, salvo tutti i grafici di spazio di ricerca degli esperimenti selezionati.
+    if st.session_state.stato_bottone_spazio_ricerca and st.session_state.salvato_tutto:     # In search-space mode, save all search-space charts for the selected experiments.
         for spazio_ricerca in st.session_state.lista_out_files:
-            if spazio_ricerca and spazio_ricerca.exp_name in [exp.name for exp in st.session_state.lista_esperimenti]:   # se sono nella modalità spazio di ricerca, salvo tutti i grafici di spazio di ricerca degli esperimenti selezionati.
+            if spazio_ricerca and spazio_ricerca.exp_name in [exp.name for exp in st.session_state.lista_esperimenti]:   # Save only the selected experiments' search-space charts
                 spazio_ricerca.grafici_spazio_ricerca(st.session_state.cartellaOutput)
-        st.success("✅ - Tutti i grafici di Spazio di Ricerca sono stati salvati con successo nella cartella di output selezionata!")
+        st.success("✅ - All search space charts were successfully saved in the selected output folder!")
     
-    st.session_state.salvato_tutto = False   # resetto la variabile di stato in modo tale che se dovessi tornare indietro e poi tornare a questa fase non mi rimane salvato tutto e non mi salva tutto senza volerlo
+    st.session_state.salvato_tutto = False   # Reset the state variable so going back and returning does not re-save everything unintentionally
 
-    if st.session_state.stato_bottone_singoli:     # se sono nella modalità singoli grafici, mostro i grafici uno alla volta con i relativi bottoni di salvataggio    
-        st.subheader("Grafici per singoli esperimenti")
-        with st.spinner('Generando i grafici...'):      # generazione vera e propria dei grafici
-            for i in range(len(st.session_state.lista_grafici_singoli)):    # corro con ciclo 
-                esperimento = st.session_state.lista_grafici_singoli[i] [0]    #prendo esperimento per esperimento
-                grafici = st.session_state.lista_grafici_singoli[i] [1]    #capisco cosa devo graficare
-                if grafici:                                     # se ho grafici
-                    st.write(f"Analizzo {esperimento}")            #analizzo
+    if st.session_state.stato_bottone_singoli:     # In single-chart mode, show charts one by one with their save buttons    
+        st.subheader("Charts for individual experiments")
+        with st.spinner('Generating charts...'):      # Actual chart generation
+            for i in range(len(st.session_state.lista_grafici_singoli)):    # Iterate through the selections 
+                esperimento = st.session_state.lista_grafici_singoli[i] [0]    # Take each experiment in turn
+                grafici = st.session_state.lista_grafici_singoli[i] [1]    # Determine what to plot
+                if grafici:                                     # If there are charts to show
+                    st.write(f"Analyzing {esperimento}")            # Analyze
                     for grafico in grafici:
                         analizer = None
-                        for a in st.session_state.lista_analizer:     #prendo l'analizer corrispondente a quell'esperimento per poterlo passare alle funzioni di generazione dei grafici
+                        for a in st.session_state.lista_analizer:     # Get the analyzer for that experiment so it can be passed to the chart functions
                             if a.exp_name == esperimento:
                                 analizer = a
                                 break
 
-                        if grafico == "LinePlot di Accuracy, Score e Params":       # serie di if-elif per capire quale grafico fare 
-                            st.write(f"- Genero {grafico}")
-                            if st.session_state.cartellaOutput and st.button(f"Salva {grafico} per {esperimento}", key=f"salva_{i}_accuracy"):         # creo un bottone che mi possa salvare quel grafico specifico
-                                plotaccuracy(analizer,esperimento, st.session_state.cartellaOutput)     #ricreo il grafico salvandolo questa volta
-                                st.success(f"✅ - {grafico} per {esperimento} salvato con successo!")      # mostro un messaggio che mi indica che il grafico è stato salvato bene
+                        if grafico == "Line plot of Accuracy, Score, and Params":       # Series of if/elif branches to decide which chart to generate 
+                            st.write(f"- Generating {grafico}")
+                            if st.session_state.cartellaOutput and st.button(f"Save {grafico} for {esperimento}", key=f"salva_{i}_accuracy"):         # Create a button to save this specific chart
+                                plotaccuracy(analizer,esperimento, st.session_state.cartellaOutput)     # Recreate the chart and save it this time
+                                st.success(f"✅ - {grafico} for {esperimento} was saved successfully!")      # Show a message indicating the chart was saved successfully
                             else:
-                                render_chart(esperimento, analizer)     # chiamo una funzione apposita per fare il render del grafico in modo tale da poter gestire meglio la selezione dei punti e la visualizzazione del dettaglio
+                                render_chart(esperimento, analizer)     # Call a dedicated function to render the chart and handle point selection and details
 
-                        elif grafico == "BarPlot efficacia azioni":
+                        elif grafico == "Bar plot of action effectiveness":
                             col1, col2, col3 = st.columns([1, 3, 1])
                             with col2:
-                                st.write(f"- Genero {grafico} ")
-                                if st.session_state.cartellaOutput and st.button(f"Salva {grafico} per {esperimento}", key=f"salva_{i}_evidence"):
+                                st.write(f"- Generating {grafico} ")
+                                if st.session_state.cartellaOutput and st.button(f"Save {grafico} for {esperimento}", key=f"salva_{i}_evidence"):
                                     plotevidence(analizer,esperimento, st.session_state.cartellaOutput)
-                                    st.success(f"✅ - {grafico} per {esperimento} salvato con successo!")
+                                    st.success(f"✅ - {grafico} for {esperimento} was saved successfully!")
                                 else:
                                     fig=plotevidence(analizer,esperimento, None)
                                     st.plotly_chart(fig)
 
-                        elif grafico == "BarPlot diagnosi":
-                            st.write(f"- Genero {grafico} ")
-                            if st.session_state.cartellaOutput and st.button(f"Salva {grafico} per {esperimento}", key=f"salva_{i}_diagnosis"):
+                        elif grafico == "Diagnosis bar plot":
+                            st.write(f"- Generating {grafico} ")
+                            if st.session_state.cartellaOutput and st.button(f"Save {grafico} for {esperimento}", key=f"salva_{i}_diagnosis"):
                                 plotdiagnosis(analizer,esperimento, st.session_state.cartellaOutput)
-                                st.success(f"✅ - {grafico} per {esperimento} salvato con successo!")
+                                st.success(f"✅ - {grafico} for {esperimento} was saved successfully!")
                             else:
                                 fig=plotdiagnosis(analizer,esperimento, None)
                                 st.plotly_chart(fig)
 
-                        elif grafico == "BarPlot tuning":
-                            st.write(f"- Genero {grafico} ")
-                            if st.session_state.cartellaOutput and st.button(f"Salva {grafico} per {esperimento}", key=f"salva_{i}_tuning"):
+                        elif grafico == "Tuning bar plot":
+                            st.write(f"- Generating {grafico} ")
+                            if st.session_state.cartellaOutput and st.button(f"Save {grafico} for {esperimento}", key=f"salva_{i}_tuning"):
                                 plottuning(analizer,esperimento, st.session_state.cartellaOutput)
-                                st.success(f"✅ - {grafico} per {esperimento} salvato con successo!")
+                                st.success(f"✅ - {grafico} for {esperimento} was saved successfully!")
                             else:
                                 fig=plottuning(analizer,esperimento,None)
                                 st.plotly_chart(fig)
 
-                        elif grafico == "ScatterPlot Timeline tuning":
+                        elif grafico == "Tuning timeline scatter plot":
                             col1, col2, col3 = st.columns([1, 3, 1])
                             with col2:
-                                st.write(f"- Genero {grafico} ")
-                                if st.session_state.cartellaOutput and st.button(f"Salva {grafico} per {esperimento}", key=f"salva_{i}_timeline"):
+                                st.write(f"- Generating {grafico} ")
+                                if st.session_state.cartellaOutput and st.button(f"Save {grafico} for {esperimento}", key=f"salva_{i}_timeline"):
                                     plottimeline(analizer,esperimento, st.session_state.cartellaOutput)
-                                    st.success(f"✅ - {grafico} per {esperimento} salvato con successo!")
+                                    st.success(f"✅ - {grafico} for {esperimento} was saved successfully!")
                                 else:
                                     fig=plottimeline(analizer,esperimento,None)
                                     st.plotly_chart(fig)
                 else:
-                    st.write(f"Nessun grafico selezionato per {esperimento}, salto l'analisi.")        # avviso che per un esperimento non è ststo selezionato nulla e proseguo
+                    st.write(f"No chart selected for {esperimento}, skipping analysis.")        # Warn that nothing was selected for the experiment and continue
 
-    if st.session_state.stato_bottone_confronto:     # se sono nella modalità grafici di confronto, mostro i grafici di confronto per tutti gli esperimenti selezionati
-        st.subheader("Grafici di confronto")
-        with st.spinner('Generando i grafici di confronto...'):
-            #seleziono solo gli analizer degli esperimenti che voglio analizzare per poterli passare alle funzioni di confronto
+    if st.session_state.stato_bottone_confronto:     # In comparison mode, show comparison charts for all selected experiments
+        st.subheader("Comparison charts")
+        with st.spinner('Generating comparison charts...'):
+            # Select only the analyzers for the experiments I want to compare
             nomi=[exp.name for exp in st.session_state.lista_esperimenti]
             analizer_confronto = [analizer for analizer in st.session_state.lista_analizer if analizer.exp_name in nomi]
             
             for grafico in st.session_state.lista_grafici_confronto:
-                if grafico == "LinePlot di Accuracy, Score e Params":
-                    st.write(f"Genero {grafico}")
-                    if st.session_state.cartellaOutput and st.button(f"Salva {grafico}", key=f"salva_confronto_accuracy"):
+                if grafico == "Line plot of Accuracy, Score, and Params":
+                    st.write(f"Generating {grafico}")
+                    if st.session_state.cartellaOutput and st.button(f"Save {grafico}", key=f"salva_confronto_accuracy"):
                         plotaccuracy_confronto(analizer_confronto, st.session_state.cartellaOutput)
-                        st.success(f"✅ - {grafico} di confronto salvato con successo!")
+                        st.success(f"✅ - Comparison {grafico} was saved successfully!")
                     fig=plotaccuracy_confronto(analizer_confronto)
                     st.plotly_chart(fig)
 
-                elif grafico == "BarPlot efficacia azioni":
-                    st.write(f"Genero {grafico}")
-                    if st.session_state.cartellaOutput and st.button(f"Salva {grafico}", key=f"salva_confronto_evidence"):
+                elif grafico == "Bar plot of action effectiveness":
+                    st.write(f"Generating {grafico}")
+                    if st.session_state.cartellaOutput and st.button(f"Save {grafico}", key=f"salva_confronto_evidence"):
                         plotevidence_confronto(analizer_confronto, st.session_state.cartellaOutput)
-                        st.success(f"✅ - {grafico} di confronto salvato con successo!")
+                        st.success(f"✅ - Comparison {grafico} was saved successfully!")
                     fig=plotevidence_confronto(analizer_confronto)
                     st.plotly_chart(fig)
 
-                elif grafico == "BarPlot diagnosi":
+                elif grafico == "Diagnosis bar plot":
                     cola,colb, colc = st.columns([1, 8, 1])
                     with colb:
-                        st.write(f"Genero {grafico}")
-                        if st.session_state.cartellaOutput and st.button(f"Salva {grafico}", key=f"salva_confronto_diagnosis"):
+                        st.write(f"Generating {grafico}")
+                        if st.session_state.cartellaOutput and st.button(f"Save {grafico}", key=f"salva_confronto_diagnosis"):
                             plotdiagnosis_confronto(analizer_confronto, st.session_state.cartellaOutput)
-                            st.success(f"✅ - {grafico} di confronto salvato con successo!")
+                            st.success(f"✅ - Comparison {grafico} was saved successfully!")
                         fig=plotdiagnosis_confronto(analizer_confronto)
                         st.plotly_chart(fig)
 
-                elif grafico == "BarPlot tuning":
+                elif grafico == "Tuning bar plot":
                     cola,colb, colc = st.columns([1, 8, 1])
                     with colb:
-                        st.write(f"Genero {grafico}")
-                        if st.session_state.cartellaOutput and st.button(f"Salva {grafico}", key=f"salva_confronto_tuning"):
+                        st.write(f"Generating {grafico}")
+                        if st.session_state.cartellaOutput and st.button(f"Save {grafico}", key=f"salva_confronto_tuning"):
                             plottuning_confronto(analizer_confronto, st.session_state.cartellaOutput)
-                            st.success(f"✅ - {grafico} di confronto salvato con successo!")
+                            st.success(f"✅ - Comparison {grafico} was saved successfully!")
                         else:
                             fig=plottuning_confronto(analizer_confronto)
                             st.plotly_chart(fig)
 
-                elif grafico == "ScatterPlot Timeline tuning":
+                elif grafico == "Tuning timeline scatter plot":
                     col4, col2, col3 = st.columns([1, 8, 1])
                     with col2:
-                        st.write(f"Genero {grafico}")
-                        if st.session_state.cartellaOutput and st.button(f"Salva {grafico}", key=f"salva_confronto_timeline"):
+                        st.write(f"Generating {grafico}")
+                        if st.session_state.cartellaOutput and st.button(f"Save {grafico}", key=f"salva_confronto_timeline"):
                             plottimeline_confronto(analizer_confronto, st.session_state.cartellaOutput)
-                            st.success(f"✅ - {grafico} di confronto salvato con successo!")
+                            st.success(f"✅ - Comparison {grafico} was saved successfully!")
                         else:
                             fig=plottimeline_confronto(analizer_confronto)
                             st.plotly_chart(fig)
 
-    if st.session_state.stato_bottone_spazio_ricerca:     # se sono nella modalità spazio di ricerca, mostro i grafici di spazio di ricerca per tutti gli esperimenti selezionati
-        st.subheader("Grafici Spazio di Ricerca")
-        with st.spinner('Generando i grafici di Spazio di Ricerca...'):
+    if st.session_state.stato_bottone_spazio_ricerca:     # In search-space mode, show search-space charts for all selected experiments
+        st.subheader("Search space charts")
+        with st.spinner('Generating search space charts...'):
             for esperimento in st.session_state.lista_out_files:
-                if esperimento and esperimento.exp_name in [exp.name for exp in st.session_state.lista_esperimenti] and st.session_state.cartellaOutput and st.button(f"Salva grafici Spazio di Ricerca per {esperimento.exp_name}", key=f"salva_spazio_ricerca_{esperimento.exp_name}"):
+                if esperimento and esperimento.exp_name in [exp.name for exp in st.session_state.lista_esperimenti] and st.session_state.cartellaOutput and st.button(f"Save search space charts for {esperimento.exp_name}", key=f"salva_spazio_ricerca_{esperimento.exp_name}"):
                     esperimento.grafici_spazio_ricerca(st.session_state.cartellaOutput)
-                    st.success(f"✅ - Grafici Spazio di Ricerca per {esperimento.exp_name} salvati con successo!")
-                if esperimento and esperimento.exp_name in [exp.name for exp in st.session_state.lista_esperimenti]:   # se sono nella modalità spazio di ricerca, salvo tutti i grafici di spazio di ricerca degli esperimenti selezionati.
-                    st.write(f"Analizzo Spazio di Ricerca per {esperimento.exp_name}")
+                    st.success(f"✅ - Search space charts for {esperimento.exp_name} were saved successfully!")
+                if esperimento and esperimento.exp_name in [exp.name for exp in st.session_state.lista_esperimenti]:   # In search-space mode, show the selected experiments' search-space charts.
+                    st.write(f"Analyzing search space for {esperimento.exp_name}")
                     fig=esperimento.grafici_spazio_ricerca()
                     col1, col2, col3 = st.columns([1, 8, 1])
                     with col2:
@@ -482,37 +482,37 @@ def fase_analisi():
         
 
 def main():
-    #imposto nome dell'applicazione icona e layout(su che spazio si sttruttura la pagina)
+    # Set the app name, icon, and layout (how the page is structured)
     st.set_page_config(page_title="ANALYZER Symbolic DNN Tuner", page_icon="📈", layout="wide")
     
-    if 'fase' not in st.session_state:                      #creo una variabile di stato per gestire le fasi dell'applicazione
-        st.session_state.fase = 'selezione_cartella'        # Setto fase iniziale: selezione cartelle
+    if 'fase' not in st.session_state:                      # Create a state variable to manage the app phases
+        st.session_state.fase = 'selezione_cartella'        # Set the initial phase: folder selection
 
-    placeholder = st.empty()        # Creo un placeholder per gestire dinamicamente il contenuto della pagina in base alla fase corrente, senza che poi si vedano sotto elementi che non devono essere mostrati in quella fase.
+    placeholder = st.empty()        # Create a placeholder to dynamically manage page content based on the current phase
     with placeholder.container():
         
-        # Fase 1: Selezione cartelle
+        # Phase 1: Folder selection
         if st.session_state.fase == 'selezione_cartella':
-            fase_selezione_cartella()
+            folder_selection_phase()
             
-        # Fase 2: Caricamento dei dati
+        # Phase 2: Data loading
         elif st.session_state.fase == 'caricamento':
-            fase_caricamento()            
+            loading_phase()            
 
-        # Fase 3: Analisi
+        # Phase 3: Analysis
         elif st.session_state.fase == 'analisi':
-            fase_analisi()
+            analysis_phase()
 
-        # Fase Ultima
+        # Final phase
         elif st.session_state.fase == 'fine':
             st.empty()
-            st.title("✅ - Analisi completata!")
-            st.write("L'analisi dei risultati è stata completata con successo. ")
+            st.title("✅ - Analysis completed!")
+            st.write("The results analysis was completed successfully. ")
             st.balloons()
 
             col_vuota, col= st.columns([5, 2]) 
-            with col:                      # se voglio una nuova analisi posso tornare alla fase iniziale e viene cancellato tutto lo stato
-                if st.button('Torna alla fase iniziale',use_container_width=True):
+            with col:                      # If I want a new analysis, I can go back to the initial phase and clear all state
+                if st.button('Back to the initial phase',use_container_width=True):
                     st.session_state.fase = 'selezione_cartella'
                     st.cache_data.clear()
                     st.cache_resource.clear()

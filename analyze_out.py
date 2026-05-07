@@ -10,20 +10,20 @@ import seaborn as sns
 import os
 
 class FileOUT:
-    """Classe per determinare lo spazio di ricerca"""
+    """Class used to determine the search space"""
 
     def __init__(self, exp_dir: Path):
-        #setto le cartelle 
+        # Set the folders 
         self.exp_dir = Path(exp_dir)
-        #exp_name è il nome dell'ultima cartella di exp_dir
+        # exp_name is the name of the last folder in exp_dir
         self.exp_name=self.exp_dir.name
-        #creo una lista di dizionari vuoti per memorizzare i risultati
+        # Create a list of empty dictionaries to store the results
         self.spazio_ricerca = []
         self.trend = []
     
     def load_search_space(self) -> bool:
-        """Carica lo spazio di ricerca da un file .out nella cartella dell'esperimento."""
-        # cerco nella cartella dell'esperimento un file che termina con .out
+        """Load the search space from a .out file in the experiment folder."""
+        # Look in the experiment folder for a file ending in .out
         search_space_file = None
         for i in self.exp_dir.iterdir():
             if i.is_file() and i.suffix == ".out":
@@ -35,29 +35,33 @@ class FileOUT:
         
         try:
             with open(search_space_file, "r") as f:
-                #devo estrarre la giusta sequenza di spazi di ricerca. Può essere che uno venga calcolato e poi scartato perchè dopo l'inizio dell'iterazione si trovano problemi
+                # Extract the correct sequence of search spaces. One may be computed and then discarded if problems appear after the iteration starts
                 dict = {}
                 lines = f.readlines()
                 for line in lines:
                     line = line.strip()
                     if "--- ITERATION" in line:
-                        #Prima di passare alla prossima iterazione, salvo lo spazio di ricerca che ho trovato nell'iterazione precedente 
+                        # Before moving to the next iteration, save the search space found in the previous one 
                         if dict:
                             self.spazio_ricerca.append(dict)
-                        # Estraggo l'iterazione corrente
+                        # Extract the current iteration
                         line =line.split("--- ITERATION")[1].strip()
-                        line = line.split(" ")[0].strip() # Prendo solo la parte numerica prima di eventuali spazi
+                        line = line.split(" ")[0].strip() # Keep only the numeric part before any spaces
                         iteration = int(line)
                         dict={"iteration": iteration}
 
                     elif line.startswith("Chosen point:"):
-                        # Estraggo la parte dopo "Chosen point:"
+                        # Extract the part after "Chosen point:"
                         space_str = line.split("Chosen point:")[1].strip()
-                        # Converto la stringa in un dizionario
+                        # Convert the string into a dictionary
                         space_dict = eval(space_str)
                         dict.update(space_dict)
+                        # if in dict there is a new_fc_? that is negative, set it to 0
+                        for key, value in dict.items():
+                            if key.startswith("new_fc_") and isinstance(value, (int, float)) and value < 0:
+                                dict[key] = 0
 
-                # Dopo l'ultima iterazione, salvo lo spazio di ricerca trovato
+                # After the last iteration, save the search space that was found
                 if dict:
                     self.spazio_ricerca.append(dict)
                 
@@ -67,7 +71,7 @@ class FileOUT:
             return False
         
     def stampa_spazio_ricerca(self):
-        """Stampa lo spazio di ricerca in modo leggibile"""
+        """Print the search space in a readable form"""
         print("\n🔍 Search Space:")
 
         for point in self.spazio_ricerca:
@@ -79,14 +83,16 @@ class FileOUT:
             print("-" * 40)
     
     def grafici_spazio_ricerca(self, output_path: Optional[Path] = None):
-        """Crea grafici per visualizzare lo spazio di ricerca"""
+        """Create charts to visualize the search space"""
         if not self.spazio_ricerca:
             return
         
-        # Converti la lista di dizionari in un DataFrame
+        # Convert the list of dictionaries into a DataFrame
         df = pd.DataFrame(self.spazio_ricerca)
+        # if i have some colomns with only 0 values, drop them
+        df = df.loc[:, (df != 0).any(axis=0)]
 
-        # devo creare un grafico per ogni parametro di ricerca che mi dica come quella quantità stia cambiano con l'avanzare delle iterazioni tutte nella stessa finestra
+        # Create one chart per search parameter showing how it changes over iterations in the same window
         grafici=[c for c in df.columns if c != "iteration"]
         grafici_da_fare = len(grafici)
         num_col=5
@@ -102,14 +108,18 @@ class FileOUT:
         fig.update_layout(height=150*num_rig, width=200*num_col, title_text=f"Search Space Trends - {self.exp_name}", showlegend=False,template="plotly_white")
 
         if output_path:
-            output_path = Path(output_path)
-            output_path=os.path.join(output_path, f"{self.exp_dir.name}_search_space.png")
-            fig.write_image(output_path)
+            try:
+                output_path = Path(output_path)
+                output_path.mkdir(parents=True, exist_ok=True)
+                output_path = os.path.join(output_path, f"{self.exp_dir.name}_search_space.png")
+                fig.write_image(output_path)
+            except Exception as e:
+                print(f"Warning: Could not save the image due to error: {e}")
         return fig
     
     def load_trend(self) -> bool:
-        """Carica l'andamento delle iterazioni da un file .out nella cartella dell'esperimento."""
-        # cerco nella cartella dell'esperimento un file che termina con .out
+        """Load the iteration trend from a .out file in the experiment folder."""
+        # Look in the experiment folder for a file ending in .out
         search_space_file = None
 
         for i in self.exp_dir.iterdir():
@@ -129,9 +139,9 @@ class FileOUT:
                     if "--- ITERATION" in line:
                         if dict:
                             self.trend.append(dict)
-                        # Estraggo l'iterazione corrente
+                        # Extract the current iteration
                         line =line.split("--- ITERATION")[1].strip()
-                        line = line.split(" ")[0].strip() # Prendo solo la parte numerica prima di eventuali spazi
+                        line = line.split(" ")[0].strip() # Keep only the numeric part before any spaces
                         iteration = int(line)
                         dict={"iteration": iteration}
 
@@ -150,7 +160,7 @@ class FileOUT:
                             dict["accuracy"] = [accuracy]
 
                     elif "Epoch" in line and "loss" in line and "acc" in line:
-                        # Rimpiazzo , e = con spazi
+                        # Replace commas and equals signs with spaces
                         line=line.replace("=", " ")
                         line=line.split(" ")
                         loss=float(line[3][:-1])
@@ -186,7 +196,7 @@ class FileOUT:
             return False
         
     def stampa_trend(self ):
-        """Stampa il trend in modo leggibile"""
+        """Print the trend in a readable form"""
         print("\n🔍 Trend:")
 
         for point in self.trend:
@@ -198,7 +208,7 @@ class FileOUT:
             print("-" * 40)
     
     def grafici_trend(self, i: int, output_path: Optional[Path] = None):
-        """Specificata un'iterazione, crea grafici per visualizzare l'andamento di accuracy e loss in quella iterazione"""
+        """Given an iteration, create charts showing the accuracy and loss trend for that iteration"""
 
         data=self.trend[i]
         fig=make_subplots(rows=1, cols=2, subplot_titles=["Loss Trend", "Accuracy Trend"])
@@ -209,7 +219,7 @@ class FileOUT:
         return fig
 
 def find_out(exp_dir: Path):
-    """Trova file .out"""
+    """Find .out files"""
     list_of_out_files = []
     exp_dir = Path(exp_dir)
     for i in exp_dir.iterdir():
@@ -232,7 +242,7 @@ def main():
     print("  EXPERIMENT RESULTS ANALYZER - Symbolic DNN Tuner")
     print("="*70 + "\n")
     
-    # Check if arguments have been passed
+    # Check whether arguments were provided
     if len(sys.argv) > 1:
         # Batch mode: use command line arguments
         exp_dir = Path(sys.argv[1])
