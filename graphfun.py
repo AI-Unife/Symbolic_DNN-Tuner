@@ -394,6 +394,7 @@ def plotaccuracy_confronto(analyzers: list[ResultsAnalyzer], output_dir: Optiona
         #if there isn't kaleido installed, the image cannot be saved, but the function should return the figure anyway without crashing
         except Exception as e:
             print(f"Warning: Could not save the image due to error: {e}")
+            return None
     return fig
 
 def plotaccuracy(analyzer: ResultsAnalyzer, exp: Path, output_dir: Optional[Path] = None):
@@ -471,6 +472,7 @@ def plotaccuracy(analyzer: ResultsAnalyzer, exp: Path, output_dir: Optional[Path
             fig.write_image(output_path)
         except Exception as e:
             print(f"Warning: Could not save the image due to error: {e}")
+            return None
     return fig
 
 def plotevidence_confronto(analyzers, output_dir: Optional[Path] = None):
@@ -556,6 +558,7 @@ def plotevidence_confronto(analyzers, output_dir: Optional[Path] = None):
                 fig.write_image(output_path)
             except Exception as e:
                 print(f"Warning: Could not save the image due to error: {e}")
+                return None
         return fig
         
 def plotevidence(analyzer: ResultsAnalyzer, exp: Path, output_dir: Optional[Path] = None):
@@ -627,6 +630,7 @@ def plotevidence(analyzer: ResultsAnalyzer, exp: Path, output_dir: Optional[Path
                     fig.write_image(output_path)
                 except Exception as e:
                     print(f"Warning: Could not save the image due to error: {e}")
+                    return None
             return fig
 
 def plottuning_confronto(analyzers: List[ResultsAnalyzer], output_dir: Optional[Path] = None):
@@ -682,6 +686,7 @@ def plottuning_confronto(analyzers: List[ResultsAnalyzer], output_dir: Optional[
             fig.write_image(output_path)
         except Exception as e:
             print(f"Warning: Could not save the image due to error: {e}")
+            return None
     return fig
 
 def plottuning(analyzer, exp, output_dir=None):
@@ -750,6 +755,7 @@ def plottuning(analyzer, exp, output_dir=None):
             fig.write_image(str(output_path / f"{exp}_tuning.png"))
         except Exception as e:
             print(f"Warning: Could not save the image due to error: {e}")
+            return None
     return fig
 
 
@@ -809,6 +815,7 @@ def plotdiagnosis_confronto(analyzers: List[ResultsAnalyzer], output_dir: Option
             fig.write_image(str(output_path / f"Comparison_Diagnosis.png"))
         except Exception as e:
             print(f"Warning: Could not save the image due to error: {e}")
+            return None
     return fig
 
 def plotdiagnosis(analyzer, exp, output_dir=None):
@@ -823,7 +830,7 @@ def plotdiagnosis(analyzer, exp, output_dir=None):
     # Create the subplot figure
     fig = make_subplots(
         rows=1, cols=num_subplot, 
-        subplot_titles=((['Frequency of Diagnoses Taken'] if grafico_evidence else []) + (['Frequency of Diagnoses Found'] if grafico_t else []))
+        subplot_titles=((['Frequency of Diagnoses Considered'] if grafico_evidence else []) + (['Frequency of Diagnoses Found'] if grafico_t else []))
     )
 
     idx = 1 # Plotly column index (starts at 1)
@@ -877,6 +884,7 @@ def plotdiagnosis(analyzer, exp, output_dir=None):
             fig.write_image(str(output_path / f"{exp}_diagnosis.png"))
         except Exception as e:
             print(f"Warning: Could not save the image due to error: {e}")
+            return None
     return fig
 
 def plottimeline_confronto(analyzers, output_dir=None):
@@ -961,6 +969,7 @@ def plottimeline_confronto(analyzers, output_dir=None):
             fig.write_image(str(output_path / "Comparison_timeline.png"))
         except Exception as e:
             print(f"Warning: Could not save the image due to error: {e}")
+            return None
 
     return fig
 
@@ -1017,6 +1026,7 @@ def plottimeline(analyzer, exp, output_dir=None):
             fig.write_image(str(output_path / f"{exp}_timeline.png"))
         except Exception as e:
             print(f"Warning: Could not save the image due to error: {e}")
+            return None
     return fig
 
 def analyze_all_experiments(parent_dir: Path, output_dir: Path = None):

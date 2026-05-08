@@ -115,6 +115,7 @@ class FileOUT:
                 fig.write_image(output_path)
             except Exception as e:
                 print(f"Warning: Could not save the image due to error: {e}")
+                return None
         return fig
     
     def load_trend(self) -> bool:

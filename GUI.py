@@ -244,7 +244,7 @@ def loading_phase():
             st.rerun()
 
 @st.fragment
-def render_chart(exp, analizer):
+def render_chart(exp, analizer):        
     fig = plotaccuracy(analizer, exp)
     chart_key = f"chart_{exp}"
     
@@ -259,7 +259,10 @@ def render_chart(exp, analizer):
         iter_idx = custom_data[0] if isinstance(custom_data, list) else custom_data
         
         if iter_idx is not None:
-            show_detail(exp, iter_idx, f"{chart_key}_{iter_idx}")
+            dialog_key = f"{exp}:{iter_idx}"
+            if st.session_state.get("trend_details_last_opened") != dialog_key:
+                st.session_state.trend_details_last_opened = dialog_key
+                show_detail(exp, iter_idx, f"{chart_key}_{iter_idx}")
 
 @st.dialog("📈 Trend details")
 def show_detail(esperimento, iter_idx, chart_key):
@@ -275,6 +278,37 @@ def show_detail(esperimento, iter_idx, chart_key):
     
     if not found:
         st.error("Data not found.")
+
+#Pop-up dialog to show the description of each chart when the info button is pressed
+@st.dialog("ℹ️ Chart description")
+def mostra_descrizione(testo):
+    st.write(testo)
+
+info_dati = {
+        "Accuracy": "These charts show the accuracy, the score, and the number of parameters for the selected experiment.\n The red line represents accuracy, the blue line shows score, and the green line indicates the number of parameters. These statistics are shown for each iteration to track model performance.\n\n\n If you click on a point in the accuracy chart, you can see details for that iteration.",
+        "Action Effectiveness": "This chart shows how effective each action was at improving the model's performance.\n For each problem/action combination, there are two bars: successful applications (green) and ineffective applications (red).",
+        "Diagnosis": "These charts show how many times each problem was diagnosed in the selected experiment.\n The chart with blue bars represents the number of times the problem was considered, while the chart with orange bars represents the number of times the problem was actually found.",
+        "Tuning": "These charts show how many times each tuning action was applied in the selected experiment.\n The chart with blue bars represents the number of times the tuning action was taken, while the chart with orange bars represents the number of times the tuning action was actually recommended.",
+        "Timeline": "This chart shows, for each iteration, which tuning action was applied (orange) and what kind of problem was found (blue).",
+        "Accuracy_comparison": "These charts compare accuracy, score, and number of parameters across the selected experiments.\n The first chart shows accuracy, the second shows score, and the third shows the number of parameters. Distinct colors represent different experiments for easy comparison.",
+        "Action Effectiveness_comparison": "This chart compares how effective each action was at improving model performance across the selected experiments.\n For each problem/action combination there are two bars: one for successful applications (the bar marked 'S') and one for ineffective ones (the bar marked 'F'). Different colors represent different experiments.",
+        "Diagnosis_comparison": "This chart compares how many times each problem was diagnosed across the selected experiments.\n Distinct colors represent different experiments.",
+        "Tuning_comparison": "This chart compares how many times each tuning action was applied across the selected experiments.\n Distinct colors represent different experiments.",
+        "Timeline_comparison": "This chart compares, for each iteration, which tuning action was applied and what kind of problem was found across the selected experiments.\n Tuning actions are shown using a red gradient, while problems use a blue gradient. Darker colors indicate that more experiments applied that tuning action or detected that problem in that iteration.",
+        "Search_Space_Charts": "These charts show the search space of the selected experiment.\n Each chart represents a different feature of the search space and shows how that feature changes across iterations."
+    }
+
+# Creation of title and info button
+def riga_grafico(titolo, chiave_info, esperimento=None):   # I can pass an optional experiment name to show it in the description of the chart, otherwise it will be generic
+    
+    col1, col2 = st.columns([0.9, 0.1])
+    with col1:
+        st.markdown(f"##### {titolo}")
+    with col2:
+        # Usiamo una chiave unica per ogni bottone (fondamentale in Streamlit)
+        if st.button("ℹ️", key=f"btn_{chiave_info}_{esperimento}", help="Click for chart description"):
+            mostra_descrizione(info_dati[chiave_info])
+
 
 def analysis_phase():
     st.empty()
@@ -307,15 +341,20 @@ def analysis_phase():
                             break
 
                     if grafico == "Line plot of Accuracy, Score, and Params":
-                        plotaccuracy(analizer,esperimento, st.session_state.cartellaOutput)
+                        if plotaccuracy(analizer,esperimento, st.session_state.cartellaOutput) is None:
+                            st.warning(f"⚠️ - Could not save {grafico} for {esperimento}.")
                     elif grafico == "Bar plot of action effectiveness":
-                        plotevidence(analizer,esperimento, st.session_state.cartellaOutput)
+                        if plotevidence(analizer,esperimento, st.session_state.cartellaOutput) is None:
+                            st.warning(f"⚠️ - Could not save {grafico} for {esperimento}.")
                     elif grafico == "Diagnosis bar plot":
-                        plotdiagnosis(analizer,esperimento, st.session_state.cartellaOutput)
+                        if plotdiagnosis(analizer,esperimento, st.session_state.cartellaOutput) is None:
+                            st.warning(f"⚠️ - Could not save {grafico} for {esperimento}.")
                     elif grafico == "Tuning bar plot":
-                        plottuning(analizer,esperimento, st.session_state.cartellaOutput)
+                        if plottuning(analizer,esperimento, st.session_state.cartellaOutput) is None:
+                            st.warning(f"⚠️ - Could not save {grafico} for {esperimento}.")
                     elif grafico == "Tuning timeline scatter plot":
-                        plottimeline(analizer,esperimento, st.session_state.cartellaOutput)
+                        if plottimeline(analizer,esperimento, st.session_state.cartellaOutput) is None:
+                            st.warning(f"⚠️ - Could not save {grafico} for {esperimento}.")
 
         st.success("✅ - All individual charts were successfully saved in the selected output folder!")
 
@@ -325,22 +364,28 @@ def analysis_phase():
         analizer_confronto = [analizer for analizer in st.session_state.lista_analizer if analizer.exp_name in nomi]
         for grafico in st.session_state.lista_grafici_confronto:
             if grafico == "Line plot of Accuracy, Score, and Params":
-                plotaccuracy_confronto(analizer_confronto, st.session_state.cartellaOutput)
+                if plotaccuracy_confronto(analizer_confronto, st.session_state.cartellaOutput) is None:
+                    st.warning(f"⚠️ - Could not save comparison {grafico}.")
             elif grafico == "Bar plot of action effectiveness":
-                plotevidence_confronto(analizer_confronto, st.session_state.cartellaOutput)
+                if plotevidence_confronto(analizer_confronto, st.session_state.cartellaOutput) is None:
+                    st.warning(f"⚠️ - Could not save comparison {grafico}.")
             elif grafico == "Diagnosis bar plot":
-                plotdiagnosis_confronto(analizer_confronto, st.session_state.cartellaOutput)
+                if plotdiagnosis_confronto(analizer_confronto, st.session_state.cartellaOutput) is None:
+                    st.warning(f"⚠️ - Could not save comparison {grafico}.")
             elif grafico == "Tuning bar plot":
-                plottuning_confronto(analizer_confronto, st.session_state.cartellaOutput)
+                if plottuning_confronto(analizer_confronto, st.session_state.cartellaOutput) is None:
+                    st.warning(f"⚠️ - Could not save comparison {grafico}.")
             elif grafico == "Tuning timeline scatter plot":
-                plottimeline_confronto(analizer_confronto, st.session_state.cartellaOutput)
+                if plottimeline_confronto(analizer_confronto, st.session_state.cartellaOutput) is None:
+                    st.warning(f"⚠️ - Could not save comparison {grafico}.")
 
         st.success("✅ - All comparison charts were successfully saved in the selected output folder!")
 
     if st.session_state.stato_bottone_spazio_ricerca and st.session_state.salvato_tutto:     # In search-space mode, save all search-space charts for the selected experiments.
         for spazio_ricerca in st.session_state.lista_out_files:
             if spazio_ricerca and spazio_ricerca.exp_name in [exp.name for exp in st.session_state.lista_esperimenti]:   # Save only the selected experiments' search-space charts
-                spazio_ricerca.grafici_spazio_ricerca(st.session_state.cartellaOutput)
+                if spazio_ricerca.grafici_spazio_ricerca(st.session_state.cartellaOutput) is None:
+                    st.warning(f"⚠️ - Could not save search space charts for {spazio_ricerca.exp_name}.")
         st.success("✅ - All search space charts were successfully saved in the selected output folder!")
     
     st.session_state.salvato_tutto = False   # Reset the state variable so going back and returning does not re-save everything unintentionally
@@ -361,52 +406,61 @@ def analysis_phase():
                                 break
 
                         if grafico == "Line plot of Accuracy, Score, and Params":       # Series of if/elif branches to decide which chart to generate 
-                            st.write(f"- Generating {grafico}")
+                            riga_grafico(f"{grafico} for {esperimento}", f"Accuracy",esperimento)     # Create a title with an info button that shows the description of the chart when pressed
                             if st.session_state.cartellaOutput and st.button(f"Save {grafico} for {esperimento}", key=f"salva_{i}_accuracy"):         # Create a button to save this specific chart
-                                plotaccuracy(analizer,esperimento, st.session_state.cartellaOutput)     # Recreate the chart and save it this time
-                                st.success(f"✅ - {grafico} for {esperimento} was saved successfully!")      # Show a message indicating the chart was saved successfully
-                            else:
-                                render_chart(esperimento, analizer)     # Call a dedicated function to render the chart and handle point selection and details
+                                if plotaccuracy(analizer,esperimento, st.session_state.cartellaOutput) is None:     # Recreate the chart and save it this time
+                                    st.warning(f"⚠️ - Could not save {grafico} for {esperimento}.")
+                                else:
+                                    st.success(f"✅ - {grafico} for {esperimento} was saved successfully!")      # Show a message indicating the chart was saved successfully
+                            render_chart(esperimento, analizer)     # Call a dedicated function to render the chart and handle point selection and details
 
                         elif grafico == "Bar plot of action effectiveness":
+                            riga_grafico(f"{grafico} for {esperimento}", f"Action Effectiveness",esperimento)     # Create a title with an info button that shows the description of the chart when pressed
                             col1, col2, col3 = st.columns([1, 3, 1])
                             with col2:
-                                st.write(f"- Generating {grafico} ")
                                 if st.session_state.cartellaOutput and st.button(f"Save {grafico} for {esperimento}", key=f"salva_{i}_evidence"):
-                                    plotevidence(analizer,esperimento, st.session_state.cartellaOutput)
-                                    st.success(f"✅ - {grafico} for {esperimento} was saved successfully!")
-                                else:
-                                    fig=plotevidence(analizer,esperimento, None)
-                                    st.plotly_chart(fig)
+                                    if plotevidence(analizer,esperimento, st.session_state.cartellaOutput) is None:
+                                        st.warning(f"⚠️ - Could not save {grafico} for {esperimento}.")
+                                    else:
+                                        st.success(f"✅ - {grafico} for {esperimento} was saved successfully!")
+                                
+                                fig=plotevidence(analizer,esperimento, None)
+                                st.plotly_chart(fig)
 
                         elif grafico == "Diagnosis bar plot":
-                            st.write(f"- Generating {grafico} ")
+                            riga_grafico(f"{grafico} for {esperimento}", f"Diagnosis",esperimento)
                             if st.session_state.cartellaOutput and st.button(f"Save {grafico} for {esperimento}", key=f"salva_{i}_diagnosis"):
-                                plotdiagnosis(analizer,esperimento, st.session_state.cartellaOutput)
-                                st.success(f"✅ - {grafico} for {esperimento} was saved successfully!")
-                            else:
-                                fig=plotdiagnosis(analizer,esperimento, None)
-                                st.plotly_chart(fig)
+                                if plotdiagnosis(analizer,esperimento, st.session_state.cartellaOutput) is None:
+                                    st.warning(f"⚠️ - Could not save {grafico} for {esperimento}.")
+                                else:
+                                    st.success(f"✅ - {grafico} for {esperimento} was saved successfully!")
+                            
+                            fig=plotdiagnosis(analizer,esperimento, None)
+                            st.plotly_chart(fig)
 
                         elif grafico == "Tuning bar plot":
-                            st.write(f"- Generating {grafico} ")
+                            riga_grafico(f"{grafico} for {esperimento}", f"Tuning",esperimento)
                             if st.session_state.cartellaOutput and st.button(f"Save {grafico} for {esperimento}", key=f"salva_{i}_tuning"):
-                                plottuning(analizer,esperimento, st.session_state.cartellaOutput)
-                                st.success(f"✅ - {grafico} for {esperimento} was saved successfully!")
-                            else:
-                                fig=plottuning(analizer,esperimento,None)
-                                st.plotly_chart(fig)
+                                if plottuning(analizer,esperimento, st.session_state.cartellaOutput) is None:
+                                    st.warning(f"⚠️ - Could not save {grafico} for {esperimento}.")
+                                else:
+                                    st.success(f"✅ - {grafico} for {esperimento} was saved successfully!")
+                            
+                            fig=plottuning(analizer,esperimento,None)
+                            st.plotly_chart(fig)
 
                         elif grafico == "Tuning timeline scatter plot":
+                            riga_grafico(f"{grafico} for {esperimento}", f"Timeline",esperimento)
                             col1, col2, col3 = st.columns([1, 3, 1])
                             with col2:
-                                st.write(f"- Generating {grafico} ")
                                 if st.session_state.cartellaOutput and st.button(f"Save {grafico} for {esperimento}", key=f"salva_{i}_timeline"):
-                                    plottimeline(analizer,esperimento, st.session_state.cartellaOutput)
-                                    st.success(f"✅ - {grafico} for {esperimento} was saved successfully!")
-                                else:
-                                    fig=plottimeline(analizer,esperimento,None)
-                                    st.plotly_chart(fig)
+                                    if plottimeline(analizer,esperimento, st.session_state.cartellaOutput) is None:
+                                        st.warning(f"⚠️ - Could not save {grafico} for {esperimento}.")
+                                    else:
+                                        st.success(f"✅ - {grafico} for {esperimento} was saved successfully!")
+                                
+                                fig=plottimeline(analizer,esperimento,None)
+                                st.plotly_chart(fig)
                 else:
                     st.write(f"No chart selected for {esperimento}, skipping analysis.")        # Warn that nothing was selected for the experiment and continue
 
@@ -419,62 +473,74 @@ def analysis_phase():
             
             for grafico in st.session_state.lista_grafici_confronto:
                 if grafico == "Line plot of Accuracy, Score, and Params":
-                    st.write(f"Generating {grafico}")
+                    riga_grafico(f"{grafico} comparison", f"Accuracy_comparison")     
                     if st.session_state.cartellaOutput and st.button(f"Save {grafico}", key=f"salva_confronto_accuracy"):
-                        plotaccuracy_confronto(analizer_confronto, st.session_state.cartellaOutput)
-                        st.success(f"✅ - Comparison {grafico} was saved successfully!")
+                        if plotaccuracy_confronto(analizer_confronto, st.session_state.cartellaOutput) is None:
+                            st.warning(f"⚠️ - Could not save comparison {grafico}.")
+                        else:
+                            st.success(f"✅ - Comparison {grafico} was saved successfully!")
                     fig=plotaccuracy_confronto(analizer_confronto)
                     st.plotly_chart(fig)
 
                 elif grafico == "Bar plot of action effectiveness":
-                    st.write(f"Generating {grafico}")
+                    riga_grafico(f"{grafico} comparison", f"Action Effectiveness_comparison")
                     if st.session_state.cartellaOutput and st.button(f"Save {grafico}", key=f"salva_confronto_evidence"):
-                        plotevidence_confronto(analizer_confronto, st.session_state.cartellaOutput)
-                        st.success(f"✅ - Comparison {grafico} was saved successfully!")
+                        if plotevidence_confronto(analizer_confronto, st.session_state.cartellaOutput) is None:
+                            st.warning(f"⚠️ - Could not save comparison {grafico}.")
+                        else:
+                            st.success(f"✅ - Comparison {grafico} was saved successfully!")
                     fig=plotevidence_confronto(analizer_confronto)
                     st.plotly_chart(fig)
 
                 elif grafico == "Diagnosis bar plot":
+                    riga_grafico(f"{grafico} comparison", f"Diagnosis_comparison")
                     cola,colb, colc = st.columns([1, 8, 1])
                     with colb:
-                        st.write(f"Generating {grafico}")
                         if st.session_state.cartellaOutput and st.button(f"Save {grafico}", key=f"salva_confronto_diagnosis"):
-                            plotdiagnosis_confronto(analizer_confronto, st.session_state.cartellaOutput)
-                            st.success(f"✅ - Comparison {grafico} was saved successfully!")
+                            if plotdiagnosis_confronto(analizer_confronto, st.session_state.cartellaOutput) is None:
+                                st.warning(f"⚠️ - Could not save comparison {grafico}.")
+                            else:
+                                st.success(f"✅ - Comparison {grafico} was saved successfully!")
                         fig=plotdiagnosis_confronto(analizer_confronto)
                         st.plotly_chart(fig)
 
                 elif grafico == "Tuning bar plot":
+                    riga_grafico(f"{grafico} comparison", f"Tuning_comparison")
                     cola,colb, colc = st.columns([1, 8, 1])
                     with colb:
-                        st.write(f"Generating {grafico}")
                         if st.session_state.cartellaOutput and st.button(f"Save {grafico}", key=f"salva_confronto_tuning"):
-                            plottuning_confronto(analizer_confronto, st.session_state.cartellaOutput)
-                            st.success(f"✅ - Comparison {grafico} was saved successfully!")
-                        else:
-                            fig=plottuning_confronto(analizer_confronto)
-                            st.plotly_chart(fig)
+                            if plottuning_confronto(analizer_confronto, st.session_state.cartellaOutput) is None:
+                                st.warning(f"⚠️ - Could not save comparison {grafico}.")
+                            else:
+                                st.success(f"✅ - Comparison {grafico} was saved successfully!")
+                        
+                        fig=plottuning_confronto(analizer_confronto)
+                        st.plotly_chart(fig)
 
                 elif grafico == "Tuning timeline scatter plot":
+                    riga_grafico(f"{grafico} comparison", f"Timeline_comparison")
                     col4, col2, col3 = st.columns([1, 8, 1])
                     with col2:
-                        st.write(f"Generating {grafico}")
                         if st.session_state.cartellaOutput and st.button(f"Save {grafico}", key=f"salva_confronto_timeline"):
-                            plottimeline_confronto(analizer_confronto, st.session_state.cartellaOutput)
-                            st.success(f"✅ - Comparison {grafico} was saved successfully!")
-                        else:
-                            fig=plottimeline_confronto(analizer_confronto)
-                            st.plotly_chart(fig)
+                            if plottimeline_confronto(analizer_confronto, st.session_state.cartellaOutput) is None:
+                                st.warning(f"⚠️ - Could not save comparison {grafico}.")
+                            else:
+                                st.success(f"✅ - Comparison {grafico} was saved successfully!")
+                        
+                        fig=plottimeline_confronto(analizer_confronto)
+                        st.plotly_chart(fig)
 
     if st.session_state.stato_bottone_spazio_ricerca:     # In search-space mode, show search-space charts for all selected experiments
         st.subheader("Search space charts")
         with st.spinner('Generating search space charts...'):
             for esperimento in st.session_state.lista_out_files:
                 if esperimento and esperimento.exp_name in [exp.name for exp in st.session_state.lista_esperimenti] and st.session_state.cartellaOutput and st.button(f"Save search space charts for {esperimento.exp_name}", key=f"salva_spazio_ricerca_{esperimento.exp_name}"):
-                    esperimento.grafici_spazio_ricerca(st.session_state.cartellaOutput)
-                    st.success(f"✅ - Search space charts for {esperimento.exp_name} were saved successfully!")
+                    if esperimento.grafici_spazio_ricerca(st.session_state.cartellaOutput) is None:
+                        st.warning(f"⚠️ - Could not save search space charts for {esperimento.exp_name}.")
+                    else:
+                        st.success(f"✅ - Search space charts for {esperimento.exp_name} was saved successfully!")
                 if esperimento and esperimento.exp_name in [exp.name for exp in st.session_state.lista_esperimenti]:   # In search-space mode, show the selected experiments' search-space charts.
-                    st.write(f"Analyzing search space for {esperimento.exp_name}")
+                    riga_grafico(f"Search space charts for {esperimento.exp_name}", f"Search_Space_Charts", esperimento.exp_name)
                     fig=esperimento.grafici_spazio_ricerca()
                     col1, col2, col3 = st.columns([1, 8, 1])
                     with col2:
@@ -487,6 +553,8 @@ def main():
     
     if 'fase' not in st.session_state:                      # Create a state variable to manage the app phases
         st.session_state.fase = 'selezione_cartella'        # Set the initial phase: folder selection
+    if 'trend_details_last_opened' not in st.session_state:
+        st.session_state.trend_details_last_opened = None
 
     placeholder = st.empty()        # Create a placeholder to dynamically manage page content based on the current phase
     with placeholder.container():
