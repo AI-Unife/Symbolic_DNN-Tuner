@@ -2,6 +2,7 @@
 
 import torch
 import torch.nn as nn
+import tensorflow as tf
 from torch.utils.flop_counter import FlopCounterMode
 
 from components.backend_interface import BackendInterface
@@ -69,36 +70,69 @@ class ModuleBackend(BackendInterface):
 def isConv2d(module) -> bool:
     """Check if the module is a Conv2d layer."""
     return isinstance(module, nn.Conv2d)
+    
 
 def get_dummy_input(self)->torch.Tensor:
     """Generate a dummy input tensor for profiling."""
     return torch.randint(0, 256, (1, 3, 32, 32))
 
 
-def extract_conv_layers(self, model) -> list:
+def extract_conv_layers(self, model, input_shape):
     """
-    Extract Conv2D layer shapes by registering forward hooks.
-    Returns list of (input_shape, output_shape) tuples.
+    Extract Conv2D layer input/output shapes.
+    Returns list of (input_shape, output_shape).
     """
+
     conv_layers = []
+    
+    # PYTORCH
+    if hasattr(model, "modules"):
 
-    def hook_fn(module, input, output):
-        if isinstance(module, nn.Conv2d):
-            conv_layers.append((input[0].shape, output.shape))
+        def hook_fn(module, input, output):
+            if isinstance(module, nn.Conv2d):
+                conv_layers.append((tuple(input[0].shape),
+                                    tuple(output.shape)))
 
-    hooks = [m.register_forward_hook(hook_fn) for m in model.modules()]
+        hooks = []
 
-    try:
-        B_eff = 1
-        C_in, H_in, W_in = self.input_shape
-        dummy_input = torch.randn(B_eff, C_in, H_in, W_in)
-        self.model.eval()
-        with torch.no_grad():
-            self.model(dummy_input)
-    except Exception as e:
-        print(colors.WARNING, f"\n[WARN] Failed to extract layer info: {e}", colors.ENDC)
-    finally:
-        for h in hooks:
-            h.remove()
+        for m in model.modules():
+            if isinstance(m, nn.Conv2d):
+                hooks.append(m.register_forward_hook(hook_fn))
+
+        try:
+            B_eff = 1
+            C_in, H_in, W_in = input_shape
+
+            dummy_input = torch.randn(B_eff, C_in, H_in, W_in)
+
+            model.eval()
+
+            with torch.no_grad():
+                model(dummy_input)
+
+        finally:
+            for h in hooks:
+                h.remove()
+
+    # TENSORFLOW / KERAS
+    elif hasattr(model, "layers"):
+        for layer in model.layers:
+
+            if isinstance(layer, tf.keras.layers.Conv2D):
+
+                try:
+                    input_shape = layer.input_shape
+                except:
+                    input_shape = layer.input.shape
+
+                try:
+                    output_shape = layer.output_shape
+                except:
+                    output_shape = layer.output.shape
+
+                conv_layers.append((input_shape, output_shape))
+
+    else:
+        raise TypeError("Unsupported model type")
 
     return conv_layers

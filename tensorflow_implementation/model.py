@@ -221,7 +221,8 @@ class TFModel(TunerModel):
                 type=layer_type,
                 module=layer,
                 params={
-                    "input_shape": layer.input_shape,
+                    #"input_shape": layer.input_shape,
+                    "input_shape": layer.input_dtype
                 }
             )
         elif layer_type == LayerTypes.BatchNormalization:

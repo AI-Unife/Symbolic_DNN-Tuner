@@ -3,6 +3,7 @@ import sys
 import yaml
 import tempfile
 from pathlib import Path
+from tensorflow.keras.layers import Conv2D
 
 # path alla cartella TUNER_ROOT
 TUNER_ROOT = Path(__file__).resolve().parents[2]
@@ -157,17 +158,32 @@ class hardware_module(common_interface):
         self.suggest_hw_opt = self.cfg.get('suggest_hw_opt', True)
 
     
-    def update_state(self, model, input_shape=None):
+    #def update_state(self, model, input_shape=None):
+    def update_state(self, model, flops=None, nparams=None):
+
+        # compatibilità vecchia pipeline
+
+        if flops is None or nparams is None:
+            flops = getattr(model, "flops", None)
+            nparams = getattr(model, "nparams", None)
+    
         # import current model reference
         self.model = model
-        self.input_shape = input_shape
+        #self.input_shape = input_shape
         list_to_pop = []
 
+        # suggest the minimal hw configuration that can run the model, if the flag is true
+        if self.suggest_hw_opt:
+            self.suggest_optimization(model)
+        
         # for each configuration calculate the latency and the total cost
         for config_key in self.nvdla:
             
             config_path = self.specs_dir / self.nvdla[config_key]['path']
             d_type = self.nvdla[config_key]['dtype']
+
+            # printing the current configuration being evaluated
+            print(colors.OKBLUE, f"\n[INFO] Evaluating configuration: {config_key} (dtype: {d_type})", colors.ENDC)
 
             # skip the configuration if it doesen't respect some constraints
             if (self.cfg.hw_backend == "ember") and (not self.hw_supports_net(self.model, self.nvdla[config_key]) or d_type != "int8"): 
@@ -194,13 +210,15 @@ class hardware_module(common_interface):
         for config_key_to_pop in list_to_pop:
             self.nvdla.pop(config_key_to_pop)
 
-        # sort the configurations by cost
-        print(colors.OKBLUE, f"\n[INFO] Available hardware configurations after compatibility check:", colors.ENDC)
-        for config_key in self.nvdla:
-            print(f"  - {config_key}: latency={self.nvdla[config_key]['latency']:.6f} s, cost={self.nvdla[config_key]['cost']}$, total_cost={self.nvdla[config_key]['total_cost']}")
-        
         # this will be useful to determine the optimal configuration
-        sorted_config = dict(sorted(self.nvdla.items(), key=lambda item: item[1]['total_cost']))
+        sorted_config = dict(sorted(self.nvdla.items(), key=lambda item: item[1]['latency']))
+
+        # printing the sorted list of configurations
+        print(colors.OKBLUE, f"\n[INFO] Available HW configurations after compatibility check, sorted by latency:", colors.ENDC)
+        for config_key in sorted_config:
+            print(f"  - {config_key}: latency={sorted_config[config_key]['latency']:.6e} s")
+        print("\n")
+
         self.nvdla = sorted_config
         first_el = next(iter(self.nvdla))
         self.latency = self.nvdla[first_el]['latency']
@@ -215,7 +233,8 @@ class hardware_module(common_interface):
 
 
     def printing_values(self):
-        print(f"\nLATENCY: {self.latency} s",)
+        print(colors.OKBLUE, f"\n[HW MODULE] Best hardware configuration: {self.current_config}", colors.ENDC)
+        print(f"LATENCY: {self.latency} s",)
         print(f"CURRENT HW: {self.current_config} [{self.cost}$]")
         print(f"TOTAL COST: {self.total_cost}")
 
@@ -280,15 +299,19 @@ class hardware_module(common_interface):
             print("[INFO] Using EMBER hardware backend")
 
             #model = SimpleCNN() 
-            dummy_input = get_dummy_input(self) 
+            dummy_input = get_dummy_input(self).float() 
         
             # esecuzione del profiler_ember
-            total_latency = ember_profile_network(
-                model,
-                dummy_input,
-                str(config_path),
-                str(TEMP_LOG_DIR)
-            )
+            try:
+                total_latency = ember_profile_network(
+                    model,
+                    dummy_input,
+                    str(config_path),
+                    str(TEMP_LOG_DIR)
+                )
+            except Exception as e:
+                print(colors.FAIL, f"Error during EMBER profiling: {e}", colors.ENDC)
+                total_latency = float('inf')  # infinity latency if profiling fails
                 
             return total_latency
 
@@ -310,7 +333,6 @@ class hardware_module(common_interface):
         if self.suggest_hw_opt:
 
             print("\n[INFO] Suggesting hardware optimization...")
-            print(f"Current configuration: {self.current_config} with latency {self.latency} s and cost {self.cost}$")
 
             minimal_config, minimal_config_path = generate_minimal_cfg(self, model)
 
@@ -335,12 +357,21 @@ class hardware_module(common_interface):
         out_buf_entries = dict_config.get("out_buf_entries", 0)
         compatible = True
 
-        first_conv = next((m for m in model.modules() if isConv2d(m)), None)
-        if first_conv is None:
-            print(colors.WARNING, f"\n[WARN] No Conv2d layer found in model", colors.ENDC)
-            return False
 
-        conv_layers = extract_conv_layers(self, model)
+        # try:
+        #     first_conv = next((m for m in model.modules() if isConv2d(m)), None)
+        # except AttributeError:  
+        #     first_conv = next((m for m in model.layers if isinstance(m, Conv2D)), None)
+
+        # if first_conv is None:
+        #     print(colors.WARNING, f"\n[WARN] No Conv2d layer found in model", colors.ENDC)
+        #     return False
+
+        conv_layers = extract_conv_layers(
+            self,
+            model,
+            (3, 32, 32) # dummy input shape
+        )
 
         for idx, (input_shape, output_shape) in enumerate(conv_layers):
             B, C, H, W = input_shape
@@ -362,4 +393,4 @@ if __name__ == "__main__":
     model = SimpleCNN()
     hw_module.update_state(model, input_shape=(3, 32, 32))
     hw_module.printing_values()
-    hw_module.suggest_optimization(model)
+    
