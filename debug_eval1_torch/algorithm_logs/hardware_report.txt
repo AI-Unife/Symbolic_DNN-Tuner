@@ -1,2 +1,0 @@
-1.0492799999999999e-10,0,0.0,minimal_nv_128x128_b1_int8.yaml
-inf,0,inf,minimal_nv_128x128_b1_int8.yaml
