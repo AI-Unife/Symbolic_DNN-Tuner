@@ -1,0 +1,4 @@
+['data_augmentation', 'add_residual']
+['dec_fc']
+['inc_conv_layers']
+['new_conv_layers']

@@ -1,0 +1,3 @@
+[(action(data_augmentation,underfitting), True), (action(add_residual,need_skip), True)]
+[(action(dec_fc,out_range), False)]
+[(action(inc_conv_layers,underfitting), False)]
