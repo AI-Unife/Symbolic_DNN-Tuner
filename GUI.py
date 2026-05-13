@@ -425,7 +425,10 @@ def analysis_phase():
                                         st.success(f"✅ - {grafico} for {esperimento} was saved successfully!")
                                 
                                 fig=plotevidence(analizer,esperimento, None)
-                                st.plotly_chart(fig)
+                                if fig is not None:
+                                    st.plotly_chart(fig)
+                                else:
+                                    st.warning(f"⚠️ - Could not display {grafico} for {esperimento}.")
 
                         elif grafico == "Diagnosis bar plot":
                             riga_grafico(f"{grafico} for {esperimento}", f"Diagnosis",esperimento)
@@ -436,7 +439,11 @@ def analysis_phase():
                                     st.success(f"✅ - {grafico} for {esperimento} was saved successfully!")
                             
                             fig=plotdiagnosis(analizer,esperimento, None)
-                            st.plotly_chart(fig)
+                            if fig is not None:
+                                st.plotly_chart(fig)
+                            else:
+                                st.warning(f"⚠️ - Could not display {grafico} for {esperimento}.")
+
 
                         elif grafico == "Tuning bar plot":
                             riga_grafico(f"{grafico} for {esperimento}", f"Tuning",esperimento)
@@ -447,7 +454,10 @@ def analysis_phase():
                                     st.success(f"✅ - {grafico} for {esperimento} was saved successfully!")
                             
                             fig=plottuning(analizer,esperimento,None)
-                            st.plotly_chart(fig)
+                            if fig is not None:
+                                st.plotly_chart(fig)
+                            else:
+                                st.warning(f"⚠️ - Could not display {grafico} for {esperimento}.")
 
                         elif grafico == "Tuning timeline scatter plot":
                             riga_grafico(f"{grafico} for {esperimento}", f"Timeline",esperimento)
@@ -460,7 +470,10 @@ def analysis_phase():
                                         st.success(f"✅ - {grafico} for {esperimento} was saved successfully!")
                                 
                                 fig=plottimeline(analizer,esperimento,None)
-                                st.plotly_chart(fig)
+                                if fig is not None:
+                                    st.plotly_chart(fig)
+                                else:
+                                    st.warning(f"⚠️ - Could not display {grafico} for {esperimento}.")
                 else:
                     st.write(f"No chart selected for {esperimento}, skipping analysis.")        # Warn that nothing was selected for the experiment and continue
 
@@ -480,7 +493,10 @@ def analysis_phase():
                         else:
                             st.success(f"✅ - Comparison {grafico} was saved successfully!")
                     fig=plotaccuracy_confronto(analizer_confronto)
-                    st.plotly_chart(fig)
+                    if fig is not None:
+                        st.plotly_chart(fig)
+                    else:
+                        st.warning(f"⚠️ - Could not display {grafico} for {esperimento}.")
 
                 elif grafico == "Bar plot of action effectiveness":
                     riga_grafico(f"{grafico} comparison", f"Action Effectiveness_comparison")
@@ -490,7 +506,11 @@ def analysis_phase():
                         else:
                             st.success(f"✅ - Comparison {grafico} was saved successfully!")
                     fig=plotevidence_confronto(analizer_confronto)
-                    st.plotly_chart(fig)
+                    if fig is not None:
+                        st.plotly_chart(fig)
+                    else:
+                        st.warning(f"⚠️ - Could not display {grafico} for {esperimento}.")
+
 
                 elif grafico == "Diagnosis bar plot":
                     riga_grafico(f"{grafico} comparison", f"Diagnosis_comparison")
@@ -502,7 +522,10 @@ def analysis_phase():
                             else:
                                 st.success(f"✅ - Comparison {grafico} was saved successfully!")
                         fig=plotdiagnosis_confronto(analizer_confronto)
-                        st.plotly_chart(fig)
+                        if fig is not None:
+                            st.plotly_chart(fig)
+                        else:
+                            st.warning(f"⚠️ - Could not display {grafico} for {esperimento}.")
 
                 elif grafico == "Tuning bar plot":
                     riga_grafico(f"{grafico} comparison", f"Tuning_comparison")
@@ -515,7 +538,10 @@ def analysis_phase():
                                 st.success(f"✅ - Comparison {grafico} was saved successfully!")
                         
                         fig=plottuning_confronto(analizer_confronto)
-                        st.plotly_chart(fig)
+                        if fig is not None:
+                            st.plotly_chart(fig)
+                        else:
+                            st.warning(f"⚠️ - Could not display {grafico} for {esperimento}.")
 
                 elif grafico == "Tuning timeline scatter plot":
                     riga_grafico(f"{grafico} comparison", f"Timeline_comparison")
@@ -528,7 +554,10 @@ def analysis_phase():
                                 st.success(f"✅ - Comparison {grafico} was saved successfully!")
                         
                         fig=plottimeline_confronto(analizer_confronto)
-                        st.plotly_chart(fig)
+                        if fig is not None:
+                            st.plotly_chart(fig)
+                        else:
+                            st.warning(f"⚠️ - Could not display {grafico} for {esperimento}.")
 
     if st.session_state.stato_bottone_spazio_ricerca:     # In search-space mode, show search-space charts for all selected experiments
         st.subheader("Search space charts")
@@ -544,7 +573,10 @@ def analysis_phase():
                     fig=esperimento.grafici_spazio_ricerca()
                     col1, col2, col3 = st.columns([1, 8, 1])
                     with col2:
-                        st.plotly_chart(fig)
+                        if fig is not None:
+                            st.plotly_chart(fig)
+                        else:
+                            st.warning(f"⚠️ - Could not display {grafico} for {esperimento}.")
         
 
 def main():
