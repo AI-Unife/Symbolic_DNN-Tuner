@@ -1,8 +1,8 @@
 import subprocess
 from itertools import product
 
-datasets_cifar = ['tinyimagenet']
-optimizers = ['filtered', 'RS_ruled', 'basic', 'standard', 'RS']
+datasets_cifar = ['cifar10', 'cifar100']
+optimizers = ['standard', 'RS'] # 'filtered', 'RS_ruled', 'basic', 
 seeds = [42, 123, 96, 7, 84]
 
 
@@ -27,12 +27,12 @@ def save_job_configs_to_file(job_configs, filename="params.txt"):
     with open(filename, "w") as f:
         for config in job_configs:
             line = ",".join(str(config[k]) for k in ["data_name", "opt", "seed"])
-            f.write(line + "\n")
+            f.write(line + ",flops_module\n")
             
 # generate_params.py
 from pathlib import Path
 
-def generate_params_file(output_path: str = "params_gesture.txt"):
+def generate_params_file(output_path: str = "params.txt"):
     """
     Generate a params.txt file for job arrays, where each line is a parameter combination
     starting from 'gesture'. Ignores prefixes and IDs.
@@ -62,7 +62,7 @@ def generate_params_file(output_path: str = "params_gesture.txt"):
 
 def main():
     job_configs = generate_jobs()
-    save_job_configs_to_file(job_configs, "params_tiny.txt")
+    save_job_configs_to_file(job_configs, "params_cifar.txt")
     # generate_params_file()
 
 if __name__ == "__main__":

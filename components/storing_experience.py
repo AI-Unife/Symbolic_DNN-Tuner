@@ -69,7 +69,7 @@ class StoringExperience:
         conn = self.connection()
         c = conn.cursor()
         try:
-            c.execute('INSERT INTO ranking (score) VALUES (' + str(1e10) + ')')
+            c.execute('INSERT INTO ranking (score) VALUES (' + str(score) + ')')
         except Error as e:
             print(e)
         conn.commit()
