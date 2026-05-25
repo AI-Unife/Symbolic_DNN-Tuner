@@ -1,4 +1,4 @@
-# Symbolic DNN-Tuner — Documentazione Tecnica
+# EDGE-DNN Tuner — Documentazione Tecnica
 
 
 ---

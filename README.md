@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://github.com/micheleFraccaroli/Symbolic_DNN-Tuner/blob/ai@edge/logo/DNN-Tuner_icon.png?raw=true" width=450>
+  <img src="https://github.com/micheleFraccaroli/Symbolic_DNN-Tuner/blob/ai@edge/logo/edge-DNNTuner_logo.png?raw=true" width=450>
 </p>
 
 # EDGE-DNN Tuner

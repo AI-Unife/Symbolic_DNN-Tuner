@@ -1,9 +1,4 @@
-# Symbolic DNN-Tuner — Technical Documentation
-
-> **Original Authors:** Michele Fraccaroli, Evelina Lamma, Fabrizio Riguzzi  
-> **Repository:** [micheleFraccaroli/Symbolic_DNN-Tuner](https://github.com/micheleFraccaroli/Symbolic_DNN-Tuner)  
-> **Active Branch:** `main_gesture`
-
+# EDGE-DNN Tuner — Technical Documentation
 ---
 
 ## Table of Contents
