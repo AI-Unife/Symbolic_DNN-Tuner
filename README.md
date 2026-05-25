@@ -2,38 +2,15 @@
   <img src="https://github.com/micheleFraccaroli/Symbolic_DNN-Tuner/blob/ai@edge/logo/DNN-Tuner_icon.png?raw=true" width=450>
 </p>
 
-# Symbolic DNN-Tuner
-Symbolic DNN-Tuner is a system to drive the training of a Deep Neural Network, analysing the performance of each training experiment and automatizing the choice of HPs to obtain a network with better performance.
+# EDGE-DNN Tuner
+**EDGE-DNN Tuner** is a modular Hardware-Aware NAS framework that extends [Symbolic DNN-Tuner](https://github.com/micheleFraccaroli/Symbolic_DNN-Tuner) 
+to optimize deep learning models for edge deployment. It balances network accuracy with strict physical constraints such as latency, FLOPs, and parameter counts. 
+Featuring a highly customizable architecture, it allows users to integrate proprietary modules and custom hardware constraints, 
+enabling efficient hardware-software co-design through either on-device profiling or analytical cost models.
+It supports multiple optimization strategies, including Random Search (RS), Bayesian Optimization (BO), and rule-filtered variants (RS+Rules, BO+Rules) 
+that discard invalid architectures early. Crucially, it includes the original tuner's advanced BO+Rules with restart mechanism, which automatically 
+resets the search if structural rules conflict with the BO's internal memory.
 
+Full documentation in both English and Italian is available within the Docs folder.
 #
-## Publications
 
-<a href="https://link.springer.com/article/10.1007/s10994-021-06097-1">[1]</a> Michele Fraccaroli, Evelina Lamma & Fabrizio Riguzzi (2021): Symbolic DNN-Tuner. Machine Learning, pp. 1–26, doi:10.1007/s10994-021-06097-1. <br>
-<a href="https://www.sciencedirect.com/science/article/pii/S2352711021001825">[2]</a> Michele Fraccaroli, Evelina Lamma & Fabrizio Riguzzi (2022): Symbolic DNN-Tuner: A Python and ProbLog-based system for optimizing Deep Neural Networks hyperparameters. SoftwareX 17, p. 100957, doi:10.1016/j.softx.2021.100957.<br>
-
-#
-## Bibitex Citations
-```
-@article{fraccaroli2022symbolic,
-  title={Symbolic DNN-tuner},
-  author={Fraccaroli, Michele and Lamma, Evelina and Riguzzi, Fabrizio},
-  journal={Machine Learning},
-  volume={111},
-  number={2},
-  pages={625--650},
-  year={2022},
-  publisher={Springer}
-}
-```
-
-```
-@article{fraccaroli2022symbolic,
-  title={Symbolic DNN-Tuner: A Python and ProbLog-based system for optimizing Deep Neural Networks hyperparameters},
-  author={Fraccaroli, Michele and Lamma, Evelina and Riguzzi, Fabrizio},
-  journal={SoftwareX},
-  volume={17},
-  pages={100957},
-  year={2022},
-  publisher={Elsevier}
-}
-```

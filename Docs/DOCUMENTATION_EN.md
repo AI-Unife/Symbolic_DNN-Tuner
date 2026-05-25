@@ -44,9 +44,19 @@
 12. [Utility Scripts](#12-utility-scripts)
 13. [HPC Cluster Execution (SLURM)](#13-hpc-cluster-execution-slurm)
 14. [Algorithm Logs Structure](#14-algorithm-logs-structure)
-15. [Debug Mode](#15-debug-mode)
-16. [Dependencies](#16-dependencies)
-17. [References](#17-references)
+15. [Graphical User Interface (GUI)](#15-graphical-user-interface-gui)
+    - 15.1 [GUI Startup](#151-gui-startup)
+    - 15.2 [Operational Phases](#152-operational-phases-of-the-gui)
+    - 15.3 [Main Classes](#153-main-classes)
+    - 15.4 [Visualization Functions](#154-visualization-functions-graphfunpy)
+    - 15.5 [Analysis Functions](#155-analysis-functions-analyze_outpy)
+    - 15.6 [Streamlit Session State](#156-streamlit-session-state)
+    - 15.7 [File Dialog Management](#157-file-dialog-management)
+    - 15.8 [Save Modes](#158-save-modes)
+    - 15.9 [Information Dialogs](#159-information-dialogs)
+16. [Debug Mode](#16-debug-mode)
+17. [Dependencies](#17-dependencies)
+18. [References](#18-references)
 
 ---
 
@@ -188,7 +198,6 @@ Symbolic_DNN-Tuner/
 │
 ├── nvdla/                     # NVDLA hardware profiling
 │   ├── profiler.py            # NVDLA latency profiler
-│   ├── profilerEMBER.py       # EMBER-integrated profiler
 │   ├── models/                # Hardware configurations
 │   ├── specs/                 # Accelerator specifications
 │   └── wrapper/               # C++ interface wrapper
@@ -629,7 +638,6 @@ The `t(...)` prefix indicates that the value is a learnable parameter.
   - `getSDPTime()`: SDP time (normalization, activation)
   - `getPDPTime()`: Pooling time
 
-- **`profilerEMBER.py`**: Version integrated with the EMBER framework for profiling on custom accelerator specifications.
 
 Supported hardware configurations define different NVDLA architectures with parameters such as MAC array size, bandwidth, and clock frequency.
 
@@ -1009,7 +1017,248 @@ results_gesture/
 
 ---
 
-## 15. Debug Mode
+## 15. Graphical User Interface (GUI)
+
+### Overview
+
+The Symbolic DNN-Tuner system includes an interactive graphical interface built with **Streamlit** that enables analysis and visualization of tuning experiment results. The GUI is accessible through the main file `GUI.py` and provides an intuitive user experience for post-experiment analysis.
+
+**Related Files**:
+- `GUI.py`: Main Streamlit interface script
+- `graphfun.py`: Visualization functions and chart creation (Plotly)
+- `analyze_out.py`: Analysis and data loading functions
+
+### 15.1 GUI Startup
+
+To launch the graphical interface:
+
+```bash
+# Start the Streamlit application
+streamlit run GUI.py
+
+# The application will open in the browser at the following address:
+# http://localhost:8501
+```
+
+**Requirements**:
+- `streamlit>=1.40.0`
+- `plotly>=5.0.0`
+- Experiment log files (directory `algorithm_logs/`)
+
+### 15.2 Operational Phases of the GUI
+
+The GUI is organized in **4 main phases**:
+
+#### Phase 1: Folder Selection
+
+**Function**: `folder_selection_phase()`
+
+Allows the user to select input and output folders:
+
+- **Analysis folder**: Folder containing experiment results (with subdirectory `algorithm_logs/`)
+- **Save folder (optional)**: Directory where generated charts will be saved
+
+**Features**:
+- Support for both file picker dialog (on Windows/Linux) and manual path input
+- Safe handling on macOS where Tkinter can cause issues
+- Path validation
+- Visual confirmation of selected path
+
+#### Phase 2: Data Loading
+
+**Function**: `loading_phase()`
+
+Loads experiments from the selected folder and enables chart selection:
+
+- **Experiment loading**: Uses `analyze_all_experiments()` to read logs
+- **Experiment selection**: Multiselect to choose which experiments to analyze
+- **Chart selection**: Three visualization modes:
+  1. **Individual charts**: Charts for single experiments
+  2. **Comparison charts**: Comparative charts across multiple experiments
+  3. **Search space**: Search space visualization
+
+**Available Charts**:
+- Line plot of Accuracy, Score, and Parameters
+- Bar plot of action effectiveness
+- Bar plot of symbolic diagnoses
+- Bar plot of tuning actions
+- Timeline scatter plot of actions/diagnoses
+
+#### Phase 3: Analysis
+
+**Function**: `analysis_phase()`
+
+Generates and displays selected charts:
+
+- **Interactive rendering**: Using Plotly with point selection
+- **Detail modal**: Clicking points in the accuracy chart opens details for that iteration
+- **Saving**: Option to save individual charts or all at once
+- **Interactivity**: All charts support zoom, pan, and other Plotly interactions
+
+#### Phase 4: Completion
+
+**Function**: Managed in `main()`
+
+Final success screen with:
+- Analysis completion confirmation
+- Celebratory animation (balloons)
+- Option to return to initial phase for new analysis
+
+### 15.3 Main Classes
+
+#### `ExperimentResult`
+
+Dataclass representing a single iteration of an experiment:
+
+```python
+@dataclass
+class ExperimentResult:
+    iteration: int                          # Iteration number
+    accuracy: Optional[float]               # Validation accuracy
+    flops: Optional[float]                  # Number of FLOPs
+    nparams: Optional[float]                # Number of parameters
+    latency: Optional[float]                # Inference latency
+    hw_cost: Optional[float]                # Hardware cost (energy)
+    hw_total_cost: Optional[float]          # Total hardware cost
+    hw_config: Optional[str]                # Hardware configuration
+    evidence: Optional[Tuple[Tuple[str, str], bool]]  # LFI evidence
+    diagnosis: Optional[List[str]]          # Symbolic diagnoses found
+    tuning: Optional[List[str]]             # Tuning actions applied
+    score: Optional[float] = None           # Score (calculated as -accuracy)
+```
+
+#### `ResultsAnalyzer`
+
+Class for analyzing experiment results:
+
+**Main Methods**:
+- `load_results()`: Loads all logs from the experiment
+- `load_config()`: Reads experiment configuration from `config.yaml`
+- `get_results()`: Returns list of `ExperimentResult`
+- `analyze_evidence()`: Analyzes effectiveness of tuning actions
+
+**Attributes**:
+- `experiment_dir`: Path to the experiment
+- `algorithm_logs_dir`: Path to logs directory
+- `results`: List of loaded results
+- `has_flops_module`: Flag if FLOPs module is present
+- `has_hardware_module`: Flag if hardware module is present
+- `exp_name`: Experiment name
+
+### 15.4 Visualization Functions (graphfun.py)
+
+Main Plotly functions available:
+
+| Function | Description |
+|----------|-------------|
+| `plotaccuracy()` | Line chart for accuracy, score, and parameters of an experiment |
+| `plotaccuracy_comparison()` | Comparative version across multiple experiments |
+| `plotevidence()` | Bar plot of tuning action effectiveness |
+| `plotevidence_comparison()` | Comparative version |
+| `plotdiagnosis()` | Bar plot of symbolic diagnoses found |
+| `plotdiagnosis_comparison()` | Comparative version |
+| `plottuning()` | Bar plot of tuning actions applied |
+| `plottuning_comparison()` | Comparative version |
+| `plottimeline()` | Timeline scatter plot of actions vs diagnoses |
+| `plottimeline_comparison()` | Comparative version |
+
+**Common Features**:
+- Support for PNG/PDF saving
+- Plotly interactivity (zoom, pan, hover info)
+- Custom legend
+- Annotations for significant values
+- Standardized colors for readability
+
+### 15.5 Analysis Functions (analyze_out.py)
+
+Functions for data analysis and loading:
+
+| Function | Description |
+|----------|-------------|
+| `analyze_all_experiments()` | Loads all experiments from a directory and returns analyzers |
+| `find_out()` | Finds output files and creates search space objects |
+| `load_experiment()` | Loads a single experiment |
+
+### 15.6 Streamlit Session State
+
+The GUI uses Streamlit's session state system to maintain state between reruns:
+
+```python
+st.session_state.fase                       # Current phase (selezione_cartella, caricamento, analisi, fine)
+st.session_state.cartellaInput              # Folder to analyze
+st.session_state.cartellaOutput             # Folder where charts are saved
+st.session_state.lista_esperimenti          # List of loaded experiments
+st.session_state.lista_analizer             # List of analyzers for experiments
+st.session_state.lista_grafici_singoli      # Charts to generate for single experiments
+st.session_state.lista_grafici_confronto    # Charts to generate for comparisons
+st.session_state.stato_bottone_singoli      # Flag for individual charts mode
+st.session_state.stato_bottone_confronto    # Flag for comparison charts mode
+st.session_state.stato_bottone_spazio_ricerca  # Flag for search space mode
+```
+
+### 15.7 File Dialog Management
+
+The GUI handles differences between operating systems for the file picker:
+
+- **Windows/Linux**: Uses standard Tkinter dialog
+- **macOS**: Requires main thread attention; falls back to manual input if necessary
+- **Validation**: Verifies path exists and is a directory
+
+```python
+def _is_macos():
+    """Check if system is macOS"""
+    return platform.system().lower() == "darwin"
+
+def _ask_directory_safe():
+    """Opens file dialog safely"""
+    if not _can_use_tk_dialog():
+        return None
+    # ... uses Tkinter filedialog
+```
+
+### 15.8 Save Modes
+
+#### Individual Save
+
+Each chart has a "Save" button allowing individual saving:
+
+```python
+if st.button(f"Save {chart}", key=f"save_single_{chart}"):
+    if plotaccuracy(analyzer, experiment, st.session_state.cartellaOutput) is None:
+        st.warning(f"Could not save {chart}")
+    else:
+        st.success(f"Successfully saved {chart}!")
+```
+
+#### Bulk Save
+
+"Save all" button saves all selected charts at once:
+
+```python
+if st.button('Save all'):
+    # Save all charts in one operation
+    st.session_state.salvato_tutto = True
+    st.rerun()
+```
+
+### 15.9 Information Dialogs
+
+The GUI includes popup dialogs for chart descriptions:
+
+```python
+@st.dialog("ℹ️ Chart description")
+def mostra_descrizione(text):
+    st.write(text)
+```
+
+**Available Information**:
+- Description of each chart type
+- Result interpretation
+- Analysis suggestions
+
+---
+
+## 16. Debug Mode
 
 ### Definition
 
@@ -1123,7 +1372,7 @@ Debug Mode is useful for:
 
 ---
 
-## 16. Dependencies
+## 17. Dependencies
 
 ```
 tensorflow==2.15          # TF backend (optional if using PyTorch)
@@ -1135,6 +1384,8 @@ problog>=2.2.6            # Probabilistic symbolic reasoning
 tqdm==4.67.1              # Progress bars
 PyYAML==6.0.3             # Configuration
 pandas==2.3.3             # Result analysis
+streamlit>=1.40.0         # Web-based graphical interface
+plotly>=5.0.0             # Interactive visualization library
 ```
 
 For PyTorch, install separately:
@@ -1145,7 +1396,7 @@ torchvision
 
 ---
 
-## 17. References
+## 18. References
 
 1. Fraccaroli, M., Lamma, E., & Riguzzi, F. (2022). *Symbolic DNN-tuner*. Machine Learning, 111(2), 625–650. [DOI: 10.1007/s10994-021-06097-1](https://link.springer.com/article/10.1007/s10994-021-06097-1)
 

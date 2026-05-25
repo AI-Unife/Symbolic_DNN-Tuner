@@ -1,8 +1,5 @@
 # Symbolic DNN-Tuner — Documentazione Tecnica
 
-> **Autori originali:** Michele Fraccaroli, Evelina Lamma, Fabrizio Riguzzi  
-> **Repository:** [micheleFraccaroli/Symbolic_DNN-Tuner](https://github.com/micheleFraccaroli/Symbolic_DNN-Tuner)  
-> **Branch attivo:** `main_gesture`
 
 ---
 
@@ -44,9 +41,19 @@
 12. [Script di Utilità](#12-script-di-utilità)
 13. [Esecuzione su Cluster HPC (SLURM)](#13-esecuzione-su-cluster-hpc-slurm)
 14. [Struttura dei Log di Algoritmo](#14-struttura-dei-log-di-algoritmo)
-15. [Debug Mode](#15-debug-mode)
-16. [Dipendenze](#16-dipendenze)
-17. [Riferimenti Bibliografici](#17-riferimenti-bibliografici)
+15. [Interfaccia Grafica (GUI)](#15-interfaccia-grafica-gui)
+    - 15.1 [Avvio della GUI](#151-avvio-della-gui)
+    - 15.2 [Fasi Operative](#152-fasi-operative-della-gui)
+    - 15.3 [Classi Principali](#153-classi-principali)
+    - 15.4 [Funzioni di Visualizzazione](#154-funzioni-di-visualizzazione-graphfunpy)
+    - 15.5 [Funzioni di Analisi](#155-funzioni-di-analisi-analyze_outpy)
+    - 15.6 [Stato Streamlit](#156-stato-streamlit-session-state)
+    - 15.7 [Gestione File Dialog](#157-gestione-file-dialog)
+    - 15.8 [Modalità di Salvataggio](#158-modalità-di-salvataggio)
+    - 15.9 [Dialoghi Informativi](#159-dialoghi-informativi)
+16. [Debug Mode](#16-debug-mode)
+17. [Dipendenze](#17-dipendenze)
+18. [Riferimenti Bibliografici](#18-riferimenti-bibliografici)
 
 ---
 
@@ -187,7 +194,6 @@ Symbolic_DNN-Tuner/
 │
 ├── nvdla/                     # Profilazione hardware NVDLA
 │   ├── profiler.py            # Profiler latenza NVDLA
-│   ├── profilerEMBER.py       # Profiler integrato con EMBER
 │   ├── models/                # Configurazioni hardware
 │   ├── specs/                 # Specifiche acceleratore
 │   └── wrapper/               # Wrapper per interfaccia C++
@@ -628,8 +634,6 @@ Il prefisso `t(...)` indica che il valore è un parametro apprendibile.
   - `getSDPTime()`: Tempo SDP (normalization, activation)
   - `getPDPTime()`: Tempo pooling
 
-- **`profilerEMBER.py`**: Versione integrata con il framework EMBER per profilazione su specifiche di acceleratore custom.
-
 Le configurazioni hardware supportate definiscono diverse architetture NVDLA con parametri come MAC array size, bandwidth, clock frequency.
 
 ---
@@ -721,6 +725,15 @@ python symbolic_tuner.py \
 # Analisi dei risultati
 python analyze_results.py
 ```
+
+**Parametri comuni**:
+- `--name`: Identificatore univoco per l'esperimento (usato per il nome della directory)
+- `--dataset`: Dataset da usare (default: "light")
+- `--backend`: Framework da usare (tf o torch)
+- `--opt`: Strategia di ottimizzazione (standard, filtered, basic, RS, RS_ruled)
+- `--eval`: Numero massimo di valutazioni
+- `--epochs`: Numero di epoche di training per valutazione
+- `--mod_list`: Lista di moduli attivi (flops_module, hardware_module)
 
 ---
 
@@ -897,7 +910,86 @@ La directory **`algorithm_logs/`** contiene un insieme completo di file che regi
 [(action(add_residual, need_skip), True), (action(dec_dropout, overfitting), False)]
 ```
 
-### 14.2 Struttura Completa della Directory
+### 14.2 Come Utilizzare i Log
+
+#### Analisi Python
+
+```python
+import json
+import ast
+
+# Percorso dell'esperimento
+result_dir = "results_gesture/gesture/26_03_20_15_75562_gesture_hybrid_64_8_BASELINE"
+log_dir = f"{result_dir}/algorithm_logs"
+
+# Carica file
+hyper_params = []
+with open(f"{log_dir}/hyper-neural.txt", "r") as f:
+    for line in f:
+        hyper_params.append(ast.literal_eval(line.strip()))
+
+accuracies = []
+with open(f"{log_dir}/acc_report.txt", "r") as f:
+    accuracies = [float(line.strip()) for line in f]
+
+diagnoses = []
+with open(f"{log_dir}/diagnosis_symbolic_logs.txt", "r") as f:
+    for line in f:
+        diagnoses.append(ast.literal_eval(line.strip()))
+
+actions = []
+with open(f"{log_dir}/tuning_symbolic_logs.txt", "r") as f:
+    for line in f:
+        actions.append(ast.literal_eval(line.strip()))
+
+evidence = []
+with open(f"{log_dir}/evidence.txt", "r") as f:
+    for line in f:
+        evidence.append(ast.literal_eval(line.strip()))
+
+# Analizza correlazione tra azioni e miglioramento di accuratezza
+for i, (hyp, acc, diag, act) in enumerate(zip(hyper_params, accuracies, diagnoses, actions)):
+    if i > 0:
+        acc_improvement = accuracies[i] - accuracies[i-1]
+        print(f"Iterazione {i}: Accuratezza={acc:.3f} (+{acc_improvement:.3f}), "
+              f"Ottimizzatore={hyp['optimizer']}, Azioni={act}")
+        if 'underfitting' in diag:
+            print(f"  → Diagnosi: UNDERFITTING")
+        elif 'overfitting' in diag:
+            print(f"  → Diagnosi: OVERFITTING")
+```
+
+#### Estrazione di Statistiche
+
+```python
+# Numero di iterazioni
+n_iters = len(accuracies)
+print(f"Iterazioni totali: {n_iters}")
+
+# Accuratezza iniziale e finale
+print(f"Accuratezza iniziale: {accuracies[0]:.3f}")
+print(f"Accuratezza finale: {accuracies[-1]:.3f}")
+print(f"Miglioramento: {accuracies[-1] - accuracies[0]:.3f}")
+
+# Diagnosi più frequenti
+from collections import Counter
+all_diagnoses = []
+for diag_list in diagnoses:
+    all_diagnoses.extend(diag_list)
+
+diag_counter = Counter(all_diagnoses)
+print(f"Frequenza diagnosi: {dict(diag_counter)}")
+
+# Azioni più frequenti
+all_actions = []
+for action_list in actions:
+    all_actions.extend(action_list)
+
+action_counter = Counter(all_actions)
+print(f"Frequenza azioni: {dict(action_counter)}")
+```
+
+### 14.3 Struttura Completa della Directory
 
 La struttura tipica di una directory di risultati è la seguente:
 
@@ -928,7 +1020,248 @@ results_gesture/
 
 ---
 
-## 15. Debug Mode
+## 15. Interfaccia Grafica (GUI)
+
+### Panoramica
+
+Il sistema Symbolic DNN-Tuner include un'interfaccia grafica interattiva costruita con **Streamlit** che consente di analizzare e visualizzare i risultati degli esperimenti di tuning. La GUI è accessibile tramite il file principale `GUI.py` e fornisce un'esperienza utente intuitiva per l'analisi post-esperimento.
+
+**File correlati**:
+- `GUI.py`: Script principale dell'interfaccia Streamlit
+- `graphfun.py`: Funzioni di visualizzazione e creazione grafici (Plotly)
+- `analyze_out.py`: Funzioni di analisi e caricamento dati
+
+### 15.1 Avvio della GUI
+
+Per lanciare l'interfaccia grafica:
+
+```bash
+# Avvia l'applicazione Streamlit
+streamlit run GUI.py
+
+# L'applicazione si aprirà nel browser al seguente indirizzo:
+# http://localhost:8501
+```
+
+**Requisiti**:
+- `streamlit>=1.40.0`
+- `plotly>=5.0.0`
+- I file di log degli esperimenti (directory `algorithm_logs/`)
+
+### 15.2 Fasi Operative della GUI
+
+La GUI è organizzata in **4 fasi principali**:
+
+#### Fase 1: Selezione Cartella (Folder Selection)
+
+**Funzione**: `folder_selection_phase()`
+
+Consente all'utente di selezionare le cartelle di input e output:
+
+- **Cartella da analizzare**: Cartella contenente i risultati degli esperimenti (con subdirectory `algorithm_logs/`)
+- **Cartella di salvataggio (opzionale)**: Directory dove salvare i grafici generati
+
+**Caratteristiche**:
+- Supporto sia per dialog file picker (su Windows/Linux) che per input manuale di path
+- Gestione sicura su macOS dove Tkinter può causare problemi
+- Validazione del percorso inserito
+- Informazione visiva del percorso selezionato
+
+#### Fase 2: Caricamento Dati (Loading Phase)
+
+**Funzione**: `loading_phase()`
+
+Carica gli esperimenti dalla cartella selezionata e permette la scelta dei grafici:
+
+- **Caricamento esperimenti**: Utilizza `analyze_all_experiments()` per leggere i log
+- **Selezione esperimenti**: Multiselect per scegliere quali esperimenti analizzare
+- **Selezione grafici**: Tre modalità di visualizzazione:
+  1. **Individual charts**: Grafici per singoli esperimenti
+  2. **Comparison charts**: Grafici comparativi tra più esperimenti
+  3. **Search space**: Visualizzazione dello spazio di ricerca
+
+**Grafici disponibili**:
+- Line plot Accuracy, Score e Parametri
+- Bar plot efficacia azioni
+- Bar plot diagnosi simboliche
+- Bar plot azioni di tuning
+- Timeline scatter plot azioni/diagnosi
+
+#### Fase 3: Analisi (Analysis Phase)
+
+**Funzione**: `analysis_phase()`
+
+Genera e visualizza i grafici selezionati:
+
+- **Rendering interattivo**: Utilizzando Plotly con selezione punti
+- **Detail modal**: Cliccando su punti nel grafico di accuratezza si aprono dettagli per quella iterazione
+- **Salvataggio**: Opzione di salvare i singoli grafici o tutti insieme
+- **Interattività**: Tutti i grafici supportano zoom, pan e altre interazioni Plotly
+
+#### Fase 4: Completamento (Final Phase)
+
+**Funzione**: Gestita in `main()`
+
+Schermata finale di successo con:
+- Confermé del completamento
+- Animazione celebrativa (balloons)
+- Opzione di tornare alla fase iniziale per una nuova analisi
+
+### 15.3 Classi Principali
+
+#### `ExperimentResult`
+
+Dataclass che rappresenta una singola iterazione di un esperimento:
+
+```python
+@dataclass
+class ExperimentResult:
+    iteration: int                          # Numero dell'iterazione
+    accuracy: Optional[float]               # Accuratezza di validazione
+    flops: Optional[float]                  # Numero di FLOPs
+    nparams: Optional[float]                # Numero di parametri
+    latency: Optional[float]                # Latenza di inferenza
+    hw_cost: Optional[float]                # Costo hardware (energia)
+    hw_total_cost: Optional[float]          # Costo totale hardware
+    hw_config: Optional[str]                # Configurazione hardware
+    evidence: Optional[Tuple[Tuple[str, str], bool]]  # Evidenza LFI
+    diagnosis: Optional[List[str]]          # Diagnosi simboliche trovate
+    tuning: Optional[List[str]]             # Azioni di tuning applicate
+    score: Optional[float] = None           # Score (calcolato come -accuracy)
+```
+
+#### `ResultsAnalyzer`
+
+Classe per l'analisi dei risultati degli esperimenti:
+
+**Metodi principali**:
+- `load_results()`: Carica tutti i log dall'esperimento
+- `load_config()`: Legge la configurazione dell'esperimento da `config.yaml`
+- `get_results()`: Restituisce la lista di `ExperimentResult`
+- `analyze_evidence()`: Analizza l'efficacia delle azioni di tuning
+
+**Attributi**:
+- `experiment_dir`: Percorso dell'esperimento
+- `algorithm_logs_dir`: Percorso della directory dei log
+- `results`: Lista di risultati caricati
+- `has_flops_module`: Flag se il modulo FLOPs è presente
+- `has_hardware_module`: Flag se il modulo hardware è presente
+- `exp_name`: Nome dell'esperimento
+
+### 15.4 Funzioni di Visualizzazione (graphfun.py)
+
+Le funzioni principali di Plotly disponibili sono:
+
+| Funzione | Descrizione |
+|----------|-------------|
+| `plotaccuracy()` | Grafico a linee per accuratezza, score e parametri di un esperimento |
+| `plotaccuracy_confronto()` | Versione comparativa tra più esperimenti |
+| `plotevidence()` | Bar plot dell'efficacia delle azioni di tuning |
+| `plotevidence_confronto()` | Versione comparativa |
+| `plotdiagnosis()` | Bar plot delle diagnosi simboliche trovate |
+| `plotdiagnosis_confronto()` | Versione comparativa |
+| `plottuning()` | Bar plot delle azioni di tuning applicate |
+| `plottuning_confronto()` | Versione comparativa |
+| `plottimeline()` | Timeline scatter plot azioni vs diagnosi |
+| `plottimeline_confronto()` | Versione comparativa |
+
+**Funzionalità comuni**:
+- Supporto per salvataggio in PNG/PDF
+- Interattività con Plotly (zoom, pan, hover info)
+- Legenda personalizzata
+- Annotazioni per valori significativi
+- Colori standardizzati per leggibilità
+
+### 15.5 Funzioni di Analisi (analyze_out.py)
+
+Funzioni per l'analisi e il caricamento dati:
+
+| Funzione | Descrizione |
+|----------|-------------|
+| `analyze_all_experiments()` | Carica tutti gli esperimenti da una directory e restituisce analyzer |
+| `find_out()` | Trova i file di output e crea oggetti per lo spazio di ricerca |
+| `load_experiment()` | Carica un singolo esperimento |
+
+### 15.6 Stato Streamlit (Session State)
+
+La GUI utilizza il sistema di session state di Streamlit per mantenere lo stato tra i rerun:
+
+```python
+st.session_state.fase                       # Fase attuale (selezione_cartella, caricamento, analisi, fine)
+st.session_state.cartellaInput              # Cartella da analizzare
+st.session_state.cartellaOutput             # Cartella dove salvare i grafici
+st.session_state.lista_esperimenti          # Lista di esperimenti caricati
+st.session_state.lista_analizer             # Lista di analyzer per gli esperimenti
+st.session_state.lista_grafici_singoli      # Grafici da generare per singoli esperimenti
+st.session_state.lista_grafici_confronto    # Grafici da generare per confronti
+st.session_state.stato_bottone_singoli      # Flag per modalità individual charts
+st.session_state.stato_bottone_confronto    # Flag per modalità comparison charts
+st.session_state.stato_bottone_spazio_ricerca  # Flag per modalità search space
+```
+
+### 15.7 Gestione File Dialog
+
+La GUI gestisce le differenze tra sistemi operativi per il file picker:
+
+- **Windows/Linux**: Utilizza dialog Tkinter standard
+- **macOS**: Richiede attenzione al thread principale; fallback a input manuale se necessario
+- **Validazione**: Verifica che il percorso esista e sia una directory
+
+```python
+def _is_macos():
+    """Verifica se il sistema è macOS"""
+    return platform.system().lower() == "darwin"
+
+def _ask_directory_safe():
+    """Apre il file dialog in modo sicuro"""
+    if not _can_use_tk_dialog():
+        return None
+    # ... usa Tkinter filedialog
+```
+
+### 15.8 Modalità di Salvataggio
+
+#### Salvataggio Singolo
+
+Ogni grafico ha un pulsante "Save" che permette il salvataggio individuale:
+
+```python
+if st.button(f"Save {grafico}", key=f"salva_singolo_{grafico}"):
+    if plotaccuracy(analizer, esperimento, st.session_state.cartellaOutput) is None:
+        st.warning(f"Could not save {grafico}")
+    else:
+        st.success(f"Successfully saved {grafico}!")
+```
+
+#### Salvataggio Bulk
+
+Pulsante "Save all" salva contemporaneamente tutti i grafici selezionati:
+
+```python
+if st.button('Save all'):
+    # Salva tutti i grafici in una sola operazione
+    st.session_state.salvato_tutto = True
+    st.rerun()
+```
+
+### 15.9 Dialoghi Informativi
+
+La GUI include dialoghi popup per le descrizioni dei grafici:
+
+```python
+@st.dialog("ℹ️ Chart description")
+def mostra_descrizione(testo):
+    st.write(testo)
+```
+
+**Informazioni disponibili**:
+- Descrizione di ogni tipo di grafico
+- Interpretazione dei risultati
+- Suggerimenti per l'analisi
+
+---
+
+## 16. Debug Mode
 
 ### Definizione
 
@@ -1042,7 +1375,7 @@ Il Debug Mode è utile per:
 
 ---
 
-## 16. Dipendenze
+## 17. Dipendenze
 
 ```
 tensorflow==2.15          # Backend TF (opzionale se si usa PyTorch)
@@ -1054,6 +1387,8 @@ problog>=2.2.6            # Ragionamento simbolico probabilistico
 tqdm==4.67.1              # Barre di progresso
 PyYAML==6.0.3             # Configurazione
 pandas==2.3.3             # Analisi risultati
+streamlit>=1.40.0         # Interfaccia grafica web
+plotly>=5.0.0             # Visualizzazione interattiva grafici
 ```
 
 Per PyTorch, è necessario installare separatamente:
@@ -1064,7 +1399,7 @@ torchvision
 
 ---
 
-## 17. Riferimenti Bibliografici
+## 18. Riferimenti Bibliografici
 
 1. Fraccaroli, M., Lamma, E., & Riguzzi, F. (2022). *Symbolic DNN-tuner*. Machine Learning, 111(2), 625–650. [DOI: 10.1007/s10994-021-06097-1](https://link.springer.com/article/10.1007/s10994-021-06097-1)
 
