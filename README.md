@@ -3,6 +3,8 @@
 </p>
 
 # EDGE-DNN Tuner
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20200987.svg)](https://doi.org/10.5281/zenodo.20200987)
+
 **EDGE-DNN Tuner** is a modular Hardware-Aware NAS framework that extends [Symbolic DNN-Tuner](https://github.com/micheleFraccaroli/Symbolic_DNN-Tuner) 
 to optimize deep learning models for edge deployment. It balances network accuracy with strict physical constraints such as latency, FLOPs, and parameter counts. 
 Featuring a highly customizable architecture, it allows users to integrate proprietary modules and custom hardware constraints, 
